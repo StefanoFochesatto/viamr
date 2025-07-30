@@ -1,0 +1,6 @@
+/*.pvd
+/*.pvtu
+/*.vtu
+/result*
+/*.csv
+/__pycache__/

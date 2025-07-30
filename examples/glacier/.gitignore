@@ -1,0 +1,5 @@
+/result*
+/*.txt
+/*.csv
+/*.png
+/__pycache__/
