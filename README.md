@@ -67,7 +67,7 @@ Then do `make all` and perhaps `make check`.
 
 ### Using Docker
 
-A docker image is available with most of the setup compete. To get started ensure that you have [Docker](https://docs.docker.com/engine/install/) installed and running on your system.
+A docker image is available, with most of the setup complete. To get started ensure that you have [Docker](https://docs.docker.com/engine/install/) installed and running on your system.
 
 Pull the Docker image:
 
@@ -87,8 +87,7 @@ Once the docker container is up and running, you can activate the python environ
 
 ## Usage
 
-These basic examples demonstrate refinement with VCD and UDO, respectively.  First make sure that the firedrake virtual environment is active.  Then do:
-
+These basic examples demonstrate refinement with the UDO, VCD and AVM methods.  First make sure that the firedrake virtual environment is active.  Then do:
 ```
 cd examples/
 python3 sphere.py
@@ -101,9 +100,11 @@ View the output fields in `result_*.pvd` using [Paraview](https://www.paraview.o
 
 ## Generating meshes
 
-Meshes can be created using the [Firedrake utility mesh generators](https://www.firedrakeproject.org/_modules/firedrake/utility_meshes.html).  Alternatively, one can create Netgen meshes with e.g. `SplineGeometry().GenerateMesh()`.  The resulting meshes have different refinement capabilities.  Future bug fixes and feature improvements in Netgen, ngsPETSc, and PETSc DMPlex might change this situation, but for now see the known limitations below.
+Meshes can be created using the [Firedrake utility mesh generators](https://www.firedrakeproject.org/_modules/firedrake/utility_meshes.html).  Alternatively, one can create Netgen meshes with e.g. `SplineGeometry().GenerateMesh()`.  The resulting meshes have different refinement capabilities.
 
 ## Known limitations
+
+Future bug fixes and feature improvements in Netgen, ngsPETSc, and PETSc DMPlex might change this situation, but for now see the known limitations below.
 
   1. [PETSc's DMPlex mesh transformations](https://petsc.org/release/overview/plex_transform_table/) include skeleton based refinement (SBR) in 2D, but [currently SBR is not available in 3D](https://petsc.org/release/src/dm/impls/plex/transform/impls/refine/sbr/plexrefsbr.c.html).  This limits `VIAMR.refinemarkedelements()` to applications in 2D.
   1. Parallel application of `VIAMR.udomark()` requires that mesh distribution parameters be explicitly set.  For example, when using a utility mesh:
@@ -112,8 +113,8 @@ Meshes can be created using the [Firedrake utility mesh generators](https://www.
       ```
   1. `VIAMR.adaptaveragedmetric()` and `VIAMR.vcdmark()` are known to generate different results in serial and parallel.  See [issue #37](https://github.com/StefanoFochesatto/VI-AMR/issues/37) and [issue #38](https://github.com/StefanoFochesatto/VI-AMR/issues/38), respectively.
   1. For the reason given on [this issue](https://github.com/firedrakeproject/mpi-pytest/issues/13), use of [pytest](https://docs.pytest.org/en/stable/) cannot easily be extended to parallel using the [mpi-pytest](https://github.com/firedrakeproject/mpi-pytest) plugin.  Thus parallel regression testing is manual; see the bottom of this page.  Future bug fixes by the mpi-pytest developers could fix this.
-  1. `VIAMR.jaccard()` only works in parallel if one mesh is a submesh of the other.  See the doc string.
-  1. `VIAMR.hausdorff()` does not work in parallel.  Also, it is the only part of VIAMR which depends on the [shapely](https://pypi.org/project/shapely/) library.
+  1. `VIAMR.jaccard()` only works in parallel if one mesh is a submesh of the other,.  See the doc string.  Note that `VIAMR.jaccardUFL()` is always valid in parallel.
+  1. `VIAMR.hausdorff()` does not work in parallel.  It is the only part of VIAMR which depends on the [shapely](https://pypi.org/project/shapely/) library.
 
 ## Testing
 
