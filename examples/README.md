@@ -8,8 +8,11 @@ The short programs `sphere.py`, `spiral.py`, and `aol.py` show many core abiliti
 
   * `spiral.py` does a similar comparison on a classical obstacle problem from Graeser & Kornhuber (2009).  Only the UDO and VCD methods are demonstrated.
 
-  * `aol.py` is a simple example that only does one level of refinement on a problem from M. Ainsworth, J.T. Oden, and C. Lee, Local a posteriori error estimators for variational inequalities, Numerical Methods for Partial Differential Equations 9 (1993), pp. 23–33.
-  It is quoted in full in the paper, and used to produce a figure there.
+  * `aol.py` is a simple example that only does one level of refinement on a problem from
+
+    M. Ainsworth, J.T. Oden, and C. Lee, Local a posteriori error estimators for variational inequalities, Numerical Methods for Partial Differential Equations 9 (1993), pp. 23–33.
+
+  This code is quoted in full in the paper, and it produces a figure therein.
 
 ## other examples
 

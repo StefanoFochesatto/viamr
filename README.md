@@ -32,7 +32,9 @@ python3 -m pip install -e animate
 
 ## Installation
 
-### clone the VIAMR repository and enter the directory
+### clone
+
+Clone the VIAMR repository and enter the directory
 
 ```
 git clone https://github.com/StefanoFochesatto/VI-AMR.git
