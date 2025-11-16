@@ -618,6 +618,10 @@ class VIAMR(OptionsManager):
         # FIXME how to check that active1, active2 are in DG0 spaces?
         # FIXME how to check that, when submesh==True, active2 is actually
         #       on a submesh of active1?
+        # FIXME warn if AreaUnion <= 0.0?
+        #       halting is *not* appropriate; it is o.k. if the users problem
+        #       has no active set at all
+
         mesh1 = active1.function_space().mesh()
         mesh2 = active2.function_space().mesh()
         if submesh == False and (mesh1._comm.size > 1 or mesh1._comm.size > 1):
@@ -633,8 +637,10 @@ class VIAMR(OptionsManager):
             new2 = Function(active1.function_space()).project(active2)
         AreaIntersection = assemble(new2 * active1 * dx(mesh1))
         AreaUnion = assemble((new2 + active1 - (new2 * active1)) * dx(mesh1))
-        assert AreaUnion > 0.0, "jaccard() computed measure of the union as zero"
-        return AreaIntersection / AreaUnion
+        if AreaUnion <= 0.0:
+            return -1.0  # FIXME warn?
+        else:
+            return AreaIntersection / AreaUnion
 
     def jaccardUFL(self, active1, active2, qdegree=6):
         """Version of jaccard() for when active1 is a UFL expression.
