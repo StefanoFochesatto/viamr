@@ -417,7 +417,7 @@ class VIAMR(OptionsManager):
         ieta = Function(DG0, name="eta on inactive set").interpolate(eta * imark)
         # compute mark in inactive set
         mark, _, total_error_est = self._fixedrate(ieta, theta, method)
-        return (mark, eta, total_error_est)
+        return (mark, ieta, total_error_est)
 
     def brinactivemark(self, uh, lb, res_ufl, theta=0.5, method="max"):
         """Return marking within the computed inactive set by using the
@@ -456,7 +456,7 @@ class VIAMR(OptionsManager):
         imark = self.eleminactive(uh, lb)
         ieta = Function(DG0, name="eta on inactive set").interpolate(eta * imark)
         mark, _, total_error_est = self._fixedrate(ieta, theta, method)
-        return (mark, eta, total_error_est)
+        return (mark, ieta, total_error_est)
 
     def refinemarkedelements(self, mesh, indicator, isUniform=False):
         """Call PETSc DMPlex routines to do skeleton-based refinement
