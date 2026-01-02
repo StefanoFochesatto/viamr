@@ -1,7 +1,7 @@
 # This example attempts to do apples-to-apples comparisons of all three
 # algorithms on the "ball" problem, where the exact solution is known
 # and we can compute norm convergence rates.  Uniform refinement is also done.
-# We generate four .pvd files, result_sphere_{udo,vcd,avm,uniform}.pvd, suitable
+# We generate four .pvd files, result_sphere_{udo,vcd,uni,avm}.pvd, suitable
 # for a figure in the paper.  Optionally we generate .csv files for norm and
 # Jaccard convergence rates.  Note we are comparing n=1 UDO to default [0.2,0.8]
 # VCD.
