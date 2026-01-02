@@ -57,11 +57,18 @@ def activeexactUFL(r):
     return conditional(le(r, afree), 1.0, 0.0)
 
 
-def errornormpreferred(r, uh, activeh):
-    """error norm against "preferred" form of numerical solution"""
+def errornorm_deg20(u, uh):
+    """L^2 error norm, but avoiding TSFC warning"""
+    # set high degree quadrature to avoid TSFC warning
+    normsq = assemble((u - uh) ** 2 * dx(degree=20))
+    return np.sqrt(normsq)
+
+
+def errornorm_preferred_deg20(r, uh, activeh):
+    """L^2 error norm against "preferred" form of numerical solution"""
     tildeuh = conditional(eq(activeh, 1.0), psiUFL(r), uh)  # preferred
-    # high degree quadrature important in next line
-    normsq = assemble((uexactUFL(r) - tildeuh) ** 2 * dx)
+    # high degree quadrature important in next line; setting it avoids TSFC warning
+    normsq = assemble((uexactUFL(r) - tildeuh) ** 2 * dx(degree=20))
     return np.sqrt(normsq)
 
 
@@ -146,9 +153,9 @@ for amrtype in ["udo", "vcd", "uni", "avm"]:
         ub = Function(V).interpolate(Constant(PETSc.INFINITY))
         solver.solve(bounds=(lb, ub))
 
-        en_no = errornorm(uexactUFL(r), uh)
+        en_no = errornorm_deg20(uexactUFL(r), uh)
         activeh = amr.elemactive(uh, lb)
-        en_pre = errornormpreferred(r, uh, activeh)
+        en_pre = errornorm_preferred_deg20(r, uh, activeh)
         print(f"  ||u_exact - u_h||_2 = {en_no:.3e}")
         print(f"  ||u_exact - tilde u_h||_2 = {en_pre:.3e}")
 

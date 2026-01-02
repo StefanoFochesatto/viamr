@@ -118,6 +118,14 @@ Future bug fixes and feature improvements in Netgen, ngsPETSc, and PETSc DMPlex 
   1. `VIAMR.jaccard()` only works in parallel if one mesh is a submesh of the other,.  See the doc string.  Note that `VIAMR.jaccardUFL()` is always valid in parallel.
   1. `VIAMR.hausdorff()` does not work in parallel.  It is the only part of VIAMR which depends on the [shapely](https://pypi.org/project/shapely/) library.
 
+## Clearing caches
+
+Firedrake will cache compiled weak forms.  At times, e.g. for addressing quadrature degree issues, and related irritating warnings, it is desirable to clear such caches:
+```
+python3 -c "import firedrake.tsfc_interface; firedrake.tsfc_interface.clear_cache()"
+```
+Another way to address this general issue is seen in `errornorm_deg20()` in `examples/sphere.py`.
+
 ## Testing
 
 Serial software tests use [pytest](https://docs.pytest.org/en/stable/index.html). In the main directory `VI-AMR/` do
