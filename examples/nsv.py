@@ -1,48 +1,114 @@
-# example "7.2 Example: Constant Obstacle" from
+# example "7.2 Example: Constant Obstacle" from NSV2003:
+#
 #   Nochetto, R. H., Siebert, K. G., & Veeser, A. (2003). Pointwise
 #   a posteriori error control for elliptic obstacle problems.
 #   Numerische Mathematik, 95(1), 163-195.
 
 from firedrake import *
 from viamr import VIAMR
+from firedrake.petsc import PETSc
+import matplotlib.pyplot as plt
 
-d = 2
-m = 100   # FIXME hi-res for debug
+print = PETSc.Sys.Print  # enables correct printing in parallel
 
-assert d == 2, "implement 3D later"
+d = 2  # spatial dimension
+m = 3  # initial mesh resolution
+levs = 9 if d == 2 else 5  # number of refinements
 
-mesh = RectangleMesh(m, m, 1.0, 1.0, originX=-1.0, originY=-1.0)
-x, y = SpatialCoordinate(mesh)
-V = FunctionSpace(mesh, "CG", 1)
+assert d in [2, 3]
+if d == 2:
+    mesh = RectangleMesh(m, m, 1.0, 1.0, originX=-1.0, originY=-1.0, diagonal="crossed")
+else:
+    # 3D SBR refinement needs Netgen mesh and Netgen refinement
+    from netgen.occ import *
 
-r = 0.7
-x2 = x ** 2 + y ** 2
-circle = x2 - r ** 2
-g_ufl = circle ** 2
+    box = Box((-1.0, -1.0, -1.0), (1.0, 1.0, 1.0))
+    ngmesh = OCCGeometry(box, dim=3).GenerateMesh(maxh=0.8)
+    mesh = Mesh(
+        ngmesh,
+        distribution_parameters={
+            "partition": True,
+            "overlap_type": (DistributedMeshOverlapType.VERTEX, 1),
+        },
+    )
 
-u_ufl = (conditional(x2 <= r ** 2, 0.0, circle)) ** 2
-uexact = Function(V, name="uexact").interpolate(u_ufl)
+sp = {
+    "snes_type": "vinewtonrsls",
+    "snes_converged_reason": None,
+    # "snes_monitor": None,
+    # "snes_view": None,
+    "ksp_type": "preonly",
+    # "ksp_converged_reason": None,
+    "pc_type": "lu",
+    "pc_factor_mat_solver_type": "mumps",
+}
 
-f_ufl = conditional(x2 <= r ** 2,
-                    - 8.0 * r ** 2 * (1.0 - circle),
-                    - 4.0 * (2.0 * x2 + d * circle))
-f = Function(V, name="f").interpolate(f_ufl)
+r = 0.7  # parameter in defining problem
+dofs = [None for j in range(levs)]
+errs = [None for j in range(levs)]
+for j in range(levs):
+    x = SpatialCoordinate(mesh)
+    V = FunctionSpace(mesh, "CG", 1)
 
-# uh, vh = Function(V), TestFunction(V)
-# F = inner(grad(uh), grad(vh)) * dx - Constant(-1) * vh * dx
-# bcs = DirichletBC(V, Function(V).interpolate(uexact), "on_boundary")
-# problem = NonlinearVariationalProblem(F, uh, bcs)
+    if d == 2:
+        x2 = x[0] ** 2 + x[1] ** 2
+    else:
+        x2 = x[0] ** 2 + x[1] ** 2 + x[2] ** 2
+    circle = x2 - r ** 2
+    g_ufl = circle ** 2
+    f_ufl = conditional(
+        x2 <= r ** 2, -8.0 * r ** 2 * (1.0 - circle), -4.0 * (2.0 * x2 + d * circle)
+    )
 
-# sp = {"snes_type": "vinewtonrsls"}
-# solver = NonlinearVariationalSolver(problem, solver_parameters=sp)
-# psih = Function(V).interpolate(0.0)
-# INF = Function(V).interpolate(Constant(PETSc.INFINITY))
-# solver.solve(bounds=(psih, INF))
+    if j == 0:
+        uh = Function(V, name="u_h")
+    else:
+        uh = Function(V, name="u_h").interpolate(uh)  # initialize by cross-mesh
 
-# amr = VIAMR()
-# mark = amr.vcdmark(uh, psih)
-# VTKFile("mesh.pvd").write(uh, mark)
+    vh = TestFunction(V)
+    F = inner(grad(uh), grad(vh)) * dx - f_ufl * vh * dx
+    bcs = DirichletBC(V, Function(V).interpolate(g_ufl), "on_boundary")
 
-# refinedmesh = amr.refinemarkedelements(mesh, mark)
+    problem = NonlinearVariationalProblem(F, uh, bcs)
+    solver = NonlinearVariationalSolver(
+        problem, solver_parameters=sp, options_prefix="s"
+    )
 
-VTKFile("result.pvd").write(f, uexact)
+    psih = Function(V).interpolate(0.0)
+    INF = Function(V).interpolate(Constant(PETSc.INFINITY))
+    solver.solve(bounds=(psih, INF))
+
+    u_ufl = conditional(x2 <= r ** 2, 0.0, circle ** 2)
+    dofs[j] = V.dim()
+    errs[j] = float(errornorm(u_ufl, uh))
+    print(f"  level {j}: nodes = {dofs[j]}, |u-u_h|_2 = {errs[j]:.3e}")
+
+    if j == levs - 1:
+        break
+
+    amr = VIAMR()
+    fmark = amr.udomark(uh, psih, n=1)
+    # fmark = amr.vcdmark(uh, psih)
+    residual = -div(grad(uh))
+    (imark, _, _) = amr.brinactivemark(uh, psih, residual, theta=0.5)
+    mark = amr.unionmarks(fmark, imark)
+
+    if d == 2:
+        mesh = amr.refinemarkedelements(mesh, mark)  # PETSc DM refinement
+    else:
+        mesh = mesh.refine_marked_elements(mark)  # Netgen refinement
+
+# FIXME generate figure to compare to Fig. 7.1 in NSV2003
+
+P2 = FunctionSpace(mesh, "CG", 2)
+udiff = Function(P2, name="u_h - u_exact").interpolate(uh - u_ufl)
+f = Function(P2, name="f").interpolate(f_ufl)
+
+outfile = "result_nsv.pvd"
+if mesh.comm.size > 1:
+    rank = Function(FunctionSpace(mesh, "DG", 0))
+    rank.dat.data[:] = mesh.comm.rank
+    rank.rename("rank")
+    VTKFile(outfile).write(uh, udiff, f, rank)
+else:
+    VTKFile(outfile).write(uh, udiff, f)
