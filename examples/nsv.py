@@ -7,13 +7,12 @@
 from firedrake import *
 from viamr import VIAMR
 from firedrake.petsc import PETSc
-import matplotlib.pyplot as plt
 
 print = PETSc.Sys.Print  # enables correct printing in parallel
 
 d = 2  # spatial dimension
 m = 3  # initial mesh resolution
-levs = 9 if d == 2 else 5  # number of refinements
+levs = 9 if d == 2 else 6  # number of refinements
 
 assert d in [2, 3]
 if d == 2:
@@ -39,6 +38,7 @@ sp = {
 r = 0.7  # parameter in defining problem
 dofs = [None for j in range(levs)]
 errs = [None for j in range(levs)]
+print(f"solving {d}D example from Nochetto, Siebert, & Veeser (2003) ...")
 for j in range(levs):
     x = SpatialCoordinate(mesh)
     V = FunctionSpace(mesh, "CG", 1)
@@ -91,7 +91,21 @@ for j in range(levs):
     else:
         mesh = mesh.refine_marked_elements(mark)  # Netgen refinement
 
-# FIXME generate figure to compare to Fig. 7.1 in NSV2003
+if mesh.comm.rank == 0:
+    import matplotlib.pyplot as plt
+    import numpy as np
+    dofs = np.array(dofs)
+    errs = np.array(errs)
+    print(np.polyfit(np.log(dofs), np.log(errs), 1))
+    plt.loglog(dofs, errs, 'ko', label=r"$\|u - u_h\|_0$")
+    y = dofs ** (-2.0 / d)
+    y = y * errs[0] / y[0]  # fix constant so that it aligns
+    plt.loglog(dofs, y, 'k:', label=f"DOFs^(-2/d) for d={d}")
+    plt.legend()
+    plt.grid(True)
+    plt.xlabel("DOFs")
+    plt.ylabel(r"error")
+    plt.show()
 
 P2 = FunctionSpace(mesh, "CG", 2)
 udiff = Function(P2, name="u_h - u_exact").interpolate(uh - u_ufl)
