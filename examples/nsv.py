@@ -23,14 +23,7 @@ else:
     from netgen.occ import *
 
     box = Box((-1.0, -1.0, -1.0), (1.0, 1.0, 1.0))
-    ngmesh = OCCGeometry(box, dim=3).GenerateMesh(maxh=0.8)
-    mesh = Mesh(
-        ngmesh,
-        distribution_parameters={
-            "partition": True,
-            "overlap_type": (DistributedMeshOverlapType.VERTEX, 1),
-        },
-    )
+    mesh = Mesh(OCCGeometry(box, dim=3).GenerateMesh(maxh=0.8))
 
 sp = {
     "snes_type": "vinewtonrsls",

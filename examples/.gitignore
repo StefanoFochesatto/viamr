@@ -3,6 +3,6 @@
 /*.vtu
 /result*
 /mesh*
-/refinemesh*
+/refinedmesh*
 /*.csv
 /__pycache__/

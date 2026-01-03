@@ -221,14 +221,6 @@ class VIAMR(OptionsManager):
             # indicator.
             border = self._elemborder(self._nodalactive(uh, lb))
 
-        # FIXME check that distribution parameters are correct in parallel
-        if mesh.comm.size > 1:
-            dp = mesh._distribution_parameters
-            if dp["overlap_type"][0].name != "VERTEX" or dp["overlap_type"][1] < 1:
-                raise ValueError(
-                    """udomark() in parallel requires distribution_parameters={"partition": True, "overlap_type": (DistributedMeshOverlapType.VERTEX, 1)} on mesh initialization."""
-                )
-
         # FIXME Experiment implementation in cython, DMLabel to mark accumulation, dmplex with only vertex and cell connectivity to save memory
 
         # Find range of indices for element stratum
