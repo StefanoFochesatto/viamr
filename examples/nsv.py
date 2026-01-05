@@ -13,6 +13,7 @@ print = PETSc.Sys.Print  # enables correct printing in parallel
 d = 2  # spatial dimension
 m = 3  # initial mesh resolution
 levs = 9 if d == 2 else 6  # number of refinements
+figure = False  # generate figure to compare to NSV2003
 
 assert d in [2, 3]
 if d == 2:
@@ -91,12 +92,12 @@ for j in range(levs):
     else:
         mesh = mesh.refine_marked_elements(mark)  # Netgen refinement
 
-if mesh.comm.rank == 0:
+if figure and mesh.comm.rank == 0:
     import matplotlib.pyplot as plt
     import numpy as np
     dofs = np.array(dofs)
     errs = np.array(errs)
-    print(np.polyfit(np.log(dofs), np.log(errs), 1))
+    #print(np.polyfit(np.log(dofs), np.log(errs), 1))
     plt.loglog(dofs, errs, 'ko', label=r"$\|u - u_h\|_0$")
     y = dofs ** (-2.0 / d)
     y = y * errs[0] / y[0]  # fix constant so that it aligns
@@ -104,7 +105,8 @@ if mesh.comm.rank == 0:
     plt.legend()
     plt.grid(True)
     plt.xlabel("DOFs")
-    plt.ylabel(r"error")
+    plt.ylabel("error")
+    plt.title("compare Figure 7.1 in Nochetto, Siebert, & Veeser (2003)")
     plt.show()
 
 P2 = FunctionSpace(mesh, "CG", 2)
