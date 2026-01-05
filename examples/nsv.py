@@ -1,4 +1,4 @@
-# example "7.2 Example: Constant Obstacle" from NSV2003:
+# example "7.2 Example: Constant Obstacle" from NSV03:
 #
 #   Nochetto, R. H., Siebert, K. G., & Veeser, A. (2003). Pointwise
 #   a posteriori error control for elliptic obstacle problems.
@@ -10,6 +10,7 @@ from firedrake.petsc import PETSc
 
 print = PETSc.Sys.Print  # enables correct printing in parallel
 
+# major parameters
 d = 2  # spatial dimension
 m = 3  # initial mesh resolution
 levs = 9 if d == 2 else 6  # number of refinements
@@ -55,9 +56,10 @@ for j in range(levs):
     )
 
     if j == 0:
-        uh = Function(V, name="u_h")
+        uh = Function(V, name="u_h (solution)")
     else:
-        uh = Function(V, name="u_h").interpolate(uh)  # initialize by cross-mesh
+        # initialize by cross-mesh interpolation; mesh sequencing
+        uh = Function(V, name="u_h (solution)").interpolate(uh)
 
     vh = TestFunction(V)
     F = inner(grad(uh), grad(vh)) * dx - f_ufl * vh * dx
@@ -77,15 +79,15 @@ for j in range(levs):
     errs[j] = float(errornorm(u_ufl, uh))
     print(f"  level {j}: nodes = {dofs[j]}, |u-u_h|_2 = {errs[j]:.3e}")
 
-    if j == levs - 1:
-        break
-
+    # compute marking; note fmark is written to file
     amr = VIAMR()
-    fmark = amr.udomark(uh, psih, n=1)
-    # fmark = amr.vcdmark(uh, psih)
+    fmark = amr.udomark(uh, psih, n=nUDO)
     residual = -div(grad(uh))
     (imark, _, _) = amr.brinactivemark(uh, psih, residual, theta=0.5)
     mark = amr.unionmarks(fmark, imark)
+
+    if j == levs - 1:
+        break
 
     if d == 2:
         mesh = amr.refinemarkedelements(mesh, mark)  # PETSc DM refinement
@@ -95,13 +97,14 @@ for j in range(levs):
 if figure and mesh.comm.rank == 0:
     import matplotlib.pyplot as plt
     import numpy as np
+
     dofs = np.array(dofs)
     errs = np.array(errs)
-    #print(np.polyfit(np.log(dofs), np.log(errs), 1))
-    plt.loglog(dofs, errs, 'ko', label=r"$\|u - u_h\|_0$")
+    # print(np.polyfit(np.log(dofs), np.log(errs), 1))
+    plt.loglog(dofs, errs, "ko", label=r"$\|u - u_h\|_0$")
     y = dofs ** (-2.0 / d)
     y = y * errs[0] / y[0]  # fix constant so that it aligns
-    plt.loglog(dofs, y, 'k:', label=f"DOFs^(-2/d) for d={d}")
+    plt.loglog(dofs, y, "k:", label=f"DOFs^(-2/d) for d={d}")
     plt.legend()
     plt.grid(True)
     plt.xlabel("DOFs")
@@ -114,6 +117,7 @@ udiff = Function(P2, name="u_h - u_exact").interpolate(uh - u_ufl)
 f = Function(P2, name="f").interpolate(f_ufl)
 
 outfile = "result_nsv.pvd"
+print(f"writing to {outfile} ...")
 if mesh.comm.size > 1:
     rank = Function(FunctionSpace(mesh, "DG", 0))
     rank.dat.data[:] = mesh.comm.rank
