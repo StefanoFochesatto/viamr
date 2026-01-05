@@ -13,8 +13,9 @@ print = PETSc.Sys.Print  # enables correct printing in parallel
 # major parameters
 d = 2  # spatial dimension
 m = 3  # initial mesh resolution
-levs = 9 if d == 2 else 6  # number of refinements
-figure = False  # generate figure to compare to NSV2003
+levs = 4 if d == 2 else 3  # number of refinements
+nUDO = 1  # for nUDO = 0: observe that sigma_h * u_h > 0 is same as UDO mark
+figure = False  # generate figure to compare to NSV03
 
 assert d in [2, 3]
 if d == 2:
@@ -112,9 +113,35 @@ if figure and mesh.comm.rank == 0:
     plt.title("compare Figure 7.1 in Nochetto, Siebert, & Veeser (2003)")
     plt.show()
 
-P2 = FunctionSpace(mesh, "CG", 2)
-udiff = Function(P2, name="u_h - u_exact").interpolate(uh - u_ufl)
-f = Function(P2, name="f").interpolate(f_ufl)
+# compute some quantities for output file
+fmark.rename("UDO FB mark")
+uerr = Function(V, name="u_err = u_h - u_exact").interpolate(uh - u_ufl)
+P3 = FunctionSpace(mesh, "CG", 3)
+f = Function(P3, name="f").interpolate(f_ufl)
+
+# following section 2.1 of NSV03, compute residual sigmah in V=P1
+#   observe this measures how close to complementarity we are
+#   noting psih=0, complementarity would be
+#     uh >= 0,  sigmah >= 0,  uh sigmah = 0
+#   here using opposite sign from NSV03
+# create cofunction with values int_Omega phi_i dx for *all* nodes i
+phi = TestFunction(V)
+scaleh = assemble(phi * dx)  # cofunction
+# compute sigma_h
+sigmah = Function(V, name="sigma_h (residual)")
+res = assemble((inner(grad(uh), grad(phi)) - f_ufl * phi) * dx)  # cofunction
+sigmah.dat.data[:] = res.dat.data_ro / scaleh.dat.data_ro  # divide numpy arrays
+# correct it on boundary; note all boundary nodes are inactive in this example
+# FIXME section 2.1 of NSV03 addresses cases where boundary nodes are active
+#    perhaps use:  n = FacetNormal(mesh); ?? inner(grad(uh), n) * omegah * dS
+DirichletBC(V, Constant(0.0), "on_boundary").apply(sigmah)
+
+# FIXME: following is playing around, but in the right way
+# compute DG0 field where  sigmah_k * uh_k > 0  at DG0 degree of freedom k
+DG0 = FunctionSpace(mesh, "DG", 0)
+noncomph = Function(DG0, name="sigma_h u_h > 0}")
+activetol = 1.0e-10
+noncomph.interpolate(conditional(sigmah * uh > activetol, 1.0, 0.0))
 
 outfile = "result_nsv.pvd"
 print(f"writing to {outfile} ...")
@@ -122,6 +149,6 @@ if mesh.comm.size > 1:
     rank = Function(FunctionSpace(mesh, "DG", 0))
     rank.dat.data[:] = mesh.comm.rank
     rank.rename("rank")
-    VTKFile(outfile).write(uh, udiff, f, rank)
+    VTKFile(outfile).write(uh, uerr, f, sigmah, noncomph, fmark, rank)
 else:
-    VTKFile(outfile).write(uh, udiff, f)
+    VTKFile(outfile).write(uh, uerr, f, sigmah, noncomph, fmark)
