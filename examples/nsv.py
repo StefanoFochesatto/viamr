@@ -1,8 +1,12 @@
-# example "7.2 Example: Constant Obstacle" from NSV03:
+# solve example "7.2 Example: Constant Obstacle" from NSV03:
 #
 #   Nochetto, R. H., Siebert, K. G., & Veeser, A. (2003). Pointwise
 #   a posteriori error control for elliptic obstacle problems.
 #   Numerische Mathematik, 95(1), 163-195.
+#
+# also:
+#   1. compute sigma_h from section 2.1 in NSV03
+#   2. compute the "practical estimator" in formula (7.1) of NSV03
 
 from firedrake import *
 from viamr import VIAMR
@@ -16,6 +20,41 @@ m = 3  # initial mesh resolution
 levs = 4 if d == 2 else 3  # number of refinements
 nUDO = 1  # for nUDO = 0: observe that sigma_h * u_h > 0 is same as UDO mark
 figure = False  # generate figure to compare to NSV03
+
+# this element-wise computation, of max abs on each element, will be
+#   needed below; should work for any nodal basis space
+def maxabselem(source):
+    V = source.function_space()
+    DG0 = FunctionSpace(V.mesh(), "DG", 0)
+    target = Function(DG0)
+    target.assign(0.0)
+    dofs = V.finat_element.space_dimension()
+    kernel = op2.Kernel(
+        """
+    void max_abs_to_dg0(double *target, double const *source)
+    {
+      /* Figure out max over cells */
+      double tmp = 0.0;
+      for (int i = 0; i < %(source_ndofs)s; i++) {
+        tmp = tmp > fabs(source[i]) ? tmp : fabs(source[i]);
+      }
+
+      /* Push that value to DG0 dof */
+      target[0] = tmp;
+    }"""
+        % {
+            "source_ndofs": dofs,
+        },
+        "max_abs_to_dg0",
+    )
+    op2.par_loop(
+        kernel,
+        V.mesh().cell_set,
+        target.dat(op2.MAX, target.cell_node_map()),
+        source.dat(op2.READ, source.cell_node_map()),
+    )
+    return target
+
 
 assert d in [2, 3]
 if d == 2:
@@ -133,15 +172,43 @@ res = assemble((inner(grad(uh), grad(phi)) - f_ufl * phi) * dx)  # cofunction
 sigmah.dat.data[:] = res.dat.data_ro / scaleh.dat.data_ro  # divide numpy arrays
 # correct it on boundary; note all boundary nodes are inactive in this example
 # FIXME section 2.1 of NSV03 addresses cases where boundary nodes are active
-#    perhaps use:  n = FacetNormal(mesh); ?? inner(grad(uh), n) * omegah * dS
+#    perhaps use:  n = FacetNormal(mesh); ?? inner(grad(uh), n) * omegah * ds
 DirichletBC(V, Constant(0.0), "on_boundary").apply(sigmah)
 
-# FIXME: following is playing around, but in the right way
-# compute DG0 field where  sigmah_k * uh_k > 0  at DG0 degree of freedom k
+# check dual admissiblity (up to tolerance) and admissibility
+dualtol = 1.0e-10
+assert min(sigmah.dat.data_ro) >= -dualtol
+antigap = Function(V).interpolate(conditional(psih - uh > 0.0, psih - uh, 0.0))
+assert norm(antigap) == 0.0  # this removes a term from etainf
+
+# Rinf is computed from (3.7) in NSV03 using p=\infty and p'=1:
+#   R_\infty = h_T^{-1} \|[[\partial_n u_h]]\|* + X
+# where by (2.3) in NSV03:
+#    X = |f - sigma_h| if entire neighborhood of T is active
+#    X = |f|           otherwise
+# and where
+#    \|.\|* = \|.\|_{\infty; \partial T \setminus \partial \Omega}
+# and where
+#    [[z]] is the jump in z along an edge
+Rinf = Function(DG0).interpolate(0.0)  # FIXME placeholder
+
+# compute local "practical estimator" from formula (7.1) in NSV03
+# namely *for each closed triangle T*:
+#   \eta_\infty =
+#        C_0 h_T^2 \|R_\infty\|_\infty
+#      + \|(\chi - u_h)^+\|_\infty                [= 0 since uh >= psih]
+#      + 1_{sigma_h > 0} * \|(u_h - \chi)^+\|_\infty   [require on T: sigma_h > tol]
+#      + \|g - I_h g\|_{\infty;\partial\Omega \cap T}   # FIXME not yet here
+# FIXME also \eta_d
+C0 = 0.1
+h = mesh.cell_sizes
 DG0 = FunctionSpace(mesh, "DG", 0)
-noncomph = Function(DG0, name="sigma_h u_h > 0}")
-activetol = 1.0e-10
-noncomph.interpolate(conditional(sigmah * uh > activetol, 1.0, 0.0))
+gaph = Function(V).interpolate(uh - psih)  # = "(u_h - \chi)_+" since uh >= psih
+sigmahT = Function(DG0).interpolate(sigmah)
+blockgap_ufl = conditional(sigmahT > dualtol, maxabselem(gaph), 0.0)
+blockgap = Function(DG0).interpolate(blockgap_ufl)
+etainf = Function(DG0, name="eta_{infty,T}")
+etainf.interpolate(C0 * h ** 2 * maxabselem(Rinf) + blockgap)
 
 outfile = "result_nsv.pvd"
 print(f"writing to {outfile} ...")
@@ -149,6 +216,6 @@ if mesh.comm.size > 1:
     rank = Function(FunctionSpace(mesh, "DG", 0))
     rank.dat.data[:] = mesh.comm.rank
     rank.rename("rank")
-    VTKFile(outfile).write(uh, uerr, f, sigmah, noncomph, fmark, rank)
+    VTKFile(outfile).write(uh, uerr, f, sigmah, etainf, fmark, rank)
 else:
-    VTKFile(outfile).write(uh, uerr, f, sigmah, noncomph, fmark)
+    VTKFile(outfile).write(uh, uerr, f, sigmah, etainf, fmark)
