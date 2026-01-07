@@ -17,7 +17,7 @@ from firedrake.petsc import PETSc
 d = 2  # spatial dimension
 m = 3  # initial mesh resolution
 levs = 4 if d == 2 else 3  # number of refinements
-nUDO = 1  # observe that {sigma_h * u_h > 0} is same as UDO mark with nUDO=0
+nUDO = 0  # observe that {sigma_h * u_h > 0} is same as UDO mark with nUDO=0
 figure = False  # generate figure to compare to NSV03
 primaltol = 0.0  # for admissibility: u_h >= -primaltol
 dualtol = 1.0e-10  # used for admissibilty (sigma_h >= -dualtol) *and* when computing estimator
