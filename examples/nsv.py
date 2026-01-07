@@ -165,11 +165,11 @@ f = Function(P3, name="f").interpolate(f_ufl)
 #   because psih=0.
 # step 1: create cofunction with values int_Omega phi_i dx for *all* nodes i
 phi = TestFunction(V)
-scaleh = assemble(phi * dx)  # cofunction
+scaleh = assemble(phi * dx)  # cofunction; we *do not* want riesz_representation() here
 # step 2: compute unscaled sigma_h
-sigmah = Function(V, name="sigma_h (residual)")
 res = assemble((inner(grad(uh), grad(phi)) - f_ufl * phi) * dx)  # cofunction
-# step 3: divide numpy arrays to correct scale
+# step 3: divide numpy arrays to give correct scale
+sigmah = Function(V, name="sigma_h (residual)")
 sigmah.dat.data[:] = res.dat.data_ro / scaleh.dat.data_ro  # divide numpy arrays
 # FIXME need to correct it on boundary, but note all boundary nodes are inactive in this example
 #    section 2.1 of NSV03 addresses cases where boundary nodes are active
@@ -182,14 +182,20 @@ assert min(sigmah.dat.data_ro) >= -dualtol
 # Rinf is computed from (3.7) in NSV03 using p=\infty and p'=1:
 #   R_\infty = h_T^{-1} \|[[\partial_n u_h]]\|* + X
 # where by (2.3) in NSV03:
-#    X = |f - sigma_h| if entire neighborhood of T is active
+#    X = |f + sigma_h| if entire neighborhood of T is active (note sign switch on sigma_h)
 #    X = |f|           otherwise
 # and where
 #    \|.\|* = \|.\|_{\infty; \partial T \setminus \partial \Omega}
 # and where
 #    [[z]] is the jump in z along an edge
+n = FacetNormal(mesh)
 DG0 = FunctionSpace(mesh, "DG", 0)
-Rinf = Function(DG0).interpolate(0.0)  # FIXME placeholder
+hT = project(CellSize(mesh), DG0)
+v0 = TestFunction(DG0)
+jumpu = assemble(jump(grad(uh) * v0, n) * dS).riesz_representation()  # in DG0
+active = amr.elemactive(uh, psih)  # FIXME not equivalent to usage in (3.7)
+X_ufl = active * abs(f_ufl + sigmah) + (1 - active) * abs(f_ufl)
+Rinf = Function(DG0).interpolate((abs(jumpu) / hT) + X_ufl)
 
 # compute local "practical estimator" from formula (7.1) in NSV03
 # namely *for each closed triangle T*:
@@ -200,16 +206,14 @@ Rinf = Function(DG0).interpolate(0.0)  # FIXME placeholder
 #      + \|g - I_h g\|_{\infty;\partial\Omega \cap T}   [exact g approximated into P3]
 # FIXME also \eta_d
 C0 = 0.1
-h = mesh.cell_sizes
 gaph = Function(V).interpolate(uh - psih)  # = "(u_h - \chi)_+" since uh >= psih
 sigmahT = Function(DG0).interpolate(sigmah)
 blockgap_ufl = conditional(sigmahT > dualtol, maxabselem(gaph), 0.0)
 blockgap = Function(DG0).interpolate(blockgap_ufl)
 adg = maxabselem(Function(P3).interpolate(g_ufl - g))  # in DG0, but over all of Omega
-TDG0 = TestFunction(DG0)
-bdryerr = assemble(adg * TDG0 * ds).riesz_representation()  # DG0 function, only along boundary
+bdryerr = assemble(adg * v0 * ds).riesz_representation()  # DG0 function, only along boundary
 etainf = Function(DG0, name="eta_{inf,T}")
-etainf.interpolate(C0 * h ** 2 * maxabselem(Rinf) + blockgap + bdryerr)
+etainf.interpolate(C0 * hT ** 2 * maxabselem(Rinf) + blockgap + bdryerr)
 
 outfile = "result_nsv.pvd"
 print(f"writing to {outfile} ...")
