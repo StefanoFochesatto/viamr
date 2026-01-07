@@ -100,7 +100,8 @@ for j in range(levs):
     # state the problem
     vh = TestFunction(V)
     F = inner(grad(uh), grad(vh)) * dx - f_ufl * vh * dx
-    bcs = DirichletBC(V, Function(V).interpolate(g_ufl), "on_boundary")
+    g = Function(V).interpolate(g_ufl)
+    bcs = DirichletBC(V, g, "on_boundary")
     problem = NonlinearVariationalProblem(F, uh, bcs)
     psih = Function(V).interpolate(0.0)
     INFupper = Function(V).interpolate(Constant(PETSc.INFINITY))
@@ -196,7 +197,7 @@ Rinf = Function(DG0).interpolate(0.0)  # FIXME placeholder
 #        C_0 h_T^2 \|R_\infty\|_\infty
 #      + \|(\chi - u_h)^+\|_\infty                [= 0 since uh >= 0.0 = chi here]
 #      + 1_{sigma_h > 0} * \|(u_h - \chi)^+\|_\infty   [require on T: sigma_h > dualtol]
-#      + \|g - I_h g\|_{\infty;\partial\Omega \cap T}   # FIXME not yet here
+#      + \|g - I_h g\|_{\infty;\partial\Omega \cap T}   [exact g approximated into P3]
 # FIXME also \eta_d
 C0 = 0.1
 h = mesh.cell_sizes
@@ -204,8 +205,11 @@ gaph = Function(V).interpolate(uh - psih)  # = "(u_h - \chi)_+" since uh >= psih
 sigmahT = Function(DG0).interpolate(sigmah)
 blockgap_ufl = conditional(sigmahT > dualtol, maxabselem(gaph), 0.0)
 blockgap = Function(DG0).interpolate(blockgap_ufl)
-etainf = Function(DG0, name="eta_{infty,T}")
-etainf.interpolate(C0 * h ** 2 * maxabselem(Rinf) + blockgap)
+adg = maxabselem(Function(P3).interpolate(g_ufl - g))  # in DG0, but over all of Omega
+TDG0 = TestFunction(DG0)
+bdryerr = assemble(adg * TDG0 * ds).riesz_representation()  # DG0 function, only along boundary
+etainf = Function(DG0, name="eta_{inf,T}")
+etainf.interpolate(C0 * h ** 2 * maxabselem(Rinf) + blockgap + bdryerr)
 
 outfile = "result_nsv.pvd"
 print(f"writing to {outfile} ...")
