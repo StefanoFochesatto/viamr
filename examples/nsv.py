@@ -216,31 +216,34 @@ if figure and mesh.comm.rank == 0:
 fmark.rename("UDO FB mark")
 uerr = Function(V, name="u_err = u_h - u_exact").interpolate(uh - u_ufl)
 
-# Following section 2.1 of NSV03, compute residual sigmah in V=P1,
-#   but use opposite sign convention so sigmah >= 0.   Note that
-#   complementarity would be
-#     uh >= 0,  sigmah >= 0,  uh sigmah = 0
-#   because psih=0.
+# Following section 2.1 of NSV03, page 169, compute residual sigmah in V=P1,
+#   but use opposite sign convention so sigmah >= 0.   complementarity is
+#   uh >= 0,  sigmah >= 0,  uh sigmah = 0  because psih=0
 # step 1: create cofunction with values int_Omega phi_i dx for *all* nodes i
 phi = TestFunction(V)
 scaleh = assemble(phi * dx)  # cofunction; we *do not* want riesz_representation() here
-# step 2: compute unscaled sigma_h
+# step 2: residual as a cofunction
 res = assemble((inner(grad(uh), grad(phi)) - f_ufl * phi) * dx)  # cofunction
-# step 3: divide numpy arrays to give correct scale
+# step 3: scale
 sigmah = Function(V, name="sigma_h (residual)")
 sigmah.dat.data[:] = res.dat.data_ro / scaleh.dat.data_ro  # divide numpy arrays
-# all boundary nodes are inactive *in this example*
-#    section 2.1 of NSV03 addresses cases where boundary nodes are active
-#    perhaps use:  n = FacetNormal(mesh); ?? inner(grad(uh), n) * omegah * ds
+# all boundary nodes are inactive *in this example*, but page 169 addresses cases
+#    where boundary nodes are active; use?:  inner(grad(uh), n) * omegah * ds
 DirichletBC(V, Constant(0.0), "on_boundary").apply(sigmah)
 
 # check dual admissiblity (up to tolerance)
 assert min(sigmah.dat.data_ro) >= -dualtol
 
-# Rinf is computed from (3.7) in NSV03 using p=\infty and p'=1:
+# FIXME in following formulas: correctly interpret line pages 188-189:
+#   "For terms involving non-polynomial data, the maximum norm is
+#    approximated by evaluating element point-values at the Lagrange
+#    nodes for 7th order polynomials.""
+
+# Rinf is part of "practical estimator" in (7.1); see below
+# it is computed from (3.7) in NSV03 using p=\infty and p'=1:
 #   R_\infty = h_T^{-1} \|[[\partial_n u_h]]\|* + X
-# where by (2.3) in NSV03:
-#    X = |f + sigma_h| if entire neighborhood of T is active (note sign switch on sigma_h)
+# where by (2.3) in NSV03 (note sign switch on sigma_h):
+#    X = |f + sigma_h| if element neighborhood of T is active
 #    X = |f|           otherwise
 # and where
 #    \|.\|* = \|.\|_{\infty; \partial T \setminus \partial \Omega}
@@ -255,13 +258,13 @@ thinactive = thinelemactive(uh, psih)
 X_ufl = thinactive * abs(f_ufl + sigmah) + (1 - thinactive) * abs(f_ufl)
 Rinf = Function(DG0).interpolate((abs(jumpu) / hT) + X_ufl)
 
-# compute local "practical estimator" from formula (7.1) in NSV03
+# compute infinity part of local "practical estimator" from formula (7.1) in NSV03
 # namely *for each closed triangle T*:
 #   \eta_\infty =
 #        C_0 h_T^2 \|R_\infty\|_\infty
-#      + \|(\chi - u_h)^+\|_\infty                [= 0 since uh >= 0.0 = chi here]
-#      + 1_{sigma_h > 0} * \|(u_h - \chi)^+\|_\infty   [require on T: sigma_h > dualtol]
-#      + \|g - I_h g\|_{\infty;\partial\Omega \cap T}   [exact g is in CG4, I_h g is in CG1]
+#      + \|(\chi - u_h)^+\|_\infty                     [= 0 since uh >= 0.0 = chi here]
+#      + 1_{sigma_h > 0} * \|(u_h - \chi)^+\|_\infty   [require: sigma_h > dualtol on T]
+#      + \|g - I_h g\|_{\infty;\partial\Omega \cap T}  [exact g is in CG4, I_h g is in CG1]
 C0 = 0.1
 gaph = Function(V).interpolate(uh - psih)  # = "(u_h - \chi)_+" since uh >= psih
 sigmahT = Function(DG0).interpolate(sigmah)
@@ -272,7 +275,7 @@ DG4 = FunctionSpace(mesh, "DG", 4)
 adg = maxabselem(Function(DG4).interpolate(g_ufl - g))  # in DG0, over all of Omega
 # bdryerr is a DG0 function, but only nonzero along boundary
 bdryerr = assemble(adg * v0 * ds).riesz_representation()
-etainf = Function(DG0, name="eta_{inf,T}")
+etainf = Function(DG0, name="eta_inf")
 etainf.interpolate(C0 * hT ** 2 * maxabselem(Rinf) + blockgap + bdryerr)
 
 # FIXME also \eta_d
