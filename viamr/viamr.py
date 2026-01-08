@@ -9,7 +9,7 @@ try:
     from petsctools import OptionsManager
 except ImportError:
     from firedrake.petsc import OptionsManager
-    
+
 from firedrake.utils import IntType
 import firedrake.cython.dmcommon as dmcommon
 import animate
@@ -263,9 +263,8 @@ class VIAMR(OptionsManager):
             # re-generate DG0 element border indicator by adding neighbors
             border = Function(DG0).interpolate(Constant(0.0))
             for k in neighborindices:
-                border.dat.data_wo_with_halos[dm2fd[k]] = (
-                    1  # parallel communication *here*
-                )
+                # parallel communication *here*:
+                border.dat.data_wo_with_halos[dm2fd[k]] = 1
 
         return Function(FunctionSpace(uh.function_space().mesh(), "DG", 0)).interpolate(
             border, allow_missing_dofs=True
@@ -305,7 +304,7 @@ class VIAMR(OptionsManager):
         w = TrialFunction(CG1)
         v = TestFunction(CG1)
         h = CellDiameter(mesh)
-        a = w * v * dx + coefficient * h**2 * inner(grad(w), grad(v)) * dx
+        a = w * v * dx + coefficient * h ** 2 * inner(grad(w), grad(v)) * dx
         L = nu * v * dx
         u = Function(CG1, name="Smoothed Nodal Active")
 
@@ -436,7 +435,7 @@ class VIAMR(OptionsManager):
         w = TestFunction(DG0)
         G = (
             inner(eta_sq / v, w) * dx
-            - inner(h**2 * res_ufl**2, w) * dx
+            - inner(h ** 2 * res_ufl ** 2, w) * dx
             - inner(h("+") / 2 * jump(grad(uh), n) ** 2, w("+")) * dS
             - inner(h("-") / 2 * jump(grad(uh), n) ** 2, w("-")) * dS
         )
@@ -643,10 +642,11 @@ class VIAMR(OptionsManager):
                 assert min(active2.dat.data_ro) >= 0.0
                 assert max(active2.dat.data_ro) <= 1.0
         AreaIntersection = assemble(active1 * active2 * dx(mesh2, degree=qdegree))
-        AreaUnion = assemble((active2 + active1 - (active2 * active1)) * dx(mesh2, degree=qdegree))
+        AreaUnion = assemble(
+            (active2 + active1 - (active2 * active1)) * dx(mesh2, degree=qdegree)
+        )
         assert AreaUnion > 0.0, "jaccard() computed measure of the union as zero"
         return AreaIntersection / AreaUnion
-
 
     def hausdorff(self, E1, E2):
         try:
