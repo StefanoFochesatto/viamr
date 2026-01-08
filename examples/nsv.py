@@ -277,7 +277,12 @@ bdryerr = assemble(adg * v0 * ds).riesz_representation()
 etainf = Function(DG0, name="eta_inf")
 etainf.interpolate(C0 * hT ** 2 * maxabselem(Rinf) + blockgap + bdryerr)
 
-# FIXME also \eta_d
+# compute *for each closed triangle T* within the thin active set, for formula (7.1):
+#   \eta_d = C1 |h^2 grad(sigmah)|_d
+C1 = 0.01
+sigslope = inner(grad(sigmah), grad(sigmah)) ** (d / 2)  # = |\grad\sigma_h|^d
+tmp = assemble(hT ** (2 * d) * sigslope * thinactive * v0 * dx).riesz_representation()
+etad = Function(DG0, name="eta_d").interpolate(C1 * tmp ** (1.0 / d))
 
 outfile = "result_nsv.pvd"
 print(f"writing to {outfile} ...")
@@ -288,6 +293,6 @@ if mesh.comm.size > 1:
     rank = Function(FunctionSpace(mesh, "DG", 0))
     rank.dat.data[:] = mesh.comm.rank
     rank.rename("rank")
-    VTKFile(outfile).write(uh, uerr, sigmah, etainf, fmark, active, thinactive, rank)
+    VTKFile(outfile).write(uh, uerr, sigmah, etainf, etad, fmark, active, thinactive, rank)
 else:
-    VTKFile(outfile).write(uh, uerr, sigmah, etainf, fmark, active, thinactive)
+    VTKFile(outfile).write(uh, uerr, sigmah, etainf, etad, fmark, active, thinactive)
