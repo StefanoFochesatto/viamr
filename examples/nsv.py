@@ -267,12 +267,11 @@ Rinf = Function(DG0).interpolate((abs(jumpu) / hT) + X_ufl)
 #      + \|g - I_h g\|_{\infty;\partial\Omega \cap T}  [exact g is in CG4, I_h g is in CG1]
 C0 = 0.1
 gaph = Function(V).interpolate(uh - psih)  # = "(u_h - \chi)_+" since uh >= psih
-sigmahT = Function(DG0).interpolate(sigmah)
 # note that blockgap is nonzero in same cells as UDO n=0 fmark
-blockgap_ufl = conditional(sigmahT > dualtol, maxabselem(gaph), 0.0)
+blockgap_ufl = conditional(sigmah > dualtol, maxabselem(gaph), 0.0)
 blockgap = Function(DG0).interpolate(blockgap_ufl)
-DG4 = FunctionSpace(mesh, "DG", 4)
-adg = maxabselem(Function(DG4).interpolate(g_ufl - g))  # in DG0, over all of Omega
+CG4 = FunctionSpace(mesh, "CG", 4)
+adg = maxabselem(Function(CG4).interpolate(g_ufl - g))  # in DG0, over all of Omega
 # bdryerr is a DG0 function, but only nonzero along boundary
 bdryerr = assemble(adg * v0 * ds).riesz_representation()
 etainf = Function(DG0, name="eta_inf")
