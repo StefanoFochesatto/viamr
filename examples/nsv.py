@@ -57,6 +57,61 @@ def maxabselem(source):
     return target
 
 
+def thinelemactive(u, psi, activetol=1.0e-10):
+    """Compute element active set indicator into DG0, but "thinned" so that a
+    cell is marked as active only if this cell *and its neighboring cells* are
+    active, according to activetol.  Returns a DG0 element-wise indicator, with
+    active elements having value 1.
+      The implementation is inspired by VIAMR.udomark().  The active elements
+    are captured first using maxabselem() above (not VIAMR.elemactive()).  Then
+    the neighbor elements of *inactive* elements are found, and they are
+    effectively removed from the active element indicator.
+    """
+    # set up
+    W = u.function_space()
+    assert W == psi.function_space()
+    mesh = W.mesh()
+    d = mesh.cell_dimension()
+    dm = mesh.topology_dm
+    plexelementlist = mesh.cell_closure[:, -1]
+    # will need map from DMPlex to firedrake indices
+    # (Is there a better way to do this in dmcommon?)
+    dm2fd = np.argsort(plexelementlist)
+    # element-wise maximum of gap=u-psi, into DG0
+    gap = Function(W).interpolate(u - psi)
+    assert min(gap.dat.data_ro) >= 0.0
+    gapmax = maxabselem(gap)
+    # get DMPlex element indices of inactive cells using dmplex cell indices
+    inactivecells = [
+        plexelementlist[k]
+        for k, value in enumerate(gapmax.dat.data_ro_with_halos)
+        if value >= activetol  # test *in*active
+    ]
+    # vertex closure: indices of vertices which are incident to an inactive
+    #   element, then flatten and remove duplicates
+    incvertices = [dm.getTransitiveClosure(k)[0][-d - 1 :] for k in inactivecells]
+    incvertices = np.unique(np.ravel(incvertices))
+    # star: indices of all elements which are incident to the incidentVertices
+    #   note that getTransitiveClosure() with useCone=False gives the star
+    #   note that the number of elements incident to a vertex is not predictable
+    #   then flatten and remove duplicates
+    kmin, kmax = dm.getHeightStratum(0)[:2]
+    neighborindices = []
+    for j in incvertices:
+        star = dm.getTransitiveClosure(j, useCone=False)[0]
+        mark = np.where((star >= kmin) & (star < kmax))
+        neighborindices.extend(star[mark])
+    neighborindices = np.unique(np.ravel(neighborindices))
+    # generate DG0 thin element active indicator by zeroing-out neighbors
+    # of inactive cells
+    DG0 = FunctionSpace(mesh, "DG", 0)
+    z = Function(DG0).interpolate(Constant(1.0))  # mark *all* cells 1.0
+    for k in neighborindices:
+        # parallel communication *here*:
+        z.dat.data_wo_with_halos[dm2fd[k]] = 0.0  # remove inactive etc.
+    return z
+
+
 assert d in [2, 3]
 if d == 2:
     mesh = RectangleMesh(m, m, 1.0, 1.0, originX=-1.0, originY=-1.0, diagonal="crossed")
@@ -196,8 +251,8 @@ DG0 = FunctionSpace(mesh, "DG", 0)
 hT = project(CellSize(mesh), DG0)
 v0 = TestFunction(DG0)
 jumpu = assemble(jump(grad(uh) * v0, n) * dS).riesz_representation()  # in DG0
-active = amr.elemactive(uh, psih)  # FIXME not equivalent to usage in (3.7)
-X_ufl = active * abs(f_ufl + sigmah) + (1 - active) * abs(f_ufl)
+thinactive = thinelemactive(uh, psih)
+X_ufl = thinactive * abs(f_ufl + sigmah) + (1 - thinactive) * abs(f_ufl)
 Rinf = Function(DG0).interpolate((abs(jumpu) / hT) + X_ufl)
 
 # compute local "practical estimator" from formula (7.1) in NSV03
@@ -224,10 +279,13 @@ etainf.interpolate(C0 * hT ** 2 * maxabselem(Rinf) + blockgap + bdryerr)
 
 outfile = "result_nsv.pvd"
 print(f"writing to {outfile} ...")
+active = amr.elemactive(uh, psih)
+active.rename("active")
+thinactive.rename("thin active")
 if mesh.comm.size > 1:
     rank = Function(FunctionSpace(mesh, "DG", 0))
     rank.dat.data[:] = mesh.comm.rank
     rank.rename("rank")
-    VTKFile(outfile).write(uh, uerr, f, sigmah, etainf, fmark, rank)
+    VTKFile(outfile).write(uh, uerr, sigmah, etainf, fmark, active, thinactive, rank)
 else:
-    VTKFile(outfile).write(uh, uerr, f, sigmah, etainf, fmark)
+    VTKFile(outfile).write(uh, uerr, sigmah, etainf, fmark, active, thinactive)
