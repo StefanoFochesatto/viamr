@@ -22,9 +22,11 @@ figure = False  # generate figure to compare to NSV03
 primaltol = 0.0  # for admissibility: u_h >= -primaltol
 dualtol = 1.0e-10  # used for admissibilty (sigma_h >= -dualtol) *and* when computing estimator
 
-# Compute element-wise maximum of absolute value of source, returning a DG0 field.
-# This should work in parallel for any nodal basis space, e.g. P_k for any k.
+
 def maxabselem(source):
+    """Compute element-wise maximum of absolute value of source, returning
+    a DG0 field.  This should work in parallel for any nodal basis space,
+    e.g. CG_k or DG_k for any k."""
     V = source.function_space()
     DG0 = FunctionSpace(V.mesh(), "DG", 0)
     target = Function(DG0, name="max |source| as DG0").assign(0.0)
@@ -92,7 +94,7 @@ for j in range(levs):
     f_ufl = conditional(
         x2 <= r ** 2, -8.0 * r ** 2 * (1.0 - circle), -4.0 * (2.0 * x2 + d * circle)
     )
-    g_ufl = circle ** 2
+    g_ufl = circle ** 2  # note this is quartic, so P4 interpolation should be exact
 
     # initialize by cross-mesh interpolation, i.e. do mesh sequencing
     uh = Function(V, name="u_h (solution)").interpolate(uh if j > 0 else 0.0)
@@ -100,7 +102,7 @@ for j in range(levs):
     # state the problem
     vh = TestFunction(V)
     F = inner(grad(uh), grad(vh)) * dx - f_ufl * vh * dx
-    g = Function(V).interpolate(g_ufl)
+    g = Function(V).interpolate(g_ufl)  # = I_h g in NSV03
     bcs = DirichletBC(V, g, "on_boundary")
     problem = NonlinearVariationalProblem(F, uh, bcs)
     psih = Function(V).interpolate(0.0)
@@ -111,7 +113,8 @@ for j in range(levs):
         problem, solver_parameters=sp, options_prefix="s"
     )
     solver.solve(bounds=(psih, INFupper))
-    assert min(uh.dat.data_ro) >= 0.0  # note this admissibility check removes term from estimator
+    # following admissibility check removes a term from the estimator
+    assert min(uh.dat.data_ro) >= 0.0
 
     # error relative to exact (UFL) solution
     u_ufl = conditional(x2 <= r ** 2, 0.0, circle ** 2)
@@ -152,11 +155,11 @@ if figure and mesh.comm.rank == 0:
     plt.title("compare Figure 7.1 in Nochetto, Siebert, & Veeser (2003)")
     plt.show()
 
+# the rest of these actions are just for the final mesh
+
 # compute some quantities for output file
 fmark.rename("UDO FB mark")
 uerr = Function(V, name="u_err = u_h - u_exact").interpolate(uh - u_ufl)
-P3 = FunctionSpace(mesh, "CG", 3)
-f = Function(P3, name="f").interpolate(f_ufl)
 
 # Following section 2.1 of NSV03, compute residual sigmah in V=P1,
 #   but use opposite sign convention so sigmah >= 0.   Note that
@@ -171,7 +174,7 @@ res = assemble((inner(grad(uh), grad(phi)) - f_ufl * phi) * dx)  # cofunction
 # step 3: divide numpy arrays to give correct scale
 sigmah = Function(V, name="sigma_h (residual)")
 sigmah.dat.data[:] = res.dat.data_ro / scaleh.dat.data_ro  # divide numpy arrays
-# FIXME need to correct it on boundary, but note all boundary nodes are inactive in this example
+# all boundary nodes are inactive *in this example*
 #    section 2.1 of NSV03 addresses cases where boundary nodes are active
 #    perhaps use:  n = FacetNormal(mesh); ?? inner(grad(uh), n) * omegah * ds
 DirichletBC(V, Constant(0.0), "on_boundary").apply(sigmah)
@@ -203,17 +206,21 @@ Rinf = Function(DG0).interpolate((abs(jumpu) / hT) + X_ufl)
 #        C_0 h_T^2 \|R_\infty\|_\infty
 #      + \|(\chi - u_h)^+\|_\infty                [= 0 since uh >= 0.0 = chi here]
 #      + 1_{sigma_h > 0} * \|(u_h - \chi)^+\|_\infty   [require on T: sigma_h > dualtol]
-#      + \|g - I_h g\|_{\infty;\partial\Omega \cap T}   [exact g approximated into P3]
-# FIXME also \eta_d
+#      + \|g - I_h g\|_{\infty;\partial\Omega \cap T}   [exact g is in CG4, I_h g is in CG1]
 C0 = 0.1
 gaph = Function(V).interpolate(uh - psih)  # = "(u_h - \chi)_+" since uh >= psih
 sigmahT = Function(DG0).interpolate(sigmah)
+# note that blockgap is nonzero in same cells as UDO n=0 fmark
 blockgap_ufl = conditional(sigmahT > dualtol, maxabselem(gaph), 0.0)
 blockgap = Function(DG0).interpolate(blockgap_ufl)
-adg = maxabselem(Function(P3).interpolate(g_ufl - g))  # in DG0, but over all of Omega
-bdryerr = assemble(adg * v0 * ds).riesz_representation()  # DG0 function, only along boundary
+DG4 = FunctionSpace(mesh, "DG", 4)
+adg = maxabselem(Function(DG4).interpolate(g_ufl - g))  # in DG0, over all of Omega
+# bdryerr is a DG0 function, but only nonzero along boundary
+bdryerr = assemble(adg * v0 * ds).riesz_representation()
 etainf = Function(DG0, name="eta_{inf,T}")
 etainf.interpolate(C0 * hT ** 2 * maxabselem(Rinf) + blockgap + bdryerr)
+
+# FIXME also \eta_d
 
 outfile = "result_nsv.pvd"
 print(f"writing to {outfile} ...")
