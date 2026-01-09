@@ -15,17 +15,25 @@ except ImportError:
 class VIAMR(OptionsManager):
     r"""A VIAMR object manages adaptive mesh refinement (AMR) for a Firedrake variational inequality (VI) solver.  Central notions are that refinement near the free boundary will improve solution quality, and that refinement in the active set can be wasted effort.  Complementary refinement in the inactive set is also supported, since both refinement modes are necessary for convergence under AMR.
 
-    The public API of the VIAMR class consists of:
-      1. udomark(), vcdmark():  2 marking methods which target the computed free boundary
-      2. gradreinactivemark(), brinactivemark():  2 classical a posterior error indicator marking methods applied in the computed inactive set
-      3. elemactive(), eleminactive():  element markings for computed active and inactive sets
-      4. unionmark():  a method for combining existing marks
-      5. lowerboundcelldiameter():  unmark elements with cell diameters below a minimum cell diameter
-      6. refinemarkedelements():  a method which calls PETSc for skeleton-based-refinement (SBR)
-      7. adaptaveragedmetric():  a method which does metric-based mesh adaptation by combining an anisotropic metric with a free-boundary targeted isotropic metric
-      8. jaccard(), jaccardUFL():  computation of the Jaccard similarity index for two active sets
+    The prominent public API of the VIAMR class consists of:
 
-    The default calls are as follows:
+      udomark(), vcdmark():  2 marking methods which target the computed free boundary
+
+      gradreinactivemark(), brinactivemark():  2 classical a posterior error indicator marking methods applied in the computed inactive set
+
+      refinemarkedelements():  a method which calls PETSc for skeleton-based-refinement (SBR)
+
+      adaptaveragedmetric():  a method which does metric-based mesh adaptation by combining an anisotropic metric with a free-boundary targeted isotropic metric
+
+      elemactive(), eleminactive():  element markings for computed active and inactive sets
+
+      unionmark():  a method for combining existing marks
+
+      lowerboundcelldiameter():  unmark elements with cell diameters below a minimum cell diameter
+
+      jaccard(), jaccardUFL():  computation of the Jaccard similarity index for two active sets
+
+    Some default calls to the major marking methods and refinement methods are:
 
     .. code-block:: python3
 
@@ -34,16 +42,12 @@ class VIAMR(OptionsManager):
       mark = amr.vcdmark(uh, lb)                     # same, but based on diffusion
       mark = amr.gradrecinactivemark(uh, lb)         # classical gradient recovery in inactive set
       mark = amr.brinactivemark(uh, lb, res_ufl)     # classical Babuska & Rheinboldt in inactive set
-      mark = amr.elemactive(uh, lb)                  # element marking for active set, according to uh
-      mark = amr.eleminactive(uh, lb)                # element marking for inactive set, according to uh
-      mark = amr.unionmarks(mark1, mark2)            # union existing marks
-      mark = amr.lowerboundcelldiameter(mark, hmin)  # stop further refinement below hmin
-      rmesh = amr.refinemarkelements(mesh, mark)     # calls PETSc DMPlexTransform method for SBR
-      rmesh = amr.adaptaveragedmetric(mesh, uh, lb)  # calls animate library for metric-based adaptation
+      rmesh = amr.refinemarkelements(mesh, mark)     # calls PETSc DMPlexTransform for SBR
+      rmesh = amr.adaptaveragedmetric(mesh, uh, lb)  # use animate for metric-based adaptation
 
     Regarding the arguments: uh is a computed VI solution, lb=psi is the lower bound (obstacle), res_ufl is a UFL expression for the residual (applicable in the inactive set), mark is an element marking in DG0 (Definition 4.2 in paper), and rmesh is a refined or adapted mesh.
 
-    Regarding the VIAMR.refinemarkedelements(), compare refine_marked_elements() from NetGen/ngspetsc.
+    Regarding the refinemarkedelements(), compare refine_marked_elements() from NetGen/ngspetsc.
 
     There are also some public utility methods: spaces(), meshsizes(), meshreport(), checkadmissible(), and countmark().  Other methods starting with an underscore are (roughly) intended to be private to the VIAMR class.
 
