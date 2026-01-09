@@ -534,14 +534,18 @@ class VIAMR(OptionsManager):
         return refinedmesh
 
     def setmetricparameters(self, **kwargs):
-        self.target_complexity = kwargs.pop("target_complexity", 3000.0)
-        self.h_min = kwargs.pop("h_min", 1.0e-7)
-        self.h_max = kwargs.pop("h_max", 1.0)
+        tc = kwargs.pop("target_complexity", 3000.0)
+        hmin = kwargs.pop("h_min", 0.0)
+        hmax = kwargs.pop("h_max", PETSc.INFINITY)
+        if self.debug:
+            assert np.isreal(tc) and tc > 0
+            assert np.isreal(hmin) and hmin >= 0
+            assert np.isreal(hmax) and hmax > 0
         mp = {
-            "target_complexity": self.target_complexity,  # target number of nodes
+            "target_complexity": tc,  # target number of nodes
             "p": 2.0,  # normalisation order
-            "h_min": self.h_min,  # minimum allowed edge length
-            "h_max": self.h_max,  # maximum allowed edge length
+            "h_min": hmin,  # minimum allowed edge length
+            "h_max": hmax,  # maximum allowed edge length
         }
         self.metricparameters = {"dm_plex_metric": mp}
         return None
