@@ -21,8 +21,9 @@ m = 3  # initial mesh resolution
 levs = 4 if d == 2 else 3  # number of refinements
 nUDO = 0  # observe that {sigma_h * u_h > 0} is same as UDO mark with nUDO=0
 figure = False  # generate figure to compare to NSV03
-primaltol = 0.0  # for admissibility; require: u_h >= psi_h - primaltol  (but not psi_h=0 here)
-dualtol = 1.0e-10  # used for admissibility (sigma_h >= -dualtol) *and* when computing estimator
+# primal admissibility requires u_h >= psi_h - primaltol, but note that psi_h=0 here
+primaltol = 0.0
+dualtol = 1.0e-10  # used for admissibility (sigma_h >= -dualtol) *and* in estimator
 
 
 def _elemextreme(source, minimum=False, absolute=False, defaultval=None):
@@ -71,12 +72,12 @@ def thinelemactive(u, psi, activetol=1.0e-10):
     active, according to activetol.  Returns a DG0 element-wise indicator, with
     active elements having value 1.
       The implementation is inspired by VIAMR.udomark().  The active elements
-    are captured first using maxabselem() above (not VIAMR.elemactive()).  Then
+    are captured first using elemmaxabs(), i.e. not VIAMR.elemactive().  Then
     the neighbor elements of *inactive* elements are found, and they are
     effectively removed from the active element indicator.
       The note about constant arity at https://op2.github.io/PyOP2/concepts.html
     suggests that this operation, and presumably VIAMR.udomark() also, cannot
-    (easily?) be done with PyOP2.  (Compare the maxabselem() operation above.)
+    be done with PyOP2.
     """
     # set up
     W = u.function_space()
@@ -92,7 +93,7 @@ def thinelemactive(u, psi, activetol=1.0e-10):
     # element-wise maximum of gap=u-psi, into DG0
     gap = Function(W).interpolate(u - psi)
     assert min(gap.dat.data_ro) >= 0.0
-    gapmax = maxabselem(gap)
+    gapmax = elemmaxabs(gap)
     # get DMPlex element indices of inactive cells using firedrake indices
     inactivecells = [
         plexelementlist[k]
@@ -145,7 +146,9 @@ sp = {
 }
 
 print = PETSc.Sys.Print  # enables correct printing in parallel
-print(f"solving {d}D example from Nochetto, Siebert, & Veeser (2003), using UDO+BR AMR ...")
+print(
+    f"solving {d}D example from Nochetto, Siebert, & Veeser (2003), using UDO+BR AMR ..."
+)
 r = 0.7  # parameter in defining problem
 dofs, errs = [], []
 for j in range(levs):
@@ -222,7 +225,7 @@ if figure and mesh.comm.rank == 0:
     plt.title("compare Figure 7.1 in Nochetto, Siebert, & Veeser (2003)")
     plt.show()
 
-# the rest of these actions are just for the final mesh
+# stuff below is for the final mesh
 
 # compute some quantities for output file
 fmark.rename("UDO FB mark")
@@ -231,36 +234,36 @@ uerr = Function(V, name="u_err = u_h - u_exact").interpolate(uh - u_ufl)
 # Following section 2.1 of NSV03, page 169, compute residual sigmah in V=P1,
 #   but use opposite sign convention so sigmah >= 0.   complementarity is
 #   uh >= 0,  sigmah >= 0,  uh sigmah = 0  because psih=0
-# step 1: create cofunction with values int_Omega phi_i dx for *all* nodes i
+# step 1: residual as a cofunction
 phi = TestFunction(V)
-scaleh = assemble(phi * dx)  # cofunction; we *do not* want riesz_representation() here
-# step 2: residual as a cofunction
 res = assemble((inner(grad(uh), grad(phi)) - f_ufl * phi) * dx)  # cofunction
-# step 3: scale
+# step 2: create cofunction with values  s_i = int_Omega phi_i dx  for *all* nodes i
+scale = assemble(phi * dx)  # cofunction; we *do not* want riesz_representation() here
+# step 3: apply scale, divide by s_i
 sigmah = Function(V, name="sigma_h (residual)")
-sigmah.dat.data[:] = res.dat.data_ro / scaleh.dat.data_ro  # divide numpy arrays
-# all boundary nodes are inactive *in this example*, but page 169 addresses cases
-#    where boundary nodes are active; use?:  inner(grad(uh), n) * omegah * ds
+sigmah.dat.data[:] = res.dat.data_ro / scale.dat.data_ro  # divide numpy arrays
+# step 4: zero out boundary values because all boundary nodes are inactive *in this
+#    example*, but page 169 addresses cases where boundary nodes are active
+#    plan to use?:  inner(grad(uh), n) * omegah * ds
 DirichletBC(V, Constant(0.0), "on_boundary").apply(sigmah)
 
 # check dual admissiblity (up to tolerance)
 assert min(sigmah.dat.data_ro) >= -dualtol
 
-# Rinf is part of "practical estimator" in (7.1); see below
+# Rinf is part of "practical estimator" in (7.1)
 # it is computed from (3.7) in NSV03 using p=\infty and p'=1:
-#   R_\infty = h_T^{-1} \|[[\partial_n u_h]]\|* + X
+#    R_\infty = h_T^{-1} \|[[\partial_n u_h]]\|* + X
 # where by (2.3) in NSV03 (note sign switch on sigma_h):
 #    X = |f + sigma_h| if element neighborhood of T is active
 #    X = |f|           otherwise
 # and where
 #    \|.\|* = \|.\|_{\infty; \partial T \setminus \partial \Omega}
-# and where
 #    [[z]] is the jump in z along an edge
 n = FacetNormal(mesh)
 DG0 = FunctionSpace(mesh, "DG", 0)
-hT = project(CellSize(mesh), DG0)
+hT = project(CellSize(mesh), DG0)  # note mesh.cell_sizes() is in CG1
 v0 = TestFunction(DG0)
-jumpu = assemble(jump(grad(uh), n) * v0('-') * dS).riesz_representation()  # in DG0
+jumpu = assemble(jump(grad(uh), n) * v0("-") * dS).riesz_representation()  # in DG0
 tactive = thinelemactive(uh, psih)
 X_ufl = tactive * abs(f_ufl + sigmah) + (1 - tactive) * abs(f_ufl)
 Rinf = Function(DG0).interpolate((abs(jumpu) / hT) + X_ufl)
@@ -283,14 +286,14 @@ Rinf = Function(DG0).interpolate((abs(jumpu) / hT) + X_ufl)
 C0 = 0.1
 gaph = Function(V).interpolate(uh - psih)  # = "(u_h - \chi)_+" since uh >= psih
 # note that blockgap is nonzero in same cells as UDO n=0 fmark
-blockgap_ufl = conditional(sigmah > dualtol, maxabselem(gaph), 0.0)
+blockgap_ufl = conditional(sigmah > dualtol, elemmaxabs(gaph), 0.0)
 blockgap = Function(DG0).interpolate(blockgap_ufl)
 CG4 = FunctionSpace(mesh, "CG", 4)
-adg = maxabselem(Function(CG4).interpolate(g_ufl - g))  # in DG0, over all of Omega
+adg = elemmaxabs(Function(CG4).interpolate(g_ufl - g))  # in DG0, over all of Omega
 # bdryerr is a DG0 function, but only nonzero along boundary
+# note restriction is implicit when using ds (versus dS)
 bdryerr = assemble(adg * v0 * ds).riesz_representation()
-etainf = Function(DG0, name="eta_inf")
-etainf.interpolate(C0 * hT ** 2 * maxabselem(Rinf) + blockgap + bdryerr)
+etainf = Function(DG0, name="eta_inf").interpolate(C0 * hT ** 2 * Rinf + blockgap + bdryerr)
 
 # compute *for each closed triangle T* within the thin active set, for formula (7.1):
 #   \eta_d = C1 |h^2 grad(sigmah)|_d
