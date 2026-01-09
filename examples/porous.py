@@ -63,7 +63,7 @@ def maxeta(eta):  # maximum of BR estimator, even in parallel
     return float(eta.function_space().mesh().comm.allreduce(mine, op=MPI.MAX))
 
 for i in range(levels + 1):
-    print(f"solving porous-type problem with UDO on mesh {i} ...")
+    print(f"solving porous-type problem with UDO+BR on mesh {i} ...")
     V = FunctionSpace(mesh, "CG", 1)
 
     if i == 0:

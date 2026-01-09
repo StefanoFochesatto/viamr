@@ -139,7 +139,7 @@ sp = {
 }
 
 print = PETSc.Sys.Print  # enables correct printing in parallel
-print(f"solving {d}D example from Nochetto, Siebert, & Veeser (2003) ...")
+print(f"solving {d}D example from Nochetto, Siebert, & Veeser (2003), using UDO+BR AMR ...")
 r = 0.7  # parameter in defining problem
 dofs, errs = [], []
 for j in range(levs):
