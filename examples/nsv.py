@@ -8,6 +8,8 @@
 #   1. computes sigma_h from section 2.1 in NSV03
 #   2. computes the "practical estimator" \eta_\infty and \eta_d in formula (7.1) of NSV03
 #   3. solves "7.2 Example: Constant Obstacle"
+#   4. does these after running UDO+BR refinement for a few levels; optionally one can
+#      generate a convergence plot from UDO+BR to compare to the NSV03 results
 
 from firedrake import *
 from viamr import VIAMR
@@ -19,8 +21,8 @@ m = 3  # initial mesh resolution
 levs = 4 if d == 2 else 3  # number of refinements
 nUDO = 0  # observe that {sigma_h * u_h > 0} is same as UDO mark with nUDO=0
 figure = False  # generate figure to compare to NSV03
-primaltol = 0.0  # for admissibility: u_h >= -primaltol
-dualtol = 1.0e-10  # used for admissibilty (sigma_h >= -dualtol) *and* when computing estimator
+primaltol = 0.0  # for admissibility; require: u_h >= psi_h - primaltol  (but not psi_h=0 here)
+dualtol = 1.0e-10  # used for admissibility (sigma_h >= -dualtol) *and* when computing estimator
 
 
 def maxabselem(source):
@@ -66,6 +68,9 @@ def thinelemactive(u, psi, activetol=1.0e-10):
     are captured first using maxabselem() above (not VIAMR.elemactive()).  Then
     the neighbor elements of *inactive* elements are found, and they are
     effectively removed from the active element indicator.
+      The note about constant arity at https://op2.github.io/PyOP2/concepts.html
+    suggests that this operation, and presumably VIAMR.udomark() also, cannot
+    (easily?) be done with PyOP2.  (Compare the maxabselem() operation above.)
     """
     # set up
     W = u.function_space()
@@ -73,15 +78,16 @@ def thinelemactive(u, psi, activetol=1.0e-10):
     mesh = W.mesh()
     d = mesh.cell_dimension()
     dm = mesh.topology_dm
+    # map from firedrake mesh indices to DMPlex element indices (-1 = 2 = elements):
     plexelementlist = mesh.cell_closure[:, -1]
-    # will need map from DMPlex to firedrake indices
+    # map back:
     # (Is there a better way to do this in dmcommon?)
     dm2fd = np.argsort(plexelementlist)
     # element-wise maximum of gap=u-psi, into DG0
     gap = Function(W).interpolate(u - psi)
     assert min(gap.dat.data_ro) >= 0.0
     gapmax = maxabselem(gap)
-    # get DMPlex element indices of inactive cells using dmplex cell indices
+    # get DMPlex element indices of inactive cells using firedrake indices
     inactivecells = [
         plexelementlist[k]
         for k, value in enumerate(gapmax.dat.data_ro_with_halos)
@@ -89,7 +95,7 @@ def thinelemactive(u, psi, activetol=1.0e-10):
     ]
     # vertex closure: indices of vertices which are incident to an inactive
     #   element, then flatten and remove duplicates
-    incvertices = [dm.getTransitiveClosure(k)[0][-d - 1 :] for k in inactivecells]
+    incvertices = [dm.getTransitiveClosure(j)[0][-d - 1 :] for j in inactivecells]
     incvertices = np.unique(np.ravel(incvertices))
     # star: indices of all elements which are incident to the incidentVertices
     #   note that getTransitiveClosure() with useCone=False gives the star
@@ -106,9 +112,9 @@ def thinelemactive(u, psi, activetol=1.0e-10):
     # of inactive cells
     DG0 = FunctionSpace(mesh, "DG", 0)
     z = Function(DG0).interpolate(Constant(1.0))  # mark *all* cells 1.0
-    for k in neighborindices:
+    for j in neighborindices:
         # parallel communication *here*:
-        z.dat.data_wo_with_halos[dm2fd[k]] = 0.0  # remove inactive etc.
+        z.dat.data_wo_with_halos[dm2fd[j]] = 0.0  # remove inactive etc.
     return z
 
 
@@ -234,11 +240,6 @@ DirichletBC(V, Constant(0.0), "on_boundary").apply(sigmah)
 # check dual admissiblity (up to tolerance)
 assert min(sigmah.dat.data_ro) >= -dualtol
 
-# FIXME in following formulas: correctly interpret line pages 188-189:
-#   "For terms involving non-polynomial data, the maximum norm is
-#    approximated by evaluating element point-values at the Lagrange
-#    nodes for 7th order polynomials.""
-
 # Rinf is part of "practical estimator" in (7.1); see below
 # it is computed from (3.7) in NSV03 using p=\infty and p'=1:
 #   R_\infty = h_T^{-1} \|[[\partial_n u_h]]\|* + X
@@ -254,9 +255,17 @@ DG0 = FunctionSpace(mesh, "DG", 0)
 hT = project(CellSize(mesh), DG0)
 v0 = TestFunction(DG0)
 jumpu = assemble(jump(grad(uh), n) * v0('-') * dS).riesz_representation()  # in DG0
-thinactive = thinelemactive(uh, psih)
-X_ufl = thinactive * abs(f_ufl + sigmah) + (1 - thinactive) * abs(f_ufl)
+tactive = thinelemactive(uh, psih)
+X_ufl = tactive * abs(f_ufl + sigmah) + (1 - tactive) * abs(f_ufl)
 Rinf = Function(DG0).interpolate((abs(jumpu) / hT) + X_ufl)
+
+# note pages 188-189 in NSV03:
+#   "For terms involving non-polynomial data, the maximum norm is
+#    approximated by evaluating element point-values at the Lagrange
+#    nodes for 7th order polynomials.""
+# one possible version of this:
+#DG7 = FunctionSpace(mesh, "DG", 7)
+#Rinf = Function(DG7).interpolate((abs(jumpu) / hT) + X_ufl)
 
 # compute infinity part of local "practical estimator" from formula (7.1) in NSV03
 # namely *for each closed triangle T*:
@@ -281,18 +290,18 @@ etainf.interpolate(C0 * hT ** 2 * maxabselem(Rinf) + blockgap + bdryerr)
 #   \eta_d = C1 |h^2 grad(sigmah)|_d
 C1 = 0.01
 sigslope = inner(grad(sigmah), grad(sigmah)) ** (d / 2)  # = |\grad\sigma_h|^d
-tmp = assemble(hT ** (2 * d) * sigslope * thinactive * v0 * dx).riesz_representation()
+tmp = assemble(hT ** (2 * d) * sigslope * tactive * v0 * dx).riesz_representation()
 etad = Function(DG0, name="eta_d").interpolate(C1 * tmp ** (1.0 / d))
 
 outfile = "result_nsv.pvd"
 print(f"writing to {outfile} ...")
 active = amr.elemactive(uh, psih)
 active.rename("active")
-thinactive.rename("thin active")
+tactive.rename("thin active")
 if mesh.comm.size > 1:
     rank = Function(FunctionSpace(mesh, "DG", 0))
     rank.dat.data[:] = mesh.comm.rank
     rank.rename("rank")
-    VTKFile(outfile).write(uh, uerr, sigmah, etainf, etad, fmark, active, thinactive, rank)
+    VTKFile(outfile).write(uh, uerr, sigmah, etainf, etad, fmark, active, tactive, rank)
 else:
-    VTKFile(outfile).write(uh, uerr, sigmah, etainf, etad, fmark, active, thinactive)
+    VTKFile(outfile).write(uh, uerr, sigmah, etainf, etad, fmark, active, tactive)
