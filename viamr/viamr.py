@@ -151,6 +151,46 @@ class VIAMR(OptionsManager):
         )
         return z
 
+    def _elemextreme(self, source, minimum=False, absolute=False, defaultval=None):
+        """Compute element-wise extreme value of the source function, returning a DG0 field.  Either computes maximum or (optionally) minimum.  Optionally applies the absolute value.  User must set the default value.  Applies a PyOP2 parallel loop.  This should work in parallel for any nodal basis space, e.g. CG_k or DG_k for any k.  Note that this is *not* a reduction, which can be handled more simply, e.g. as in VIAMR.meshsizes()."""
+        assert defaultval is not None
+        V = source.function_space()
+        DG0 = FunctionSpace(V.mesh(), "DG", 0)
+        target = Function(DG0).assign(defaultval)
+        kernel = op2.Kernel(
+            """
+        void elem_extreme(double *target, double const *source)
+        {
+        /* Evaluate extreme value over cell */
+        double tmp = %(dval)s;
+        for (int i = 0; i < %(ndofs)s; i++) {
+            tmp = tmp %(compare)s %(src)s ? tmp : %(src)s;
+        }
+
+        /* Set as DG0 dof */
+        target[0] = tmp;
+        }"""
+            % {
+                "dval": float(defaultval),
+                "ndofs": V.finat_element.space_dimension(),
+                "compare": "<" if minimum else ">",
+                "src": "fabs(source[i])" if absolute else "source[i]",
+            },
+            "elem_extreme",
+        )
+        op2.par_loop(
+            kernel,
+            V.mesh().cell_set,
+            target.dat(op2.MIN if minimum else op2.MAX, target.cell_node_map()),
+            source.dat(op2.READ, source.cell_node_map()),
+        )
+        return target
+
+
+    def _elemmaxabs(self, source):
+        return self._elemextreme(source, minimum=False, absolute=True, defaultval=0.0)
+
+
     def countmark(self, mark):
         """Return count of number of elements marked."""
         if self.debug:

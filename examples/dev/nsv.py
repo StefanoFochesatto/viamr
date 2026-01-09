@@ -26,47 +26,7 @@ primaltol = 0.0
 dualtol = 1.0e-10  # used for admissibility (sigma_h >= -dualtol) *and* in estimator
 
 
-def _elemextreme(source, minimum=False, absolute=False, defaultval=None):
-    """Compute element-wise extreme value of the source function, returning a DG0 field.  Either computes maximum or (optionally) minimum.  Optionally applies the absolute value.  User must set the default value.  Applies a PyOP2 parallel loop.  This should work in parallel for any nodal basis space, e.g. CG_k or DG_k for any k.  Note that this is *not* a reduction, which can be handled more simply, e.g. as in VIAMR.meshsizes()."""
-    assert defaultval is not None
-    V = source.function_space()
-    DG0 = FunctionSpace(V.mesh(), "DG", 0)
-    target = Function(DG0).assign(defaultval)
-    kernel = op2.Kernel(
-        """
-    void elem_extreme(double *target, double const *source)
-    {
-      /* Evaluate extreme value over cell */
-      double tmp = %(dval)s;
-      for (int i = 0; i < %(ndofs)s; i++) {
-        tmp = tmp %(compare)s %(src)s ? tmp : %(src)s;
-      }
-
-      /* Set as DG0 dof */
-      target[0] = tmp;
-    }"""
-        % {
-            "dval": float(defaultval),
-            "ndofs": V.finat_element.space_dimension(),
-            "compare": "<" if minimum else ">",
-            "src": "fabs(source[i])" if absolute else "source[i]",
-        },
-        "elem_extreme",
-    )
-    op2.par_loop(
-        kernel,
-        V.mesh().cell_set,
-        target.dat(op2.MIN if minimum else op2.MAX, target.cell_node_map()),
-        source.dat(op2.READ, source.cell_node_map()),
-    )
-    return target
-
-
-def elemmaxabs(source):
-    return _elemextreme(source, minimum=False, absolute=True, defaultval=0.0)
-
-
-def thinelemactive(u, psi, activetol=1.0e-10):
+def thinelemactive(gapmax, activetol=1.0e-10):
     """Compute element active set indicator into DG0, but "thinned" so that a
     cell is marked as active only if this cell *and its neighboring cells* are
     active, according to activetol.  Returns a DG0 element-wise indicator, with
@@ -80,9 +40,9 @@ def thinelemactive(u, psi, activetol=1.0e-10):
     be done with PyOP2.
     """
     # set up
-    W = u.function_space()
-    assert W == psi.function_space()
-    mesh = W.mesh()
+    DG0 = gapmax.function_space()
+    assert DG0.ufl_element() == FiniteElement("Discontinuous Lagrange", triangle, 0)
+    mesh = DG0.mesh()
     d = mesh.cell_dimension()
     dm = mesh.topology_dm
     # map from firedrake mesh indices to DMPlex element indices (-1 = 2 = elements):
@@ -90,10 +50,6 @@ def thinelemactive(u, psi, activetol=1.0e-10):
     # map back:
     # (Is there a better way to do this in dmcommon?)
     dm2fd = np.argsort(plexelementlist)
-    # element-wise maximum of gap=u-psi, into DG0
-    gap = Function(W).interpolate(u - psi)
-    assert min(gap.dat.data_ro) >= 0.0
-    gapmax = elemmaxabs(gap)
     # get DMPlex element indices of inactive cells using firedrake indices
     inactivecells = [
         plexelementlist[k]
@@ -117,7 +73,6 @@ def thinelemactive(u, psi, activetol=1.0e-10):
     neighborindices = np.unique(np.ravel(neighborindices))
     # generate DG0 thin element active indicator by zeroing-out neighbors
     # of inactive cells
-    DG0 = FunctionSpace(mesh, "DG", 0)
     z = Function(DG0).interpolate(Constant(1.0))  # mark *all* cells 1.0
     for j in neighborindices:
         # parallel communication *here*:
@@ -250,6 +205,9 @@ DirichletBC(V, Constant(0.0), "on_boundary").apply(sigmah)
 # check dual admissiblity (up to tolerance)
 assert min(sigmah.dat.data_ro) >= -dualtol
 
+# element-wise maximum of gap=u-psi, into DG0
+gapmax = amr._elemmaxabs(uh)
+
 # Rinf is part of "practical estimator" in (7.1)
 # it is computed from (3.7) in NSV03 using p=\infty and p'=1:
 #    R_\infty = h_T^{-1} \|[[\partial_n u_h]]\|* + X
@@ -268,11 +226,11 @@ DG0 = FunctionSpace(mesh, "DG", 0)
 hT = project(CellSize(mesh), DG0)  # note mesh.cell_sizes() is in CG1
 v0 = TestFunction(DG0)
 jumpu = assemble(jump(grad(uh), n) * v0("-") * dS).riesz_representation()  # in DG0
-tactive = thinelemactive(uh, psih)
+tactive = thinelemactive(gapmax)
 X_ufl = tactive * abs(f_ufl + sigmah) + (1.0 - tactive) * abs(f_ufl)
 DG7 = FunctionSpace(mesh, "DG", 7)
 Rinf = Function(DG7).interpolate((abs(jumpu) / hT) + X_ufl)
-Rinf = elemmaxabs(Rinf)
+Rinf = amr._elemmaxabs(Rinf)
 
 # compute infinity part of local "practical estimator" from formula (7.1) in NSV03
 # namely *for each closed triangle T*:
@@ -284,10 +242,10 @@ Rinf = elemmaxabs(Rinf)
 C0 = 0.1
 gaph = Function(V).interpolate(uh - psih)  # = "(u_h - \chi)_+" since uh >= psih
 # note that blockgap is nonzero in same cells as UDO n=0 fmark
-blockgap_ufl = conditional(sigmah > dualtol, elemmaxabs(gaph), 0.0)
+blockgap_ufl = conditional(sigmah > dualtol, amr._elemmaxabs(gaph), 0.0)
 blockgap = Function(DG0).interpolate(blockgap_ufl)
 CG4 = FunctionSpace(mesh, "CG", 4)
-adg = elemmaxabs(Function(CG4).interpolate(g_ufl - g))  # in DG0, over all of Omega
+adg = amr._elemmaxabs(Function(CG4).interpolate(g_ufl - g))  # in DG0, over all of Omega
 # bdryerr is a DG0 function, but only nonzero along boundary
 # note restriction is implicit when using ds (versus dS)
 bdryerr = assemble(adg * v0 * ds).riesz_representation()
