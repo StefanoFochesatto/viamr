@@ -21,15 +21,15 @@ except ImportError:
 
 
 class VIAMR(OptionsManager):
-    r"""A VIAMR object manages adaptive mesh refinement (AMR) for a Firedrake variational inequality (VI) solver.  Central notions are that refinement near the free boundary will improve solution quality, and that refinement in the active set can be wasted effort.  Complementary refinement in the inactive set is also supported.  Both refinement modes are necessary for convergence under AMR.
+    r"""A VIAMR object manages adaptive mesh refinement (AMR) for a Firedrake variational inequality (VI) solver.  Central notions are that refinement near the free boundary will improve solution quality, and that refinement in the active set can be wasted effort.  Complementary refinement in the inactive set is also supported, since both refinement modes are necessary for convergence under AMR.
 
     The public API of the VIAMR class consists of:
-      1. udomark(), vcdmark():  two marking methods which target the computed free boundary
-      2. gradreinactivemark(), brinactivemark():  two classical a posterior error indicator marking methods applied in the computed inactive set
+      1. udomark(), vcdmark():  2 marking methods which target the computed free boundary
+      2. gradreinactivemark(), brinactivemark():  2 classical a posterior error indicator marking methods applied in the computed inactive set
       3. elemactive(), eleminactive():  element markings for computed active and inactive sets
       4. unionmark():  a method for combining existing marks
       5. lowerboundcelldiameter():  unmark elements with cell diameters below a minimum cell diameter
-      6. refinemarkedelements():  a method which calls PETSc for skeleton-based-refinement (SBR); compare refine_marked_elements() from NetGen/ngspetsc
+      6. refinemarkedelements():  a method which calls PETSc for skeleton-based-refinement (SBR)
       7. adaptaveragedmetric():  a method which does metric-based mesh adaptation by combining an anisotropic metric with a free-boundary targeted isotropic metric
       8. jaccard(), jaccardUFL():  computation of the Jaccard similarity index for two active sets
 
@@ -51,6 +51,8 @@ class VIAMR(OptionsManager):
 
     Regarding the arguments: uh is a computed VI solution, lb=psi is the lower bound (obstacle), res_ufl is a UFL expression for the residual (applicable in the inactive set), mark is an element marking in DG0 (Definition 4.2 in paper), and rmesh is a refined or adapted mesh.
 
+    Regarding the VIAMR.refinemarkedelements(), compare refine_marked_elements() from NetGen/ngspetsc.
+
     There are also some public utility methods: spaces(), meshsizes(), meshreport(), checkadmissible(), and countmark().  Other methods starting with an underscore are (roughly) intended to be private to the VIAMR class.
 
     Certain functions do not work in parallel: 1. jaccard() with submesh=False, and 2. hausdorff().
@@ -63,17 +65,17 @@ class VIAMR(OptionsManager):
         self.debug = kwargs.pop("debug", False)  # extra checks with debug=True
         self.metricparameters = None
 
-    def spaces(self, mesh, p=1):
-        """Return CG{p} and DG{p-1} spaces."""
+    def spaces(self, mesh, k=1):
+        """Return CG_k and DG_k-1 spaces."""
         if self.debug:
-            assert isinstance(p, int)
-            assert p >= 1
-        return FunctionSpace(mesh, "CG", p), FunctionSpace(mesh, "DG", p - 1)
+            assert isinstance(k, int)
+            assert k >= 1
+        return FunctionSpace(mesh, "CG", k), FunctionSpace(mesh, "DG", k - 1)
 
     def meshsizes(self, mesh):
         """Compute number of vertices, number of elements, and range of
         mesh diameters."""
-        CG1, DG0 = self.spaces(mesh, p=1)
+        CG1, DG0 = self.spaces(mesh, k=1)
         nvertices = CG1.dim()
         nelements = DG0.dim()
         mymin, mymax = PETSc.INFINITY, PETSc.NINFINITY
@@ -94,6 +96,7 @@ class VIAMR(OptionsManager):
         return None
 
     def checkadmissible(self, uh, bound, upper=False):
+        """Check strict admissibility of uh, namely if uh >= bound (upper=False) or uh <= bound (upper=True)."""
         if upper:
             bad = assemble(conditional(uh > bound, 1.0, 0.0) * dx)
         else:
@@ -101,9 +104,9 @@ class VIAMR(OptionsManager):
         return bad == 0.0
 
     def _nodalactive(self, uh, lb):
-        """Compute nodal active set indicator in same function space as uh.
-        Applies to unilateral obstacle problems.  The active
-        set is {x : u(x) == lb(x)}, within activetol.  Active nodes get value 1.0."""
+        """Compute nodal active set indicator in same function space as uh.  Only implemented for unilateral (lower bound) obstacle problems.  The nodal active set is
+          {x in N(V): |u(x) - lb(x)| < activetol}
+        where N(V) is the nodal set for V = uh.function_space().  Active nodes get value 1.0."""
         if self.debug:
             if len(uh.dat.data_ro) > 0 and len(lb.dat.data_ro) > 0:
                 assert min(uh.dat.data_ro - lb.dat.data_ro) >= 0.0
@@ -113,10 +116,7 @@ class VIAMR(OptionsManager):
         return z
 
     def elemactive(self, uh, lb):
-        """Compute element active set indicator in DG0.  Applies to unilateral
-        obstacle problems with.  Elements are marked active if the DG0 degree of
-        freedom for that element is active, within activetol.  Active elements get
-        value 1.0."""
+        """Compute an element active set indicator in DG0.  Only implemented for unilateral (lower bound) obstacle problems.  Elements are marked active if the DG0 degree of freedom for that element is active, within activetol, so use with caution if z is not in CG1.  Active elements get value 1.0."""
         if self.debug:
             if len(uh.dat.data_ro) > 0 and len(lb.dat.data_ro) > 0:
                 assert min(uh.dat.data_ro - lb.dat.data_ro) >= 0.0
@@ -127,9 +127,7 @@ class VIAMR(OptionsManager):
         return z
 
     def eleminactive(self, uh, lb):
-        """Compute element inactive set indicator in DG0.  Elements are marked
-        inactive if the DG0 degree of freedom for that element is inactive, within
-        activetol.  Inactive elements get value 1.0."""
+        """Compute an element inactive set indicator in DG0.  Only implemented for unilateral (lower bound) obstacle problems.  Elements are marked inactive if the DG0 degree of freedom for that element is inactive, within activetol, so use with caution if z is not in CG1.  Inactive elements get value 1.0."""
         if self.debug:
             if len(uh.dat.data_ro) > 0 and len(lb.dat.data_ro) > 0:
                 assert min(uh.dat.data_ro - lb.dat.data_ro) >= 0.0
@@ -140,7 +138,7 @@ class VIAMR(OptionsManager):
         return z
 
     def _elemborder(self, nodalactive):
-        """From *nodal* active set indicator nodalactive, computes bordering element indicator.  Crucially uses the fact that the DG0 degree of freedom is strictly inside the element.  Probably only works if z is in CG1.  Returns 1.0 for elements with
+        """From *nodal* active set indicator, computes bordering element indicator.  Uses the fact that the DG0 degree of freedom is strictly inside the element, so use with caution if z is not in CG1.  Returns 1.0 for elements with
           0 < nu_h(x_K) < 1
         for nodal active set indicator nu_h, and at x_K which is the DG0 dof for element K.
         """
@@ -159,6 +157,10 @@ class VIAMR(OptionsManager):
 
     def countmark(self, mark):
         """Return count of number of elements marked."""
+        if self.debug:
+            assert mark.function_space().ufl_element() == FiniteElement(
+                "Discontinuous Lagrange", triangle, 0
+            )
         j = np.count_nonzero(mark.dat.data_ro)
         comm = mark.function_space().mesh().comm
         return int(comm.allreduce(j, op=MPI.SUM))
@@ -166,12 +168,24 @@ class VIAMR(OptionsManager):
     def unionmarks(self, mark1, mark2):
         """Computes the mark which is 1.0 where either mark1==1.0
         or mark2==1.0.  That is, computes the indicator set of the union."""
+        if self.debug:
+            assert mark1.function_space().ufl_element() == FiniteElement(
+                "Discontinuous Lagrange", triangle, 0
+            )
+            assert mark2.function_space().ufl_element() == FiniteElement(
+                "Discontinuous Lagrange", triangle, 0
+            )
         return Function(mark1.function_space()).interpolate(
             (mark1 + mark2) - (mark1 * mark2)
         )
 
     def lowerboundcelldiameter(self, mark, hmin):
+        """For a DG0 cell marking mark, return a new DG0 marking with small elements unmarked, where "small" is CellDiameter() < hmin."""
         DG0 = mark.function_space()
+        if self.debug:
+            assert DG0.ufl_element() == FiniteElement(
+                "Discontinuous Lagrange", triangle, 0
+            )
         large = Function(DG0).interpolate(
             conditional(CellDiameter(DG0.mesh()) >= hmin, 1.0, 0.0)
         )
@@ -378,6 +392,10 @@ class VIAMR(OptionsManager):
             total_error_est = sqrt(eta_.dot(eta_))
 
         DG0 = eta.function_space()
+        if self.debug:
+            assert DG0.ufl_element() == FiniteElement(
+                "Discontinuous Lagrange", triangle, 0
+            )
         mark = Function(DG0).interpolate(conditional(gt(eta, ethresh), 1, 0))
         return mark, ethresh, total_error_est
 
@@ -473,6 +491,10 @@ class VIAMR(OptionsManager):
 
         # dmcommon provides a python binding for this operation of setting
         # the label given an indicator function data array
+        if self.debug:
+            assert indicator.function_space().ufl_element() == FiniteElement(
+                "Discontinuous Lagrange", triangle, 0
+            )
         dmcommon.mark_points_with_function_array(
             dm, indicatorSect, 0, indicator.dat.data_with_halos, adaptLabel, 1
         )
@@ -595,26 +617,23 @@ class VIAMR(OptionsManager):
             return animate.adapt(mesh, VIMetric)
 
     def jaccard(self, active1, active2, submesh=False):
-        """Compute the Jaccard metric from two element-wise active set
-        indicators.  By definition, the Jaccard metric of two sets is
+        """Compute the Jaccard metric from two element-wise DG0 active set indicators.  By definition, the Jaccard metric of two sets is
             J(S,T) = |S cap T| / |S cup T|,
-        where |.| is area (measure) of the set.  Thus J(S,T) the ratio of
-        the area (measure) of the intersection divided by that of the union.
-        The inputs are the indicator functions of the sets as DG0 functions.
-        In serial they can be on different meshes.  (In that case project()
-        method is used to put them on active1's mesh.)  If submesh==True
-        then active2 is assumed to live on a submesh of active1, so
-        interpolate onto the active1 mesh will work correctly.
-        *Thus with submesh==True it works in parallel.*"""
-        # FIXME how to check that active1, active2 are in DG0 spaces?
-        # FIXME how to check that, when submesh==True, active2 is actually
-        #       on a submesh of active1?
-        # FIXME warn if AreaUnion <= 0.0?
-        #       halting is *not* appropriate; it is o.k. if the users problem
-        #       has no active set at all
-
-        mesh1 = active1.function_space().mesh()
-        mesh2 = active2.function_space().mesh()
+        where |.| is area (measure) of the set.  Thus J(S,T) the ratio of the area (measure) of the intersection divided by that of the union.  The inputs are the indicator functions of the sets as DG0 functions.  In serial they can be on different meshes.  (In that case project()
+        method is used to put them on active1's mesh.)  If submesh==True then active2 is assumed to live on a submesh of active1, so interpolate onto the active1 mesh will work correctly.  *Note that with submesh==True this function works in parallel.*"""
+        # FIXME how to check that, when submesh==True, active2 is actually on a submesh of active1?
+        # FIXME warn if AreaUnion <= 0.0? halting is *not* appropriate; it is o.k. if the users problem has no active set at all
+        a1DG0 = active1.function_space()
+        a2DG0 = active2.function_space()
+        if self.debug:
+            assert a1DG0.ufl_element() == FiniteElement(
+                "Discontinuous Lagrange", triangle, 0
+            )
+            assert a2DG0.ufl_element() == FiniteElement(
+                "Discontinuous Lagrange", triangle, 0
+            )
+        mesh1 = a1DG0.mesh()
+        mesh2 = a2DG0.mesh()
         if submesh == False and (mesh1._comm.size > 1 or mesh1._comm.size > 1):
             raise ValueError("jaccard(.., submesh=False) is not valid in parallel")
         if self.debug:
@@ -623,20 +642,22 @@ class VIAMR(OptionsManager):
                     assert min(a.dat.data_ro) >= 0.0
                     assert max(a.dat.data_ro) <= 1.0
         if submesh:
-            new2 = Function(active1.function_space()).interpolate(active2)
+            new2 = Function(a1DG0).interpolate(active2)
         else:
-            new2 = Function(active1.function_space()).project(active2)
+            new2 = Function(a1DG0).project(active2)
         AreaIntersection = assemble(new2 * active1 * dx(mesh1))
         AreaUnion = assemble((new2 + active1 - (new2 * active1)) * dx(mesh1))
-        if AreaUnion <= 0.0:
-            return -1.0  # FIXME warn?
-        else:
-            return AreaIntersection / AreaUnion
+        return AreaIntersection / AreaUnion if AreaUnion > 0.0 else -1.0
 
     def jaccardUFL(self, active1, active2, qdegree=6):
         """Version of jaccard() for when active1 is a UFL expression.
         Uses high-degree quadrature.  Always valid in parallel."""
-        mesh2 = active2.function_space().mesh()
+        a2DG0 = active2.function_space()
+        if self.debug:
+            assert a2DG0.ufl_element() == FiniteElement(
+                "Discontinuous Lagrange", triangle, 0
+            )
+        mesh2 = a2DG0.mesh()
         if self.debug:
             if len(active2.dat.data_ro) > 0:
                 assert min(active2.dat.data_ro) >= 0.0
@@ -645,8 +666,7 @@ class VIAMR(OptionsManager):
         AreaUnion = assemble(
             (active2 + active1 - (active2 * active1)) * dx(mesh2, degree=qdegree)
         )
-        assert AreaUnion > 0.0, "jaccard() computed measure of the union as zero"
-        return AreaIntersection / AreaUnion
+        return AreaIntersection / AreaUnion if AreaUnion > 0.0 else -1.0
 
     def hausdorff(self, E1, E2):
         try:
