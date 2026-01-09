@@ -259,22 +259,20 @@ assert min(sigmah.dat.data_ro) >= -dualtol
 # and where
 #    \|.\|* = \|.\|_{\infty; \partial T \setminus \partial \Omega}
 #    [[z]] is the jump in z along an edge
+# note pages 188-189 in NSV03 regarding expensive use of DG7:
+#   "For terms involving non-polynomial data, the maximum norm is
+#    approximated by evaluating element point-values at the Lagrange
+#    nodes for 7th order polynomials.""
 n = FacetNormal(mesh)
 DG0 = FunctionSpace(mesh, "DG", 0)
 hT = project(CellSize(mesh), DG0)  # note mesh.cell_sizes() is in CG1
 v0 = TestFunction(DG0)
 jumpu = assemble(jump(grad(uh), n) * v0("-") * dS).riesz_representation()  # in DG0
 tactive = thinelemactive(uh, psih)
-X_ufl = tactive * abs(f_ufl + sigmah) + (1 - tactive) * abs(f_ufl)
-Rinf = Function(DG0).interpolate((abs(jumpu) / hT) + X_ufl)
-
-# note pages 188-189 in NSV03:
-#   "For terms involving non-polynomial data, the maximum norm is
-#    approximated by evaluating element point-values at the Lagrange
-#    nodes for 7th order polynomials.""
-# one possible version of this:
-#DG7 = FunctionSpace(mesh, "DG", 7)
-#Rinf = Function(DG7).interpolate((abs(jumpu) / hT) + X_ufl)
+X_ufl = tactive * abs(f_ufl + sigmah) + (1.0 - tactive) * abs(f_ufl)
+DG7 = FunctionSpace(mesh, "DG", 7)
+Rinf = Function(DG7).interpolate((abs(jumpu) / hT) + X_ufl)
+Rinf = elemmaxabs(Rinf)
 
 # compute infinity part of local "practical estimator" from formula (7.1) in NSV03
 # namely *for each closed triangle T*:
