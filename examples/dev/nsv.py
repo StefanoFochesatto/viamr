@@ -25,38 +25,44 @@ primaltol = 0.0  # for admissibility; require: u_h >= psi_h - primaltol  (but no
 dualtol = 1.0e-10  # used for admissibility (sigma_h >= -dualtol) *and* when computing estimator
 
 
-def maxabselem(source):
-    """Compute element-wise maximum of absolute value of source, returning
-    a DG0 field.  This should work in parallel for any nodal basis space,
-    e.g. CG_k or DG_k for any k."""
+def _elemextreme(source, minimum=False, absolute=False, defaultval=None):
+    """Compute element-wise extreme value of the source function, returning a DG0 field.  Either computes maximum or (optionally) minimum.  Optionally applies the absolute value.  User must set the default value.  Applies a PyOP2 parallel loop.  This should work in parallel for any nodal basis space, e.g. CG_k or DG_k for any k.  Note that this is *not* a reduction, which can be handled more simply, e.g. as in VIAMR.meshsizes()."""
+    assert defaultval is not None
     V = source.function_space()
     DG0 = FunctionSpace(V.mesh(), "DG", 0)
-    target = Function(DG0, name="max |source| as DG0").assign(0.0)
+    target = Function(DG0).assign(defaultval)
     kernel = op2.Kernel(
         """
-    void max_abs(double *target, double const *source)
+    void elem_extreme(double *target, double const *source)
     {
-      /* Evaluate max over cell */
-      double tmp = 0.0;
+      /* Evaluate extreme value over cell */
+      double tmp = %(dval)s;
       for (int i = 0; i < %(ndofs)s; i++) {
-        tmp = tmp > fabs(source[i]) ? tmp : fabs(source[i]);
+        tmp = tmp %(compare)s %(src)s ? tmp : %(src)s;
       }
 
-      /* As DG0 dof */
+      /* Set as DG0 dof */
       target[0] = tmp;
     }"""
         % {
+            "dval": float(defaultval),
             "ndofs": V.finat_element.space_dimension(),
+            "compare": "<" if minimum else ">",
+            "src": "fabs(source[i])" if absolute else "source[i]",
         },
-        "max_abs",
+        "elem_extreme",
     )
     op2.par_loop(
         kernel,
         V.mesh().cell_set,
-        target.dat(op2.MAX, target.cell_node_map()),
+        target.dat(op2.MIN if minimum else op2.MAX, target.cell_node_map()),
         source.dat(op2.READ, source.cell_node_map()),
     )
     return target
+
+
+def elemmaxabs(source):
+    return _elemextreme(source, minimum=False, absolute=True, defaultval=0.0)
 
 
 def thinelemactive(u, psi, activetol=1.0e-10):
