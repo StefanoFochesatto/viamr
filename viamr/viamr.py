@@ -12,6 +12,7 @@ try:
 except ImportError:
     from firedrake.petsc import OptionsManager
 
+
 class VIAMR(OptionsManager):
     r"""A VIAMR object manages adaptive mesh refinement (AMR) for a Firedrake variational inequality (VI) solver.  Central notions are that refinement near the free boundary will improve solution quality, and that refinement in the active set can be wasted effort.  Complementary refinement in the inactive set is also supported, since both refinement modes are necessary for convergence under AMR.
 
@@ -186,16 +187,14 @@ class VIAMR(OptionsManager):
         )
         return target
 
-
     def _elemmaxabs(self, source):
         return self._elemextreme(source, minimum=False, absolute=True, defaultval=0.0)
-
 
     def countmark(self, mark):
         """Return count of number of elements marked."""
         if self.debug:
             assert mark.function_space().ufl_element() == FiniteElement(
-                "Discontinuous Lagrange", triangle, 0
+                "DG", triangle, 0
             )
         j = np.count_nonzero(mark.dat.data_ro)
         comm = mark.function_space().mesh().comm
@@ -206,10 +205,10 @@ class VIAMR(OptionsManager):
         or mark2==1.0.  That is, computes the indicator set of the union."""
         if self.debug:
             assert mark1.function_space().ufl_element() == FiniteElement(
-                "Discontinuous Lagrange", triangle, 0
+                "DG", triangle, 0
             )
             assert mark2.function_space().ufl_element() == FiniteElement(
-                "Discontinuous Lagrange", triangle, 0
+                "DG", triangle, 0
             )
         return Function(mark1.function_space()).interpolate(
             (mark1 + mark2) - (mark1 * mark2)
@@ -219,9 +218,7 @@ class VIAMR(OptionsManager):
         """For a DG0 cell marking mark, return a new DG0 marking with small elements unmarked, where "small" is CellDiameter() < hmin."""
         DG0 = mark.function_space()
         if self.debug:
-            assert DG0.ufl_element() == FiniteElement(
-                "Discontinuous Lagrange", triangle, 0
-            )
+            assert DG0.ufl_element() == FiniteElement("DG", triangle, 0)
         large = Function(DG0).interpolate(
             conditional(CellDiameter(DG0.mesh()) >= hmin, 1.0, 0.0)
         )
@@ -429,9 +426,7 @@ class VIAMR(OptionsManager):
 
         DG0 = eta.function_space()
         if self.debug:
-            assert DG0.ufl_element() == FiniteElement(
-                "Discontinuous Lagrange", triangle, 0
-            )
+            assert DG0.ufl_element() == FiniteElement("DG", triangle, 0)
         mark = Function(DG0).interpolate(conditional(gt(eta, ethresh), 1, 0))
         return mark, ethresh, total_error_est
 
@@ -529,7 +524,7 @@ class VIAMR(OptionsManager):
         # the label given an indicator function data array
         if self.debug:
             assert indicator.function_space().ufl_element() == FiniteElement(
-                "Discontinuous Lagrange", triangle, 0
+                "DG", triangle, 0
             )
         dmcommon.mark_points_with_function_array(
             dm, indicatorSect, 0, indicator.dat.data_with_halos, adaptLabel, 1
@@ -666,12 +661,8 @@ class VIAMR(OptionsManager):
         a1DG0 = active1.function_space()
         a2DG0 = active2.function_space()
         if self.debug:
-            assert a1DG0.ufl_element() == FiniteElement(
-                "Discontinuous Lagrange", triangle, 0
-            )
-            assert a2DG0.ufl_element() == FiniteElement(
-                "Discontinuous Lagrange", triangle, 0
-            )
+            assert a1DG0.ufl_element() == FiniteElement("DG", triangle, 0)
+            assert a2DG0.ufl_element() == FiniteElement("DG", triangle, 0)
         mesh1 = a1DG0.mesh()
         mesh2 = a2DG0.mesh()
         if submesh == False and (mesh1._comm.size > 1 or mesh1._comm.size > 1):
@@ -694,9 +685,7 @@ class VIAMR(OptionsManager):
         Uses high-degree quadrature.  Always valid in parallel."""
         a2DG0 = active2.function_space()
         if self.debug:
-            assert a2DG0.ufl_element() == FiniteElement(
-                "Discontinuous Lagrange", triangle, 0
-            )
+            assert a2DG0.ufl_element() == FiniteElement("DG", triangle, 0)
         mesh2 = a2DG0.mesh()
         if self.debug:
             if len(active2.dat.data_ro) > 0:
@@ -713,6 +702,7 @@ class VIAMR(OptionsManager):
             import shapely
         except ImportError:
             import sys
+
             print("ImportError.  Unable to import shapely.  Exiting.")
             sys.exit(0)
         return shapely.hausdorff_distance(

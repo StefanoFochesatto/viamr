@@ -146,6 +146,30 @@ def test_overlapping_and_nonoverlapping_hausdorff():
     assert amr.hausdorff(E1, E2) == 0.2
 
 
+def test_elemmaxabs():
+    mesh = UnitSquareMesh(2, 1)
+    x, y = SpatialCoordinate(mesh)
+    CG1 = FunctionSpace(mesh, "CG", 1)
+    f = Function(CG1).interpolate(x * y)
+    eamax = VIAMR(debug=True)._elemmaxabs(f)
+    #VTKFile("foo.pvd").write(f, amax)
+    assert eamax.function_space().ufl_element() == FiniteElement("DG", triangle, 0)
+    diff = eamax.dat.data_ro - np.array([1.0, 0.5, 0.5, 0.0])
+    assert np.linalg.norm(diff) == 0.0
+
+
+def test_elemmin():
+    mesh = UnitCubeMesh(1, 1, 2)
+    x, y, z = SpatialCoordinate(mesh)
+    CG1 = FunctionSpace(mesh, "CG", 1)
+    f = Function(CG1).interpolate(x + y + z - 1.0)
+    amr = VIAMR(debug=True)
+    emin = amr._elemextreme(f, minimum=True, absolute=False, defaultval=1000.0)
+    vals = np.array([-1 for j in range(6)] + [-0.5 for j in range(6)])
+    assert emin.function_space().ufl_element() == FiniteElement("DG", tetrahedron, 0)
+    assert np.linalg.norm(emin.dat.data_ro - vals) == 0.0
+
+
 if __name__ == "__main__":
     test_spaces_sizes()
     test_mark_none()
@@ -156,3 +180,5 @@ if __name__ == "__main__":
     test_jaccard_submesh_uniform()
     test_third_jaccard_ufl()
     test_overlapping_and_nonoverlapping_hausdorff()
+    test_elemmaxabs()
+    test_elemmin()
