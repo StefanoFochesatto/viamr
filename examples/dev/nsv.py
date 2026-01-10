@@ -25,61 +25,6 @@ figure = False  # generate figure to compare to NSV03
 primaltol = 0.0
 dualtol = 1.0e-10  # used for admissibility (sigma_h >= -dualtol) *and* in estimator
 
-
-def thinelemactive(gapmax, activetol=1.0e-10):
-    """Compute element active set indicator into DG0, but "thinned" so that a
-    cell is marked as active only if this cell *and its neighboring cells* are
-    active, according to activetol.  Returns a DG0 element-wise indicator, with
-    active elements having value 1.
-      The implementation is inspired by VIAMR.udomark().  The active elements
-    are captured first using elemmaxabs(), i.e. not VIAMR.elemactive().  Then
-    the neighbor elements of *inactive* elements are found, and they are
-    effectively removed from the active element indicator.
-      The note about constant arity at https://op2.github.io/PyOP2/concepts.html
-    suggests that this operation, and presumably VIAMR.udomark() also, cannot
-    be done with PyOP2.
-    """
-    # set up
-    DG0 = gapmax.function_space()
-    assert DG0.ufl_element() == FiniteElement("Discontinuous Lagrange", triangle, 0)
-    mesh = DG0.mesh()
-    d = mesh.cell_dimension()
-    dm = mesh.topology_dm
-    # map from firedrake mesh indices to DMPlex element indices (-1 = 2 = elements):
-    plexelementlist = mesh.cell_closure[:, -1]
-    # map back:
-    # (Is there a better way to do this in dmcommon?)
-    dm2fd = np.argsort(plexelementlist)
-    # get DMPlex element indices of inactive cells using firedrake indices
-    inactivecells = [
-        plexelementlist[k]
-        for k, value in enumerate(gapmax.dat.data_ro_with_halos)
-        if value >= activetol  # test *in*active
-    ]
-    # vertex closure: indices of vertices which are incident to an inactive
-    #   element, then flatten and remove duplicates
-    incvertices = [dm.getTransitiveClosure(j)[0][-d - 1 :] for j in inactivecells]
-    incvertices = np.unique(np.ravel(incvertices))
-    # star: indices of all elements which are incident to the incidentVertices
-    #   note that getTransitiveClosure() with useCone=False gives the star
-    #   note that the number of elements incident to a vertex is not predictable
-    #   then flatten and remove duplicates
-    kmin, kmax = dm.getHeightStratum(0)[:2]
-    neighborindices = []
-    for j in incvertices:
-        star = dm.getTransitiveClosure(j, useCone=False)[0]
-        mark = np.where((star >= kmin) & (star < kmax))
-        neighborindices.extend(star[mark])
-    neighborindices = np.unique(np.ravel(neighborindices))
-    # generate DG0 thin element active indicator by zeroing-out neighbors
-    # of inactive cells
-    z = Function(DG0).interpolate(Constant(1.0))  # mark *all* cells 1.0
-    for j in neighborindices:
-        # parallel communication *here*:
-        z.dat.data_wo_with_halos[dm2fd[j]] = 0.0  # remove inactive etc.
-    return z
-
-
 assert d in [2, 3]
 if d == 2:
     mesh = RectangleMesh(m, m, 1.0, 1.0, originX=-1.0, originY=-1.0, diagonal="crossed")
@@ -205,9 +150,6 @@ DirichletBC(V, Constant(0.0), "on_boundary").apply(sigmah)
 # check dual admissiblity (up to tolerance)
 assert min(sigmah.dat.data_ro) >= -dualtol
 
-# element-wise maximum of gap=u-psi, into DG0
-gapmax = amr._elemmaxabs(uh)
-
 # Rinf is part of "practical estimator" in (7.1)
 # it is computed from (3.7) in NSV03 using p=\infty and p'=1:
 #    R_\infty = h_T^{-1} \|[[\partial_n u_h]]\|* + X
@@ -226,7 +168,7 @@ DG0 = FunctionSpace(mesh, "DG", 0)
 hT = project(CellSize(mesh), DG0)  # note mesh.cell_sizes() is in CG1
 v0 = TestFunction(DG0)
 jumpu = assemble(jump(grad(uh), n) * v0("-") * dS).riesz_representation()  # in DG0
-tactive = thinelemactive(gapmax)
+tactive = amr.thinelemactive(uh, psih)
 X_ufl = tactive * abs(f_ufl + sigmah) + (1.0 - tactive) * abs(f_ufl)
 DG7 = FunctionSpace(mesh, "DG", 7)
 Rinf = Function(DG7).interpolate((abs(jumpu) / hT) + X_ufl)
