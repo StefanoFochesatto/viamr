@@ -4,12 +4,13 @@
 #   a posteriori error control for elliptic obstacle problems.
 #   Numerische Mathematik, 95(1), 163-195.
 #
-# does the following:
+# first runs UDO+BR refinement for a few levels; optionally one can
+#   generate a convergence plot from UDO+BR to compare to the NSV03 results
+# then does the following on the final mesh:
 #   1. computes sigma_h from section 2.1 in NSV03
 #   2. computes the "practical estimator" \eta_\infty and \eta_d in formula (7.1) of NSV03
 #   3. solves "7.2 Example: Constant Obstacle"
-#   4. does these after running UDO+BR refinement for a few levels; optionally one can
-#      generate a convergence plot from UDO+BR to compare to the NSV03 results
+# TODO implement VIAMR.nsvmark(); use it here in a permanent example; add it to sphere.py
 
 from firedrake import *
 from viamr import VIAMR
