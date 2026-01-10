@@ -16,7 +16,7 @@ The short programs `sphere.py`, `spiral.py`, and `aol.py` show many core abiliti
 
 ## other examples
 
-Programs `blister.py`, `parabola1d.py1`, `pollutant.py`, and `suttmeier.py` are documented only by their source code.
+Programs `blister.py`, `parabola1d.py1`, `pollutant.py`, `suttmeier.py`, and `nsv.py` are documented only by their source code.
 
 The `glaciers/` directory contains another example; see `glaciers/README.md` and `glaciers/METHOD.md` for what it is doing and how to run it.
 

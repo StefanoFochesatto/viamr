@@ -1,16 +1,11 @@
-# from NSV03:
+# compare UDO+BR to the method from NSV03 on "7.2 Example: Constant Obstacle"
+# from the same source:
 #
 #   Nochetto, R. H., Siebert, K. G., & Veeser, A. (2003). Pointwise
 #   a posteriori error control for elliptic obstacle problems.
 #   Numerische Mathematik, 95(1), 163-195.
 #
-# first runs UDO+BR refinement for a few levels; optionally one can
-#   generate a convergence plot from UDO+BR to compare to the NSV03 results
-# then does the following on the final mesh:
-#   1. computes sigma_h from section 2.1 in NSV03
-#   2. computes the "practical estimator" \eta_\infty and \eta_d in formula (7.1) of NSV03
-#   3. solves "7.2 Example: Constant Obstacle"
-# TODO implement VIAMR.nsvmark(); use it here in a permanent example; add it to sphere.py
+# the methods are VIAMR.{udomark,nsvmark}
 
 from firedrake import *
 from viamr import VIAMR
@@ -18,23 +13,32 @@ from firedrake.petsc import PETSc
 
 # major parameters
 d = 2  # spatial dimension
+#  FIXME: for d=3 the NSV method generates an error with refine_marked_elements() from Netgen;
+#         maybe related to boundary refinement?
 m = 3  # initial mesh resolution
 levs = 7 if d == 2 else 4  # number of refinements
 nUDO = 0  # observe that {sigma_h * u_h > 0} is same as UDO mark with nUDO=0
-# primal admissibility requires u_h >= psi_h - primaltol, but note that psi_h=0 here
-primaltol = 0.0
 dualtol = 1.0e-8  # used for admissibility (sigma_h >= -dualtol) *and* in estimator
 
 # initial mesh
 assert d in [2, 3]
 if d == 2:
-    mesh0 = RectangleMesh(m, m, 1.0, 1.0, originX=-1.0, originY=-1.0, diagonal="crossed")
+    mesh0 = RectangleMesh(
+        m, m, 1.0, 1.0, originX=-1.0, originY=-1.0, diagonal="crossed"
+    )
 else:
     # 3D SBR refinement needs Netgen mesh and Netgen refinement (and produces bad meshes)
     from netgen.occ import *
 
     box = Box((-1.0, -1.0, -1.0), (1.0, 1.0, 1.0))
-    mesh0 = Mesh(OCCGeometry(box, dim=3).GenerateMesh(maxh=0.8))
+    ngmesh = OCCGeometry(box, dim=3).GenerateMesh(maxh=0.8)
+    mesh0 = Mesh(
+        ngmesh,
+        distribution_parameters={
+            "partition": True,
+            "overlap_type": (DistributedMeshOverlapType.VERTEX, 1),
+        },
+    )
 
 # all methods use same VI solver
 sp = {
@@ -88,8 +92,6 @@ for method in methods:
             problem, solver_parameters=sp, options_prefix="s"
         )
         solver.solve(bounds=(psih, INFupper))
-        # following admissibility check removes a term from the estimator
-        assert min(uh.dat.data_ro) >= 0.0
 
         # error relative to exact (UFL) solution
         u_ufl = conditional(x2 <= r ** 2, 0.0, circle ** 2)
@@ -98,15 +100,17 @@ for method in methods:
         print(f"  level {j}: nodes = {dofs[-1]}, |u-u_h|_2 = {errs[-1]:.3e}")
 
         # compute marking; note fmark is written to file for comparison
-        amr = VIAMR()
+        amr = VIAMR(debug=True)
         if method == "UDOBR":
             fmark = amr.udomark(uh, psih, n=nUDO)
-            residual = -div(grad(uh))
+            residual = -div(grad(uh)) - f_ufl
             (imark, _, _) = amr.brinactivemark(uh, psih, residual, theta=0.5)
             mark = amr.unionmarks(fmark, imark)
         else:
             Cfb = 10.0 if method == "NSVfb" else 1.0
-            (mark, etainf, sigmah, _) = amr.nsvmark(uh, psih, g, f_ufl, g_ufl, theta=0.5, Cfb=Cfb, dualtol=dualtol)
+            (mark, etainf, sigmah, _) = amr.nsvmark(
+                uh, psih, g, f_ufl, g_ufl, theta=0.5, Cfb=Cfb, dualtol=dualtol
+            )
 
         # get next mesh by refinement
         if j == levs - 1:
@@ -148,11 +152,15 @@ for method in methods:
         _, DG0 = amr.spaces(mesh)
         hT = project(CellSize(mesh), DG0)
         v0 = TestFunction(DG0)
-        tmp = assemble(hT ** (2 * d) * sigslope * tactive * v0 * dx).riesz_representation()
+        tmp = assemble(
+            hT ** (2 * d) * sigslope * tactive * v0 * dx
+        ).riesz_representation()
         etad = Function(DG0, name="eta_d").interpolate(C1 * tmp ** (1.0 / d))
 
         if mesh.comm.size > 1:
-            VTKFile(outfile).write(uh, uerr, sigmah, etainf, etad, active, tactive, rank)
+            VTKFile(outfile).write(
+                uh, uerr, sigmah, etainf, etad, active, tactive, rank
+            )
         else:
             VTKFile(outfile).write(uh, uerr, sigmah, etainf, etad, active, tactive)
 
@@ -165,7 +173,7 @@ if mesh.comm.rank == 0:
     for j in range(3):
         meth = methods[j]
         dofs, errs = np.array(results[meth][0]), np.array(results[meth][1])
-        #print(np.polyfit(np.log(dofs), np.log(errs), 1))
+        # print(np.polyfit(np.log(dofs), np.log(errs), 1))
         plt.loglog(dofs, errs, markers[j], label=meth)
         if meth == "UDOBR":
             y = dofs ** (-2.0 / d)
@@ -175,5 +183,5 @@ if mesh.comm.rank == 0:
     plt.grid(True)
     plt.xlabel("DOFs")
     plt.ylabel("error")
-    #plt.title("compare Figure 7.1 in Nochetto, Siebert, & Veeser (2003)")
+    plt.title("compare Figure 7.1 in Nochetto, Siebert, & Veeser (2003)")
     plt.show()
