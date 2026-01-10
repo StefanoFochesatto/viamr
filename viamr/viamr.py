@@ -183,7 +183,7 @@ class VIAMR(OptionsManager):
     def _elemborder(self, nodalactive):
         """From *nodal* active set indicator, computes bordering element indicator.  Uses the fact that the DG0 degree of freedom is strictly inside the element, so use with caution if z is not in CG1.  Returns 1.0 for elements with
           0 < nu_h(x_K) < 1
-        for nodal active set indicator nu_h, and at x_K which is the DG0 dof for element K.
+        for nodal active set indicator nu_h (in CG1), where x_K is the DG0 dof for element K.
         """
         if self.debug:
             if len(nodalactive.dat.data_ro) > 0:
@@ -280,8 +280,7 @@ class VIAMR(OptionsManager):
         Tuning advice:  Increase n to mark more elements near the free boundary, but
         on simple examples even n=1 may suffice."""
 
-        # get mesh and its DMPlex, added flag for restriction
-
+        # get mesh and border mark; added flag for restriction
         if restrict is not None:
             meshInit = uh.function_space().mesh()
             dInit = meshInit.cell_dimension()
@@ -291,29 +290,26 @@ class VIAMR(OptionsManager):
                     self.elemactive(uh, lb)
                     + self._elemborder(self._nodalactive(uh, lb))
                 )
-            elif (
-                restrict == "inactive"
-            ):  # restric to inactive set, which contains border already
+            elif restrict == "inactive":
+                # restrict to inactive set, which contains border already
                 indicator = self.eleminactive(uh, lb)
-
             mesh = self._filtermesh(meshInit, indicator)
-            d = mesh.cell_dimension()
-            dm = mesh.topology_dm
-
+            _, DG0 = self.spaces(mesh)
             # Use nodal active set indicator to make an initial DG0 element border
             # indicator. This is now on a restricted domain so allow_missing_dofs=True
-            border = Function(FunctionSpace(mesh, "DG", 0)).interpolate(
+            border = Function(DG0).interpolate(
                 self._elemborder(self._nodalactive(uh, lb)), allow_missing_dofs=True
             )
-
         else:
             mesh = uh.function_space().mesh()
-            d = mesh.cell_dimension()
-            dm = mesh.topology_dm
+            _, DG0 = self.spaces(mesh)
             # Use nodal active set indicator to make an initial DG0 element border
             # indicator.
             border = self._elemborder(self._nodalactive(uh, lb))
 
+        # get DMPlex
+        d = mesh.cell_dimension()
+        dm = mesh.topology_dm
         # FIXME Experiment implementation in cython, DMLabel to mark accumulation, dmplex with only vertex and cell connectivity to save memory
 
         # Find range of indices for element stratum
@@ -326,7 +322,6 @@ class VIAMR(OptionsManager):
 
         # main loop: expand element border out to n levels, using only DMPlex indices
         #   (index convention:  i for levels, j for nodes/vertices, k for elements)
-        _, DG0 = self.spaces(mesh)
         for i in range(n):
             # Pull DMPlex border element indices using dmplex cell indices
             borderindices = [
@@ -359,9 +354,7 @@ class VIAMR(OptionsManager):
                 # parallel communication *here*:
                 border.dat.data_wo_with_halos[dm2fd[k]] = 1
 
-        return Function(FunctionSpace(uh.function_space().mesh(), "DG", 0)).interpolate(
-            border, allow_missing_dofs=True
-        )
+        return Function(DG0).interpolate(border, allow_missing_dofs=True)
 
     def vcdmark(
         self,
