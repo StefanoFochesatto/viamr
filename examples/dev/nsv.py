@@ -19,23 +19,24 @@ from firedrake.petsc import PETSc
 # major parameters
 d = 2  # spatial dimension
 m = 3  # initial mesh resolution
-levs = 4 if d == 2 else 3  # number of refinements
+levs = 7 if d == 2 else 4  # number of refinements
 nUDO = 0  # observe that {sigma_h * u_h > 0} is same as UDO mark with nUDO=0
-figure = False  # generate figure to compare to NSV03
 # primal admissibility requires u_h >= psi_h - primaltol, but note that psi_h=0 here
 primaltol = 0.0
-dualtol = 1.0e-10  # used for admissibility (sigma_h >= -dualtol) *and* in estimator
+dualtol = 1.0e-8  # used for admissibility (sigma_h >= -dualtol) *and* in estimator
 
+# initial mesh
 assert d in [2, 3]
 if d == 2:
-    mesh = RectangleMesh(m, m, 1.0, 1.0, originX=-1.0, originY=-1.0, diagonal="crossed")
+    mesh0 = RectangleMesh(m, m, 1.0, 1.0, originX=-1.0, originY=-1.0, diagonal="crossed")
 else:
     # 3D SBR refinement needs Netgen mesh and Netgen refinement (and produces bad meshes)
     from netgen.occ import *
 
     box = Box((-1.0, -1.0, -1.0), (1.0, 1.0, 1.0))
-    mesh = Mesh(OCCGeometry(box, dim=3).GenerateMesh(maxh=0.8))
+    mesh0 = Mesh(OCCGeometry(box, dim=3).GenerateMesh(maxh=0.8))
 
+# all methods use same VI solver
 sp = {
     "snes_type": "vinewtonrsls",
     "snes_converged_reason": None,
@@ -47,169 +48,132 @@ sp = {
 }
 
 print = PETSc.Sys.Print  # enables correct printing in parallel
-print(
-    f"solving {d}D example from Nochetto, Siebert, & Veeser (2003), using UDO+BR AMR ..."
-)
+print(f"solving {d}D example from Nochetto, Siebert, & Veeser (2003) ...")
 r = 0.7  # parameter in defining problem
-dofs, errs = [], []
-for j in range(levs):
-    x = SpatialCoordinate(mesh)
-    V = FunctionSpace(mesh, "CG", 1)
+results = {}
+methods = ["UDOBR", "NSV", "NSVfb"]
+for method in methods:
+    mesh = mesh0
+    dofs, errs = [], []
+    for j in range(levs):
+        print(f"using AMR by {method} ...")
+        x = SpatialCoordinate(mesh)
+        V = FunctionSpace(mesh, "CG", 1)
 
-    # UFL expressions for source function and boundary values
-    if d == 2:
-        x2 = x[0] ** 2 + x[1] ** 2
+        # UFL expressions for source function and boundary values
+        if d == 2:
+            x2 = x[0] ** 2 + x[1] ** 2
+        else:
+            x2 = x[0] ** 2 + x[1] ** 2 + x[2] ** 2
+        circle = x2 - r ** 2
+        f_ufl = conditional(
+            x2 <= r ** 2, -8.0 * r ** 2 * (1.0 - circle), -4.0 * (2.0 * x2 + d * circle)
+        )
+        g_ufl = circle ** 2  # note this is quartic, so P4 interpolation should be exact
+
+        # initialize by cross-mesh interpolation, i.e. do mesh sequencing
+        uh = Function(V, name="u_h (solution)").interpolate(uh if j > 0 else 0.0)
+
+        # state the problem
+        vh = TestFunction(V)
+        F = inner(grad(uh), grad(vh)) * dx - f_ufl * vh * dx
+        g = Function(V).interpolate(g_ufl)  # = I_h g in NSV03
+        bcs = DirichletBC(V, g, "on_boundary")
+        problem = NonlinearVariationalProblem(F, uh, bcs)
+        psih = Function(V).interpolate(0.0)
+        INFupper = Function(V).interpolate(Constant(PETSc.INFINITY))
+
+        # solve the problem
+        solver = NonlinearVariationalSolver(
+            problem, solver_parameters=sp, options_prefix="s"
+        )
+        solver.solve(bounds=(psih, INFupper))
+        # following admissibility check removes a term from the estimator
+        assert min(uh.dat.data_ro) >= 0.0
+
+        # error relative to exact (UFL) solution
+        u_ufl = conditional(x2 <= r ** 2, 0.0, circle ** 2)
+        dofs.append(V.dim())
+        errs.append(float(errornorm(u_ufl, uh)))
+        print(f"  level {j}: nodes = {dofs[-1]}, |u-u_h|_2 = {errs[-1]:.3e}")
+
+        # compute marking; note fmark is written to file for comparison
+        amr = VIAMR()
+        if method == "UDOBR":
+            fmark = amr.udomark(uh, psih, n=nUDO)
+            residual = -div(grad(uh))
+            (imark, _, _) = amr.brinactivemark(uh, psih, residual, theta=0.5)
+            mark = amr.unionmarks(fmark, imark)
+        else:
+            Cfb = 10.0 if method == "NSVfb" else 1.0
+            (mark, etainf, sigmah, _) = amr.nsvmark(uh, psih, g, f_ufl, g_ufl, theta=0.5, Cfb=Cfb, dualtol=dualtol)
+
+        # get next mesh by refinement
+        if j == levs - 1:
+            break
+        if d == 2:
+            mesh = amr.refinemarkedelements(mesh, mark)  # PETSc DM refinement
+        else:
+            mesh = mesh.refine_marked_elements(mark)  # Netgen refinement
+
+    # for figure below
+    results[method] = (dofs, errs)
+
+    # compute fields on final mesh (independent of method)
+    uerr = Function(V, name="u_err = u_h - u_exact").interpolate(uh - u_ufl)
+    active = amr.elemactive(uh, psih)
+    active.rename("active")
+    tactive = amr.thinelemactive(uh, psih)
+    tactive.rename("thin active")
+    if mesh.comm.size > 1:
+        rank = Function(FunctionSpace(mesh, "DG", 0))
+        rank.dat.data[:] = mesh.comm.rank
+        rank.rename("rank")
+
+    outfile = f"result_{method}.pvd"
+    print(f"generating output file {outfile} ...")
+    if method == "UDOBR":
+        fmark.rename("UDO FB mark")
+        print(f"writing to {outfile} ...")
+        if mesh.comm.size > 1:
+            VTKFile(outfile).write(uh, uerr, fmark, active, tactive, rank)
+        else:
+            VTKFile(outfile).write(uh, uerr, fmark, active, tactive)
     else:
-        x2 = x[0] ** 2 + x[1] ** 2 + x[2] ** 2
-    circle = x2 - r ** 2
-    f_ufl = conditional(
-        x2 <= r ** 2, -8.0 * r ** 2 * (1.0 - circle), -4.0 * (2.0 * x2 + d * circle)
-    )
-    g_ufl = circle ** 2  # note this is quartic, so P4 interpolation should be exact
+        # FIXME etad could go into VIAMR.nsvmark()?
+        # compute *for each closed triangle T* within the thin active set, for formula (7.1):
+        #   \eta_d = C1 |h^2 grad(sigmah)|_d
+        C1 = 0.01
+        sigslope = inner(grad(sigmah), grad(sigmah)) ** (d / 2)  # = |\grad\sigma_h|^d
+        _, DG0 = amr.spaces(mesh)
+        hT = project(CellSize(mesh), DG0)
+        v0 = TestFunction(DG0)
+        tmp = assemble(hT ** (2 * d) * sigslope * tactive * v0 * dx).riesz_representation()
+        etad = Function(DG0, name="eta_d").interpolate(C1 * tmp ** (1.0 / d))
 
-    # initialize by cross-mesh interpolation, i.e. do mesh sequencing
-    uh = Function(V, name="u_h (solution)").interpolate(uh if j > 0 else 0.0)
+        if mesh.comm.size > 1:
+            VTKFile(outfile).write(uh, uerr, sigmah, etainf, etad, active, tactive, rank)
+        else:
+            VTKFile(outfile).write(uh, uerr, sigmah, etainf, etad, active, tactive)
 
-    # state the problem
-    vh = TestFunction(V)
-    F = inner(grad(uh), grad(vh)) * dx - f_ufl * vh * dx
-    g = Function(V).interpolate(g_ufl)  # = I_h g in NSV03
-    bcs = DirichletBC(V, g, "on_boundary")
-    problem = NonlinearVariationalProblem(F, uh, bcs)
-    psih = Function(V).interpolate(0.0)
-    INFupper = Function(V).interpolate(Constant(PETSc.INFINITY))
-
-    # solve the problem
-    solver = NonlinearVariationalSolver(
-        problem, solver_parameters=sp, options_prefix="s"
-    )
-    solver.solve(bounds=(psih, INFupper))
-    # following admissibility check removes a term from the estimator
-    assert min(uh.dat.data_ro) >= 0.0
-
-    # error relative to exact (UFL) solution
-    u_ufl = conditional(x2 <= r ** 2, 0.0, circle ** 2)
-    dofs.append(V.dim())
-    errs.append(float(errornorm(u_ufl, uh)))
-    print(f"  level {j}: nodes = {dofs[-1]}, |u-u_h|_2 = {errs[-1]:.3e}")
-
-    # compute UDO marking; note fmark is written to file for comparison
-    amr = VIAMR()
-    fmark = amr.udomark(uh, psih, n=nUDO)
-    residual = -div(grad(uh))
-    (imark, _, _) = amr.brinactivemark(uh, psih, residual, theta=0.5)
-    mark = amr.unionmarks(fmark, imark)
-
-    # get next mesh by refinement
-    if j == levs - 1:
-        break
-    if d == 2:
-        mesh = amr.refinemarkedelements(mesh, mark)  # PETSc DM refinement
-    else:
-        mesh = mesh.refine_marked_elements(mark)  # Netgen refinement
-
-# optional convergence figure
-if figure and mesh.comm.rank == 0:
+# convergence figure
+if mesh.comm.rank == 0:
     import matplotlib.pyplot as plt
     import numpy as np
 
-    dofs, errs = np.array(dofs), np.array(errs)
-    # print(np.polyfit(np.log(dofs), np.log(errs), 1))
-    plt.loglog(dofs, errs, "ko", label=r"$\|u - u_h\|_0$")
-    y = dofs ** (-2.0 / d)
-    y = y * errs[0] / y[0]  # fix constant so that it aligns
-    plt.loglog(dofs, y, "k:", label=f"DOFs^(-2/d) for d={d}")
+    markers = ["ko", "bs", "rs"]
+    for j in range(3):
+        meth = methods[j]
+        dofs, errs = np.array(results[meth][0]), np.array(results[meth][1])
+        #print(np.polyfit(np.log(dofs), np.log(errs), 1))
+        plt.loglog(dofs, errs, markers[j], label=meth)
+        if meth == "UDOBR":
+            y = dofs ** (-2.0 / d)
+            y = y * errs[0] / y[0]  # fix constant so that it aligns
+            plt.loglog(dofs, y, "k:", label=f"DOFs^(-2/d) for d={d}")
     plt.legend()
     plt.grid(True)
     plt.xlabel("DOFs")
     plt.ylabel("error")
-    plt.title("compare Figure 7.1 in Nochetto, Siebert, & Veeser (2003)")
+    #plt.title("compare Figure 7.1 in Nochetto, Siebert, & Veeser (2003)")
     plt.show()
-
-# stuff below is for the final mesh
-
-# compute some quantities for output file
-fmark.rename("UDO FB mark")
-uerr = Function(V, name="u_err = u_h - u_exact").interpolate(uh - u_ufl)
-
-# Following section 2.1 of NSV03, page 169, compute residual sigmah in V=P1,
-#   but use opposite sign convention so sigmah >= 0.   complementarity is
-#   uh >= 0,  sigmah >= 0,  uh sigmah = 0  because psih=0
-# step 1: residual as a cofunction
-phi = TestFunction(V)
-res = assemble((inner(grad(uh), grad(phi)) - f_ufl * phi) * dx)  # cofunction
-# step 2: create cofunction with values  s_i = int_Omega phi_i dx  for *all* nodes i
-scale = assemble(phi * dx)  # cofunction; we *do not* want riesz_representation() here
-# step 3: apply scale, divide by s_i
-sigmah = Function(V, name="sigma_h (residual)")
-sigmah.dat.data[:] = res.dat.data_ro / scale.dat.data_ro  # divide numpy arrays
-# step 4: zero out boundary values because all boundary nodes are inactive *in this
-#    example*, but page 169 addresses cases where boundary nodes are active
-#    plan to use?:  inner(grad(uh), n) * omegah * ds
-DirichletBC(V, Constant(0.0), "on_boundary").apply(sigmah)
-
-# check dual admissiblity (up to tolerance)
-assert min(sigmah.dat.data_ro) >= -dualtol
-
-# Rinf is part of "practical estimator" in (7.1)
-# it is computed from (3.7) in NSV03 using p=\infty and p'=1:
-#    R_\infty = h_T^{-1} \|[[\partial_n u_h]]\|* + X
-# where by (2.3) in NSV03 (note sign switch on sigma_h):
-#    X = |f + sigma_h| if element neighborhood of T is active
-#    X = |f|           otherwise
-# and where
-#    \|.\|* = \|.\|_{\infty; \partial T \setminus \partial \Omega}
-#    [[z]] is the jump in z along an edge
-# note pages 188-189 in NSV03 regarding expensive use of DG7:
-#   "For terms involving non-polynomial data, the maximum norm is
-#    approximated by evaluating element point-values at the Lagrange
-#    nodes for 7th order polynomials.""
-n = FacetNormal(mesh)
-DG0 = FunctionSpace(mesh, "DG", 0)
-hT = project(CellSize(mesh), DG0)  # note mesh.cell_sizes() is in CG1
-v0 = TestFunction(DG0)
-jumpu = assemble(jump(grad(uh), n) * v0("-") * dS).riesz_representation()  # in DG0
-tactive = amr.thinelemactive(uh, psih)
-X_ufl = tactive * abs(f_ufl + sigmah) + (1.0 - tactive) * abs(f_ufl)
-DG7 = FunctionSpace(mesh, "DG", 7)
-Rinf = Function(DG7).interpolate((abs(jumpu) / hT) + X_ufl)
-Rinf = amr._elemmaxabs(Rinf)
-
-# compute infinity part of local "practical estimator" from formula (7.1) in NSV03
-# namely *for each closed triangle T*:
-#   \eta_\infty =
-#        C_0 h_T^2 \|R_\infty\|_\infty
-#      + \|(\chi - u_h)^+\|_\infty                     [= 0 since uh >= 0.0 = chi here]
-#      + 1_{sigma_h > 0} * \|(u_h - \chi)^+\|_\infty   [require: sigma_h > dualtol on T]
-#      + \|g - I_h g\|_{\infty;\partial\Omega \cap T}  [exact g is in CG4, I_h g is in CG1]
-C0 = 0.1
-gaph = Function(V).interpolate(uh - psih)  # = "(u_h - \chi)_+" since uh >= psih
-# note that blockgap is nonzero in same cells as UDO n=0 fmark
-blockgap_ufl = conditional(sigmah > dualtol, amr._elemmaxabs(gaph), 0.0)
-blockgap = Function(DG0).interpolate(blockgap_ufl)
-CG4 = FunctionSpace(mesh, "CG", 4)
-adg = amr._elemmaxabs(Function(CG4).interpolate(g_ufl - g))  # in DG0, over all of Omega
-# bdryerr is a DG0 function, but only nonzero along boundary
-# note restriction is implicit when using ds (versus dS)
-bdryerr = assemble(adg * v0 * ds).riesz_representation()
-etainf = Function(DG0, name="eta_inf").interpolate(C0 * hT ** 2 * Rinf + blockgap + bdryerr)
-
-# compute *for each closed triangle T* within the thin active set, for formula (7.1):
-#   \eta_d = C1 |h^2 grad(sigmah)|_d
-C1 = 0.01
-sigslope = inner(grad(sigmah), grad(sigmah)) ** (d / 2)  # = |\grad\sigma_h|^d
-tmp = assemble(hT ** (2 * d) * sigslope * tactive * v0 * dx).riesz_representation()
-etad = Function(DG0, name="eta_d").interpolate(C1 * tmp ** (1.0 / d))
-
-outfile = "result_nsv.pvd"
-print(f"writing to {outfile} ...")
-active = amr.elemactive(uh, psih)
-active.rename("active")
-tactive.rename("thin active")
-if mesh.comm.size > 1:
-    rank = Function(FunctionSpace(mesh, "DG", 0))
-    rank.dat.data[:] = mesh.comm.rank
-    rank.rename("rank")
-    VTKFile(outfile).write(uh, uerr, sigmah, etainf, etad, fmark, active, tactive, rank)
-else:
-    VTKFile(outfile).write(uh, uerr, sigmah, etainf, etad, fmark, active, tactive)
