@@ -523,21 +523,23 @@ class VIAMR(OptionsManager):
         mark, _, total_error_est = self._fixedrate(ieta, theta, method)
         return (mark, ieta, total_error_est)
 
-    def nsvmark(self, uh, lb, g, f_ufl, g_ufl, theta=0.5, dualtol=1.0e-10, C0=0.1, Cfb=1.0):
-        """Compute marking on entire domain according to the local "practical estimator" from NSV03:
+    def nsvmark(
+        self, uh, lb, g, f_ufl, g_ufl, theta=0.5, dualtol=1.0e-10, C0=0.1, Cfb=1.0
+    ):
+        """Compute marking on entire domain according to the local 'practical estimator' from NSV03:
             Nochetto, R. H., Siebert, K. G., & Veeser, A. (2003). Pointwise a posteriori error control for elliptic obstacle problems. Numerische Mathematik, 95(1), 163-195.
         The main formula (7.1) in NSV03 is the following quantity computed on each triangle T in the mesh:
-            \eta_\infty =
-                    C_0 h_T^2 \|R_\infty\|_\infty                    [term 1]
-                + \|(\chi - u_h)^+\|_\infty                          [term 2]
-                + C_fb 1_{sigma_h > 0} * \|(u_h - \chi)^+\|_\infty   [term 3]
-                + \|g - I_h g\|_{\infty;\partial\Omega \cap T}       [term 4]
+            eta_infty =
+                  C_0 h_T^2 ||R_infty||_infty                      [term 1]
+                + ||(chi - u_h)^+||_infty                          [term 2]
+                + C_fb 1_{sigma_h > 0} * ||(u_h - chi)^+||_infty   [term 3]
+                + ||g - I_h g||_{infty; partial Omega cap T}       [term 4]
         Meaning:
-          term 1:  Estimates the residual relevant to the VI problem; see below for the R_\infty formula, which uses the discrete residual sigma_h below.  C_0=0.1 is used by NSV03.
-          term 2:  Assumed to be zero because we take \chi=\chi_h here and assert strict admissibility.  [<-- could be improved]
-          term 3:  This "blocked gap" is gap = u_h - \chi_h, but blocked according to the simplest discrete residual sigma_h, computed below.  (Note that we assert sigma_h > -dualtol below.)  Here we add coefficient C_fb, which is 1.0 in NSV03.  Increasing C_fb will generate refinement near the free boundary.
+          term 1:  Estimates the residual relevant to the VI problem; see below for the R_infty formula, which uses the discrete residual sigma_h below.  C_0=0.1 is used by NSV03.
+          term 2:  Assumed to be zero because we take chi=chi_h here and assert strict admissibility.  [<-- FIXME could be improved]
+          term 3:  This "blocked gap" is gap = u_h - chi_h, but blocked according to the simplest discrete residual sigma_h, computed below.  (Note that we assert sigma_h > -dualtol below.)  Here we add coefficient C_fb, which is 1.0 in NSV03.  Increasing C_fb will generate refinement near the free boundary.
           * Term 4 estimates the boundary interpolation error, and we use a formula which is correct if g is in CG4.
-        FIXME also \eta_d?
+        FIXME also eta_d?
         """
         # mesh quantities
         mesh = uh.function_space().mesh()
@@ -551,8 +553,9 @@ class VIAMR(OptionsManager):
         # step 1: residual as a cofunction
         phi = TestFunction(CG1)
         res = assemble((inner(grad(uh), grad(phi)) - f_ufl * phi) * dx)  # cofunction
-        # step 2: create cofunction with values  s_i = int_Omega phi_i dx  for *all* nodes i
-        scale = assemble(phi * dx)  # cofunction; we *do not* want riesz_representation() here
+        # step 2: create cofunction with values  s_i = int_Omega phi_i dx  for *all*
+        #   nodes i; we *do not* want riesz_representation() here
+        scale = assemble(phi * dx)
         # step 3: apply scale, divide by s_i
         sigmah = Function(CG1, name="sigma_h (residual)")
         sigmah.dat.data[:] = res.dat.data_ro / scale.dat.data_ro  # divide numpy arrays
@@ -575,24 +578,31 @@ class VIAMR(OptionsManager):
         #    \|.\|* = \|.\|_{\infty; \partial T \setminus \partial \Omega}
         #    [[z]] is the jump in z along an edge
         v0 = TestFunction(DG0)
-        jumpu = assemble(jump(grad(uh), n) * v0("-") * dS).riesz_representation()  # in DG0
+        # jumpu is in DG0
+        jumpu = assemble(jump(grad(uh), n) * v0("-") * dS).riesz_representation()
         tactive = self.thinelemactive(uh, lb)
         X_ufl = tactive * abs(f_ufl + sigmah) + (1.0 - tactive) * abs(f_ufl)
-        # note pages 188-189 in NSV03 regarding expensive use of DG7:
-        #   "For terms involving non-polynomial data, the maximum norm is
-        #    approximated by evaluating element point-values at the Lagrange
-        #    nodes for 7th order polynomials.""
+        # note pages 188-189 in NSV03 regarding expensive use of DG7, to deal
+        #   with the fact that f_ufl is generally not in CG1:
+        #     "For terms involving non-polynomial data, the maximum norm is
+        #      approximated by evaluating element point-values at the Lagrange
+        #      nodes for 7th order polynomials.""
         DG7 = FunctionSpace(mesh, "DG", 7)
         Rinf = Function(DG7).interpolate((abs(jumpu) / hT) + X_ufl)
         Rinf = self._elemmaxabs(Rinf)
 
+        # admissibility check; FIXME removes term 2 "(\chi - u_h)_+" from
+        #   the estimator *only when* \chi=lb is representable in u_h's space
+        gaph = Function(CG1).interpolate(uh - lb)
+        assert min(gaph.dat.data_ro) >= 0.0
+
         # finally compute eta_inf; see doc string above for formula
-        gaph = Function(CG1).interpolate(uh - lb)  # = "(u_h - \chi)_+" since uh >= psih
         # note that blockgap is nonzero in same cells as UDO n=0 fmark
         blockgap_ufl = conditional(sigmah > dualtol, self._elemmaxabs(gaph), 0.0)
         blockgap = Function(DG0).interpolate(blockgap_ufl)
         CG4 = FunctionSpace(mesh, "CG", 4)
-        adg = self._elemmaxabs(Function(CG4).interpolate(g_ufl - g))  # in DG0, over all of Omega
+        # adg = abs delta g; in DG0 and defined over all of Omega
+        adg = self._elemmaxabs(Function(CG4).interpolate(g_ufl - g))
         # bdryerr is a DG0 function, but only nonzero along boundary
         # note restriction is implicit when using ds (versus dS)
         bdryerr = assemble(adg * v0 * ds).riesz_representation()
