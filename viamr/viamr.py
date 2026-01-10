@@ -179,7 +179,6 @@ class VIAMR(OptionsManager):
             z.dat.data_wo_with_halos[dm2fd[j]] = 0.0  # remove inactive etc.
         return z
 
-
     def _elemborder(self, nodalactive):
         """From *nodal* active set indicator, computes bordering element indicator.  Uses the fact that the DG0 degree of freedom is strictly inside the element, so use with caution if z is not in CG1.  Returns 1.0 for elements with
           0 < nu_h(x_K) < 1
@@ -238,35 +237,32 @@ class VIAMR(OptionsManager):
 
     def countmark(self, mark):
         """Return count of number of elements marked."""
+        mesh = mark.function_space().mesh()
         if self.debug:
-            assert mark.function_space().ufl_element() == FiniteElement(
-                "DG", triangle, 0
-            )
+            _, DG0 = self.spaces(mesh)
+            assert mark.function_space().ufl_element() == DG0.ufl_element()
         j = np.count_nonzero(mark.dat.data_ro)
-        comm = mark.function_space().mesh().comm
-        return int(comm.allreduce(j, op=MPI.SUM))
+        return int(mesh.comm.allreduce(j, op=MPI.SUM))
 
     def unionmarks(self, mark1, mark2):
         """Computes the mark which is 1.0 where either mark1==1.0
         or mark2==1.0.  That is, computes the indicator set of the union."""
         if self.debug:
-            assert mark1.function_space().ufl_element() == FiniteElement(
-                "DG", triangle, 0
-            )
-            assert mark2.function_space().ufl_element() == FiniteElement(
-                "DG", triangle, 0
-            )
+            _, DG0 = self.spaces(mark1.function_space().mesh())
+            assert mark1.function_space().ufl_element() == DG0.ufl_element()
+            assert mark2.function_space().ufl_element() == DG0.ufl_element()
         return Function(mark1.function_space()).interpolate(
             (mark1 + mark2) - (mark1 * mark2)
         )
 
     def lowerboundcelldiameter(self, mark, hmin):
         """For a DG0 cell marking mark, return a new DG0 marking with small elements unmarked, where "small" is CellDiameter() < hmin."""
-        DG0 = mark.function_space()
+        mesh = mark.function_space().mesh()
+        _, DG0 = self.spaces(mesh)
         if self.debug:
-            assert DG0.ufl_element() == FiniteElement("DG", triangle, 0)
+            assert mark.function_space().ufl_element() == DG0.ufl_element()
         large = Function(DG0).interpolate(
-            conditional(CellDiameter(DG0.mesh()) >= hmin, 1.0, 0.0)
+            conditional(CellDiameter(mesh) >= hmin, 1.0, 0.0)
         )
         return Function(DG0).interpolate(mark * large)
 
@@ -432,7 +428,7 @@ class VIAMR(OptionsManager):
         return mark
 
     def _fixedrate(self, eta, theta, method):
-        """Marks elements according to the values of estimator eta and a threshold which depends on theta.  The number of elements marked is an increasing function of theta.  The default 'max' strategy marks all elements with eta greater than
+        """Marks elements according to the values of estimator eta in DG0 and a threshold which depends on the scalar theta.  The number of elements marked is an increasing function of theta.  The default 'max' strategy marks all elements with eta greater than
           ethresh = theta * max eta
         The 'total' strategy sorts the elements owned by the process by decreasing eta value.  Then the threshold
           ethresh = eta(index)
@@ -443,7 +439,7 @@ class VIAMR(OptionsManager):
 
         with eta.dat.vec_ro as eta_:
             if method == "max":
-                ethresh = theta * eta_.max()[1]
+                ethresh = theta * eta_.max()[1]  # FIXME looks process-dependent
             elif method == "total":
                 values = eta_.array_r
                 sorted_values = np.sort(values)[::-1]  # sort in descending order
@@ -456,9 +452,7 @@ class VIAMR(OptionsManager):
             total_error_est = sqrt(eta_.dot(eta_))
 
         DG0 = eta.function_space()
-        if self.debug:
-            assert DG0.ufl_element() == FiniteElement("DG", triangle, 0)
-        mark = Function(DG0).interpolate(conditional(gt(eta, ethresh), 1, 0))
+        mark = Function(DG0).interpolate(conditional(gt(eta, ethresh), 1.0, 0.0))
         return mark, ethresh, total_error_est
 
     def gradrecinactivemark(self, uh, lb, theta=0.5, method="max"):
@@ -634,9 +628,8 @@ class VIAMR(OptionsManager):
         # dmcommon provides a python binding for this operation of setting
         # the label given an indicator function data array
         if self.debug:
-            assert indicator.function_space().ufl_element() == FiniteElement(
-                "DG", triangle, 0
-            )
+            _, DG0 = self.spaces(mesh)
+            assert indicator.function_space().ufl_element() == DG0.ufl_element()
         dmcommon.mark_points_with_function_array(
             dm, indicatorSect, 0, indicator.dat.data_with_halos, adaptLabel, 1
         )
@@ -771,11 +764,13 @@ class VIAMR(OptionsManager):
         # FIXME warn if AreaUnion <= 0.0? halting is *not* appropriate; it is o.k. if the users problem has no active set at all
         a1DG0 = active1.function_space()
         a2DG0 = active2.function_space()
-        if self.debug:
-            assert a1DG0.ufl_element() == FiniteElement("DG", triangle, 0)
-            assert a2DG0.ufl_element() == FiniteElement("DG", triangle, 0)
         mesh1 = a1DG0.mesh()
         mesh2 = a2DG0.mesh()
+        if self.debug:
+            _, DG01 = self.spaces(mesh1)
+            assert a1DG0.ufl_element() == DG01.ufl_element()
+            _, DG02 = self.spaces(mesh2)
+            assert a2DG0.ufl_element() == DG02.ufl_element()
         if submesh == False and (mesh1._comm.size > 1 or mesh1._comm.size > 1):
             raise ValueError("jaccard(.., submesh=False) is not valid in parallel")
         if self.debug:
@@ -795,9 +790,10 @@ class VIAMR(OptionsManager):
         """Version of jaccard() for when active1 is a UFL expression.
         Uses high-degree quadrature.  Always valid in parallel."""
         a2DG0 = active2.function_space()
-        if self.debug:
-            assert a2DG0.ufl_element() == FiniteElement("DG", triangle, 0)
         mesh2 = a2DG0.mesh()
+        if self.debug:
+            _, DG02 = self.spaces(mesh2)
+            assert a2DG0.ufl_element() == DG02.ufl_element()
         if self.debug:
             if len(active2.dat.data_ro) > 0:
                 assert min(active2.dat.data_ro) >= 0.0
