@@ -1,10 +1,14 @@
-# This example attempts to do apples-to-apples comparisons of all three
-# algorithms on the "ball" problem, where the exact solution is known
-# and we can compute norm convergence rates.  Uniform refinement is also done.
-# We generate four .pvd files, result_sphere_{udo,vcd,uni,avm}.pvd, suitable
-# for a figure in the paper.  Optionally we generate .csv files for norm and
-# Jaccard convergence rates.  Note we are comparing n=1 UDO to default [0.2,0.8]
-# VCD.
+# This example attempts to do apples-to-apples comparisons of five
+# algorithms on the "ball" problem:
+#   1. UNI = uniform refinement
+#   2. UDOBR
+#   3. VCDBR
+#   4. AVM
+#   5. NSV
+# In this problem the exact solution is known and we can compute norm convergence rates.
+# We generate .pvd files: result_sphere_{uni,udobr,vcdbr,nsv,avm}.pvd
+# Optionally we generate .csv files for norm and Jaccard convergence rates.
+# Note we are comparing n=1 UDO to default [0.2,0.8] VCD.
 
 import time
 import numpy as np
@@ -23,7 +27,7 @@ print = PETSc.Sys.Print  # enables correct printing in parallel
 # number of AMR refinements; use e.g. levels = 11, and parallel, for serious convergence
 # generally uniform can't reach high levels; suggest  uniformlevels = 0.6 levels,
 # e.g. levels=11 --> uniformlevels=7
-m0 = 12           # for UDO,VCD,UNI initial mesh is m0 x m0; see below for AVM
+m0 = 12           # for UNI,UDOBR,VCDBR,NSV initial mesh is m0 x m0; see below for AVM
 levels = 4
 uniformlevels = 4
 writecsvs = False
@@ -31,7 +35,7 @@ writecsvs = False
 # method parameters
 thetaBR = 0.4  # controls BR resolution in inactive set, and convergence rate
 
-# AVM parameters; attempts to do apples-to-apples vs UDO|VCD+BR
+# AVM parameters; attempts to do apples-to-apples vs UDOBR|VCDBR
 initialhAVM = 4.0 / m0
 targetsAVM = [100, 300, 900, 3000, 7000, 18000, 50000, 100000, 250000, 600000, 1400000, 3000000]
 
@@ -88,15 +92,8 @@ sp = {
     "snes_converged_reason": None,
 }
 
-for amrtype in ["udo", "vcd", "uni", "avm"]:
-    methodname = amrtype.upper()
-    if methodname != "AVM" and methodname != "UNI":
-        methodname += "+BR"
-    print(f"solving by VIAMR using {methodname} method ...")
-
-    if writecsvs:
-        csvfile = open(f"sphere_{methodname}.csv", "w")
-        csvfile.write("I,NV,NE,HMIN,HMAX,ENORM,ENORMPREF,JACCARD,REFINETIME\n")
+for amrtype in ["uni", "udobr", "vcdbr", "avm", "nsv"]:
+    print(f"solving by VIAMR using {amrtype.upper()} method ...")
 
     amr = VIAMR()
 
@@ -125,6 +122,10 @@ for amrtype in ["udo", "vcd", "uni", "avm"]:
     if amrtype == "uni":
         unimh = MeshHierarchy(mesh0, uniformlevels)
 
+    if writecsvs:
+        csvfile = open(f"sphere_{amrtype}.csv", "w")
+        csvfile.write("I,NV,NE,HMIN,HMAX,ENORM,ENORMPREF,JACCARD,REFINETIME\n")
+
     for i in range(levels + 1):
         mesh = meshHist[i]
         x, y = SpatialCoordinate(mesh)
@@ -143,7 +144,8 @@ for amrtype in ["udo", "vcd", "uni", "avm"]:
 
         v = TestFunction(V)
         F = inner(grad(uh), grad(v)) * dx
-        bcs = DirichletBC(V, uexactUFL(r), "on_boundary")
+        g_ufl = uexactUFL(r)
+        bcs = DirichletBC(V, g_ufl, "on_boundary")
         problem = NonlinearVariationalProblem(F, uh, bcs)
 
         solver = NonlinearVariationalSolver(
@@ -180,10 +182,14 @@ for amrtype in ["udo", "vcd", "uni", "avm"]:
         elif amrtype == "avm":
             amr.setmetricparameters(target_complexity=targetsAVM[i+1], h_min=1.0e-4, h_max=1.0)
             mesh = amr.adaptaveragedmetric(mesh, uh, lb)
+        elif amrtype == "nsv":
+            g = Function(V).interpolate(g_ufl)
+            (mark, _, _, _) = amr.nsvmark(uh, lb, g, Constant(0.0), g_ufl, theta=thetaBR)
+            mesh = amr.refinemarkedelements(mesh, mark)
         else:
-            if amrtype == "udo":
+            if amrtype == "udobr":
                 mark = amr.udomark(uh, lb, n=1)
-            elif amrtype == "vcd":
+            elif amrtype == "vcdbr":
                 mark = amr.vcdmark(uh, lb)
             residual = -div(grad(uh))
             (imark, _, _) = amr.brinactivemark(uh, lb, residual, theta=thetaBR)

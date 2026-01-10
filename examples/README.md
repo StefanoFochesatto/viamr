@@ -4,9 +4,9 @@
 
 The short programs `sphere.py`, `spiral.py`, and `aol.py` show many core abilities of the `VIAMR` class.  Each of these writes `.pvd` files for viewing in Paraview.
 
-  * `sphere.py` refines an initially homogeneous mesh on a classical obstacle problem from Chapter 12 of Bueler (2021).  The three algorithms in the paper, namely UDO, VCD, and AVM, are used to mark elements for refinement near the free boundary, and refinement in the inactive set also occurs.  (Note that the AVM method depends on the [animate](https://github.com/mesh-adaptation/animate) library; see below.)  The default settings at the start of `sphere.py` are intended to generate a (more or less) apples-to-apples comparison of the methods.  View the `gap` variable in the output Paraview files to see the active, inactive, and free boundary sets.  See the `error` variable to see the distribution of numerical error.
+  * `sphere.py` refines an initially homogeneous mesh on a classical obstacle problem from Chapter 12 of Bueler (2021).  Five algorithms are applied namely, uniform refinement, UDO+BR, VCD+BR, AVM, and NSV.  The last method is from Nochetto, Siebert, and Veeser (2003).  Some methods mark elements for refinement near the free boundary, and in all methods refinement in the inactive set also occurs.  Note that the AVM method depends on the [animate](https://github.com/mesh-adaptation/animate) library; see below.  The target complexity set at the start of `sphere.py` is intended to generate a (more or less) apples-to-apples comparison of the methods.  View the `gap` variable in the output Paraview files to see the active, inactive, and free boundary sets.  See the `error` variable to see the distribution of numerical error.
 
-  * `spiral.py` does a similar comparison on a classical obstacle problem from Graeser & Kornhuber (2009).  Only the UDO and VCD methods are demonstrated.
+  * `spiral.py` does a similar comparison on a classical obstacle problem from Graeser & Kornhuber (2009).  Only 3 methods are demonstrated, namely: UDO+BR, VCD+BR, and NSV.
 
   * `aol.py` is a simple example that only does one level of refinement on a problem from
 

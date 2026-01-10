@@ -10,7 +10,9 @@ from firedrake.petsc import PETSc
 print = PETSc.Sys.Print  # enables correct printing in parallel
 from viamr import VIAMR
 
-levels = 5
+targetnodes = 20000  # stop on first mesh to reach this many nodes
+maxlevels = 12  # backstop
+CfbNSV = 100.0  # parameter to force NSV to focus on free boundary
 m0 = 10
 
 # setting distribution parameters should not be necessary ... but bug in netgen
@@ -44,12 +46,11 @@ sp = {
     "snes_converged_reason": None,
 }
 
-for amrtype in ["udo", "vcd"]:
-    methodname = amrtype.upper() + "+BR"
+for amrtype in ["udobr", "vcdbr", "nsv"]:
     meshHist = [mesh0]
 
-    for i in range(levels + 1):
-        print(f"solving spiral problem with {methodname} AMR on mesh {i} ...")
+    for i in range(maxlevels + 1):
+        print(f"solving spiral problem using {amrtype.upper()} on mesh {i} ...")
         mesh = meshHist[i]
         V = FunctionSpace(mesh, "CG", 1)
         gbdry = Constant(0.0)
@@ -83,23 +84,30 @@ for amrtype in ["udo", "vcd"]:
             print(f"  Jaccard agreement {100*jac:.2f}% [levels {i-1}, {i}]")
         eactive = neweactive
 
-        if i == levels:
+        if V.dim() >= targetnodes:
             break
 
-        residual = -div(grad(uh))
-        imark, _, _ = amr.brinactivemark(uh, lb, residual)
-        if amrtype == "udo":
-            mark = amr.udomark(uh, lb, n=1)
-        elif amrtype == "vcd":
-            mark = amr.vcdmark(uh, lb, bracket=[0.1, 0.9])
+        if amrtype == "nsv":
+            (mark, _, _, _) = amr.nsvmark(uh, lb, Constant(0.0), Constant(0.0), Constant(0.0), Cfb=CfbNSV, dualtol=1.0e-6)
         else:
-            raise ValueError("unknown amrtype")
-        mark = amr.unionmarks(mark, imark)
+            residual = -div(grad(uh))
+            imark, _, _ = amr.brinactivemark(uh, lb, residual)
+            if amrtype == "udobr":
+                mark = amr.udomark(uh, lb, n=1)
+            elif amrtype == "vcdbr":
+                mark = amr.vcdmark(uh, lb, bracket=[0.1, 0.9])
+            mark = amr.unionmarks(mark, imark)
+            
         mesh = amr.refinemarkedelements(mesh, mark)
         meshHist.append(mesh)
 
     outfile = "result_spiral_" + amrtype + ".pvd"
     print(f"done ... writing to {outfile} ...")
     gap = Function(V, name="gap = uh-lb").interpolate(uh - lb)
-    VTKFile(outfile).write(uh, lb, gap)
+    if amrtype == "nsv":
+        (mark, etainf, sigmah, _) = amr.nsvmark(uh, lb, Constant(0.0), Constant(0.0), Constant(0.0), Cfb=CfbNSV, dualtol=1.0e-6)
+        # FIXME show log(etainf), log(sigmah) because *very* concentrated
+        VTKFile(outfile).write(uh, lb, gap, mark, etainf, sigmah)
+    else:
+        VTKFile(outfile).write(uh, lb, gap)
     print("")
