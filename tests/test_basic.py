@@ -72,6 +72,38 @@ def test_unionmarks():
     assert abs(assemble(mark * dx) - 9.92) < 1.0e-10  # union of marked area
 
 
+def test_elemactive():
+    mesh = UnitSquareMesh(3, 2)
+    amr = VIAMR(debug=True)
+    CG1, DG0 = amr.spaces(mesh)
+    x, y = SpatialCoordinate(mesh)
+    uh = Function(CG1).interpolate(conditional(x > 0.5, x - 0.5, 0.0))
+    psih = Function(CG1).interpolate(Constant(0.0))
+    act = amr.elemactive(uh, psih)
+    assert act.function_space().ufl_element() == DG0.ufl_element()
+    correct = np.zeros(12)
+    correct[[0, 1, 3, 5]] = 1.0
+    assert np.linalg.norm(act.dat.data_ro - correct) == 0
+
+
+def test_thinelemactive():
+    # this also tests amr.eleminactive()
+    mesh = RectangleMesh(5, 5, 2.0, 2.0, originX=0.0, originY=0.0)
+    amr = VIAMR(debug=True)
+    CG1, DG0 = amr.spaces(mesh)
+    x, y = SpatialCoordinate(mesh)
+    r2 = x ** 2 + y ** 2
+    R0 = 1.4
+    uh = Function(CG1, name="uh").interpolate(conditional(r2 > R0 ** 2, r2 - R0 ** 2, 0.0))
+    psih = Function(CG1, name="psih").interpolate(Constant(0.0))
+    act = amr.elemactive(uh, psih)
+    tact = amr.thinelemactive(uh, psih)
+    assert act.function_space().ufl_element() == DG0.ufl_element()
+    assert tact.function_space().ufl_element() == DG0.ufl_element()
+    assert abs(assemble(act * dx) - 1.12) < 1.0e-10
+    assert abs(assemble(tact * dx) - 0.56) < 1.0e-10
+
+
 def test_overlapping_jaccard():
     mesh = _get_netgen_mesh(TriHeight=1.2)
     amr = VIAMR(debug=True)
@@ -149,11 +181,12 @@ def test_overlapping_and_nonoverlapping_hausdorff():
 def test_elemmaxabs():
     mesh = UnitSquareMesh(2, 1)
     x, y = SpatialCoordinate(mesh)
-    CG1 = FunctionSpace(mesh, "CG", 1)
+    amr = VIAMR(debug=True)
+    CG1, DG0 = amr.spaces(mesh)
     f = Function(CG1).interpolate(x * y)
-    eamax = VIAMR(debug=True)._elemmaxabs(f)
+    eamax = amr._elemmaxabs(f)
     #VTKFile("foo.pvd").write(f, amax)
-    assert eamax.function_space().ufl_element() == FiniteElement("DG", triangle, 0)
+    assert eamax.function_space().ufl_element() == DG0.ufl_element()
     diff = eamax.dat.data_ro - np.array([1.0, 0.5, 0.5, 0.0])
     assert np.linalg.norm(diff) == 0.0
 
@@ -161,12 +194,12 @@ def test_elemmaxabs():
 def test_elemmin():
     mesh = UnitCubeMesh(1, 1, 2)
     x, y, z = SpatialCoordinate(mesh)
-    CG1 = FunctionSpace(mesh, "CG", 1)
-    f = Function(CG1).interpolate(x + y + z - 1.0)
     amr = VIAMR(debug=True)
+    CG1, DG0 = amr.spaces(mesh)
+    f = Function(CG1).interpolate(x + y + z - 1.0)
     emin = amr._elemextreme(f, minimum=True, absolute=False, defaultval=1000.0)
     vals = np.array([-1 for j in range(6)] + [-0.5 for j in range(6)])
-    assert emin.function_space().ufl_element() == FiniteElement("DG", tetrahedron, 0)
+    assert emin.function_space().ufl_element() == DG0.ufl_element()
     assert np.linalg.norm(emin.dat.data_ro - vals) == 0.0
 
 
@@ -174,6 +207,8 @@ if __name__ == "__main__":
     test_spaces_sizes()
     test_mark_none()
     test_unionmarks()
+    test_elemactive()
+    test_thinelemactive()
     test_overlapping_jaccard()
     test_nonoverlapping_jaccard()
     test_symmetry_jaccard()

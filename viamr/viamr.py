@@ -134,6 +134,52 @@ class VIAMR(OptionsManager):
         z.interpolate(conditional(abs(uh - lb) < self.activetol, 0.0, 1.0))
         return z
 
+    def thinelemactive(self, uh, lb):
+        """Compute element active set indicator into DG0, but "thinned".  In contrast to elemactive(), a cell is marked as active only if it *and its neighboring cells* are active.  The test for active is based on testing at the DG0 degree of freedom, and according to activetol. Returns a DG0 element-wise indicator, with active elements having value 1.
+        The implementation is inspired by VIAMR.udomark().  The neighbor elements of *inactive* elements are found, and they are effectively removed from the active element indicator.
+        The note about constant arity at https://op2.github.io/PyOP2/concepts.html suggests that this operation, and presumably VIAMR.udomark() also, cannot be done with PyOP2.
+        """
+        inactive = self.eleminactive(uh, lb)
+        mesh = uh.function_space().mesh()
+        _, DG0 = self.spaces(mesh)
+        dm = mesh.topology_dm
+        # map from firedrake mesh indices to DMPlex element indices (-1 = 2 = elements):
+        plexelementlist = mesh.cell_closure[:, -1]
+        # map back:
+        # (Is there a better way to do this in dmcommon?)
+        dm2fd = np.argsort(plexelementlist)
+        # get DMPlex element indices of inactive cells using firedrake indices
+        inactivecells = [
+            plexelementlist[k]
+            for k, value in enumerate(inactive.dat.data_ro_with_halos)
+            if value == 1.0
+        ]
+        # vertex closure: indices of vertices which are incident to an inactive
+        #   element, then flatten and remove duplicates
+        d = mesh.cell_dimension()
+        incvertices = [dm.getTransitiveClosure(j)[0][-d - 1 :] for j in inactivecells]
+        incvertices = np.unique(np.ravel(incvertices))
+        # star: indices of all elements which are incident to the incvertices
+        #   note that getTransitiveClosure() with useCone=False gives the star
+        #   note that the number of elements incident to a vertex is not predictable
+        #   then flatten and remove duplicates
+        kmin, kmax = dm.getHeightStratum(0)[:2]  # range for element indices
+        neighborindices = []
+        for j in incvertices:
+            star = dm.getTransitiveClosure(j, useCone=False)[0]
+            # FIXME is np.where needed?
+            mark = np.where((star >= kmin) & (star < kmax))
+            neighborindices.extend(star[mark])
+        neighborindices = np.unique(np.ravel(neighborindices))
+        # generate DG0 thin element active indicator by zeroing-out all neighbors
+        # of inactive cells
+        z = Function(DG0).interpolate(Constant(1.0))  # mark *all* cells 1.0
+        for j in neighborindices:
+            # parallel communication *here*:
+            z.dat.data_wo_with_halos[dm2fd[j]] = 0.0  # remove inactive etc.
+        return z
+
+
     def _elemborder(self, nodalactive):
         """From *nodal* active set indicator, computes bordering element indicator.  Uses the fact that the DG0 degree of freedom is strictly inside the element, so use with caution if z is not in CG1.  Returns 1.0 for elements with
           0 < nu_h(x_K) < 1
