@@ -524,7 +524,7 @@ class VIAMR(OptionsManager):
         return (mark, ieta, total_error_est)
 
     def nsvmark(
-        self, uh, lb, g, f_ufl, g_ufl, theta=0.5, dualtol=1.0e-10, C0=0.1, Cfb=1.0
+        self, uh, lb, g, f_ufl, g_ufl, method="max", theta=0.5, dualtol=1.0e-10, C0=0.1, Cfb=1.0
     ):
         """Compute marking on entire domain according to the local 'practical estimator' from NSV03:
             Nochetto, R. H., Siebert, K. G., & Veeser, A. (2003). Pointwise a posteriori error control for elliptic obstacle problems. Numerische Mathematik, 95(1), 163-195.
@@ -610,7 +610,7 @@ class VIAMR(OptionsManager):
         etainf = Function(DG0, name="eta_inf").interpolate(etainf_ufl)
 
         # compute mark in whole domain
-        mark, _, total_error_est = self._fixedrate(etainf, theta, "max")
+        mark, _, total_error_est = self._fixedrate(etainf, theta, method)
         return (mark, etainf, sigmah, total_error_est)
 
     def refinemarkedelements(self, mesh, indicator, isUniform=False):
