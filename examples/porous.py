@@ -78,7 +78,7 @@ for i in range(levels + 1):
 
     # source term which is -2.1 at (0,0) and +3.9 at (1,1)
     x, y = SpatialCoordinate(mesh)
-    fsource = Function(V).interpolate(3.0 * (x * x + y * y - 0.7))
+    fsource = Function(V, name="f (source)").interpolate(3.0 * (x * x + y * y - 0.7))
 
     # regularization for the problem on this mesh
     eps = epssched[i]
@@ -140,6 +140,6 @@ if mesh.comm.size > 1:
     DG0 = FunctionSpace(mesh, "DG", 0)
     rank = Function(DG0, name="rank")
     rank.dat.data[:] = mesh.comm.rank
-    VTKFile(outfile).write(uh, eta, rank)
+    VTKFile(outfile).write(uh, fsource, eta, rank)
 else:
-    VTKFile(outfile).write(uh, eta)
+    VTKFile(outfile).write(uh, fsource, eta)
