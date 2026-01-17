@@ -10,10 +10,12 @@ from firedrake.petsc import PETSc
 print = PETSc.Sys.Print  # enables correct printing in parallel
 from viamr import VIAMR
 
+m0 = 10  # initial mesh is m0 x m0
 targetnodes = 20000  # stop on first mesh to reach this many nodes
 maxlevels = 12  # backstop
-CfbNSV = 100.0  # parameter to force NSV to focus on free boundary
-m0 = 10
+useVCD = False  # add VCD+BR results if this is True
+CfbNSV = 100.0  # parameter to help force NSV to focus on free boundary
+dualtol = 1.0e-6  # used in NSV
 
 # setting distribution parameters should not be necessary ... but bug in netgen
 dp = {
@@ -46,7 +48,12 @@ sp = {
     "snes_converged_reason": None,
 }
 
-for amrtype in ["udobr", "vcdbr", "nsv"]:
+if useVCD:
+    typelist = ["udobr", "vcdbr", "nsv", "nsvfb"]
+else:
+    typelist = ["udobr", "nsv", "nsvfb"]
+
+for amrtype in typelist:
     meshHist = [mesh0]
 
     for i in range(maxlevels + 1):
@@ -87,16 +94,17 @@ for amrtype in ["udobr", "vcdbr", "nsv"]:
         if V.dim() >= targetnodes:
             break
 
-        if amrtype == "nsv":
-            (mark, _, _, _) = amr.nsvmark(uh, lb, Constant(0.0), Constant(0.0), Constant(0.0), Cfb=CfbNSV, dualtol=1.0e-6)
-        else:
+        if amrtype in ["udobr", "vcdbr"]:
             residual = -div(grad(uh))
-            imark, _, _ = amr.brinactivemark(uh, lb, residual)
+            imark, _, _ = amr.brinactivemark(uh, lb, residual, method="total")
             if amrtype == "udobr":
                 mark = amr.udomark(uh, lb, n=1)
             elif amrtype == "vcdbr":
                 mark = amr.vcdmark(uh, lb, bracket=[0.1, 0.9])
             mark = amr.unionmarks(mark, imark)
+        else:
+            cc = CfbNSV if amrtype == "nsvfb" else 0.0
+            (mark, _, _, _) = amr.nsvmark(uh, lb, Constant(0.0), Constant(0.0), Constant(0.0), method="total", Cfb=cc, dualtol=dualtol)
             
         mesh = amr.refinemarkedelements(mesh, mark)
         meshHist.append(mesh)
@@ -104,10 +112,24 @@ for amrtype in ["udobr", "vcdbr", "nsv"]:
     outfile = "result_spiral_" + amrtype + ".pvd"
     print(f"done ... writing to {outfile} ...")
     gap = Function(V, name="gap = uh-lb").interpolate(uh - lb)
-    if amrtype == "nsv":
-        (mark, etainf, sigmah, _) = amr.nsvmark(uh, lb, Constant(0.0), Constant(0.0), Constant(0.0), Cfb=CfbNSV, dualtol=1.0e-6)
-        # FIXME show log(etainf), log(sigmah) because *very* concentrated
-        VTKFile(outfile).write(uh, lb, gap, mark, etainf, sigmah)
+    if amrtype in ["udobr", "vcdbr"]:
+        # for output file, compute imark, mark on final mesh
+        residual = -div(grad(uh))
+        imark, _, _ = amr.brinactivemark(uh, lb, residual, method="total")
+        if amrtype == "udobr":
+            mark = amr.udomark(uh, lb, n=1)
+        elif amrtype == "vcdbr":
+            mark = amr.vcdmark(uh, lb, bracket=[0.1, 0.9])
+        mark = amr.unionmarks(mark, imark)
+        imark.rename("imark (BR)")
+        mark.rename("mark")
+        VTKFile(outfile).write(uh, lb, gap, mark, imark)
     else:
-        VTKFile(outfile).write(uh, lb, gap)
+        # for output file, compute mark, etainf, sigmah on final mesh
+        cc = CfbNSV if amrtype == "nsvfb" else 0.0
+        (mark, etainf, sigmah, _) = amr.nsvmark(uh, lb, Constant(0.0), Constant(0.0), Constant(0.0), method="total", Cfb=cc, dualtol=dualtol)
+        mark.rename("mark")
+        lnsigmah = Function(V, name="ln(sigma_h)").interpolate(ln(sigmah + dualtol))
+        lnetainf = Function(V, name="ln(eta_inf)").interpolate(ln(etainf))
+        VTKFile(outfile).write(uh, lb, gap, mark, sigmah, lnsigmah, etainf, lnetainf)
     print("")
