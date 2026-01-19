@@ -27,10 +27,10 @@ print = PETSc.Sys.Print  # enables correct printing in parallel
 # number of AMR refinements; use e.g. levels = 11, and parallel, for serious convergence
 # generally uniform can't reach high levels; suggest  uniformlevels = 0.6 levels,
 # e.g. levels=11 --> uniformlevels=7
-m0 = 12  # for UNI,UDOBR,VCDBR,NSV initial mesh is m0 x m0; see below for AVM
-maxlevels = 12  # backstop target complexity
-targetelements = 2.0e5
-uniformlevels = 5
+m0 = 10  # for UNI,UDOBR,VCDBR,NSV initial mesh is m0 x m0; see below for AVM
+maxlevels = 15  # backstop target complexity
+targetelements = 3.0e5
+uniformlevels = 6
 writecsvs = True
 
 # method parameters
@@ -93,8 +93,7 @@ sp = {
     "snes_converged_reason": None,
 }
 
-#for amrtype in ["uni", "udobr", "vcdbr", "avm", "nsv"]:
-for amrtype in ["uni", "udobr", "nsv"]:
+for amrtype in ["uni", "udobr", "avm", "nsv"]:  # note vcdbr very close to udobr
     print(f"solving by VIAMR using {amrtype.upper()} method ...")
 
     amr = VIAMR()
@@ -126,15 +125,12 @@ for amrtype in ["uni", "udobr", "nsv"]:
 
     if writecsvs:
         csvfile = open(f"sphere_{amrtype}.csv", "w")
-        csvfile.write("I,NV,NE,HMIN,HMAX,ENORM,ENORMPREF,JACCARD,REFINETIME\n")
+        csvfile.write("I,NV,NE,HMIN,HMAX,ENORM,ENORMPREF,JACCARD,HAUSDORFF,REFINETIME\n")
 
     for i in range(maxlevels + 1):
-        mesh = meshHist[i]
-        x, y = SpatialCoordinate(mesh)
-        r = sqrt(x * x + y * y)
         print(f"solving on mesh {i} ...")
+        mesh = meshHist[i]
         amr.meshreport(mesh)
-
         V = FunctionSpace(mesh, "CG", 1)
         if i == 0:
             uh = Function(V, name="u_h")
@@ -144,12 +140,14 @@ for amrtype in ["uni", "udobr", "nsv"]:
             uUFL = conditional(uh < lb, lb, uh)  # use old data
             uh = Function(V, name="u_h").interpolate(uUFL)
 
+        # set up and solve problem
         v = TestFunction(V)
         F = inner(grad(uh), grad(v)) * dx
+        x, y = SpatialCoordinate(mesh)
+        r = sqrt(x * x + y * y)
         g_ufl = uexactUFL(r)
         bcs = DirichletBC(V, g_ufl, "on_boundary")
         problem = NonlinearVariationalProblem(F, uh, bcs)
-
         solver = NonlinearVariationalSolver(
             problem, solver_parameters=sp, options_prefix="s"
         )
@@ -157,27 +155,34 @@ for amrtype in ["uni", "udobr", "nsv"]:
         ub = Function(V).interpolate(Constant(PETSc.INFINITY))
         solver.solve(bounds=(lb, ub))
 
+        # compute norms
         en_no = errornorm_deg20(uexactUFL(r), uh)
         activeh = amr.elemactive(uh, lb)
         en_pre = errornorm_preferred_deg20(r, uh, activeh)
         print(f"  ||u_exact - u_h||_2 = {en_no:.3e}")
         print(f"  ||u_exact - tilde u_h||_2 = {en_pre:.3e}")
-
         jaccard = amr.jaccardUFL(activeexactUFL(r), activeh)
         print(f"  jaccard(A_u, A_uh) = {jaccard:.5f}")
+        if mesh.comm.size == 1:
+            uexact = Function(V, name="u_exact").interpolate(uexactUFL(r))
+            _, fbexact = amr.freeboundarygraph(uexact, lb)
+            _, fb = amr.freeboundarygraph(uh, lb)
+            haus = amr.hausdorff(fbexact, fb)
+            print(f"  hausdorff(Gamma_u, Gamma_uh) = {haus:.5f}")
+        else:
+            print(f"  [parallel: skipping Hausdorff distance]")
+            haus = PETSc.INFINITY
 
+        # report, and break if targer complexity met
         Nv, Ne, hmin, hmax = amr.meshsizes(mesh)
         if writecsvs:
             csvfile.write(
-                f"{i},{Nv},{Ne},{hmin:.5f},{hmax:.5f},{en_no:.3e},{en_pre:.3e},{jaccard:.5f},{refinetime:.3e}\n"
+                f"{i},{Nv},{Ne},{hmin:.5f},{hmax:.5f},{en_no:.3e},{en_pre:.3e},{jaccard:.5f},{haus:.5f},{refinetime:.3e}\n"
             )
-
-        if amrtype == "uni" and i >= uniformlevels:
-            break
-
         if Ne > targetelements:
             break
 
+        # do an AMR level
         start_time = time.time()
         if amrtype == "uni":
             mesh = unimh[i+1]
@@ -199,7 +204,6 @@ for amrtype in ["uni", "udobr", "nsv"]:
             mesh = amr.refinemarkedelements(mesh, mark)
         if amrtype != "uni":
             refinetime = time.time() - start_time
-
         meshHist.append(mesh)
 
     if writecsvs:
