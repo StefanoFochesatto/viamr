@@ -14,7 +14,6 @@ m0 = 10  # initial mesh is m0 x m0
 targetnodes = 20000  # stop on first mesh to reach this many nodes
 maxlevels = 12  # backstop
 useVCD = False  # add VCD+BR results if this is True
-CfbNSV = 100.0  # parameter to help force NSV to focus on free boundary
 dualtol = 1.0e-6  # used in NSV
 
 # setting distribution parameters should not be necessary ... but bug in netgen
@@ -49,9 +48,9 @@ sp = {
 }
 
 if useVCD:
-    typelist = ["udobr", "vcdbr", "nsv", "nsvfb"]
+    typelist = ["udobr", "vcdbr", "nsv"]
 else:
-    typelist = ["udobr", "nsv", "nsvfb"]
+    typelist = ["udobr", "nsv"]
 
 for amrtype in typelist:
     meshHist = [mesh0]
@@ -103,8 +102,7 @@ for amrtype in typelist:
                 mark = amr.vcdmark(uh, lb, bracket=[0.1, 0.9])
             mark = amr.unionmarks(mark, imark)
         else:
-            cc = CfbNSV if amrtype == "nsvfb" else 0.0
-            (mark, _, _, _) = amr.nsvmark(uh, lb, Constant(0.0), Constant(0.0), Constant(0.0), method="total", Cfb=cc, dualtol=dualtol)
+            (mark, _, _, _) = amr.nsvmark(uh, lb, Constant(0.0), Constant(0.0), Constant(0.0), method="total", dualtol=dualtol)
             
         mesh = amr.refinemarkedelements(mesh, mark)
         meshHist.append(mesh)
@@ -126,8 +124,7 @@ for amrtype in typelist:
         VTKFile(outfile).write(uh, lb, gap, mark, imark)
     else:
         # for output file, compute mark, etainf, sigmah on final mesh
-        cc = CfbNSV if amrtype == "nsvfb" else 0.0
-        (mark, etainf, sigmah, _) = amr.nsvmark(uh, lb, Constant(0.0), Constant(0.0), Constant(0.0), method="total", Cfb=cc, dualtol=dualtol)
+        (mark, etainf, sigmah, _) = amr.nsvmark(uh, lb, Constant(0.0), Constant(0.0), Constant(0.0), method="total", dualtol=dualtol)
         mark.rename("mark")
         lnsigmah = Function(V, name="ln(sigma_h)").interpolate(ln(sigmah + dualtol))
         lnetainf = Function(V, name="ln(eta_inf)").interpolate(ln(etainf))
