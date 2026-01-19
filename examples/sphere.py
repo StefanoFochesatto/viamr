@@ -27,13 +27,14 @@ print = PETSc.Sys.Print  # enables correct printing in parallel
 # number of AMR refinements; use e.g. levels = 11, and parallel, for serious convergence
 # generally uniform can't reach high levels; suggest  uniformlevels = 0.6 levels,
 # e.g. levels=11 --> uniformlevels=7
-m0 = 12           # for UNI,UDOBR,VCDBR,NSV initial mesh is m0 x m0; see below for AVM
-levels = 4
-uniformlevels = 4
-writecsvs = False
+m0 = 12  # for UNI,UDOBR,VCDBR,NSV initial mesh is m0 x m0; see below for AVM
+maxlevels = 12  # backstop target complexity
+targetelements = 2.0e5
+uniformlevels = 5
+writecsvs = True
 
 # method parameters
-thetaBR = 0.4  # controls BR resolution in inactive set, and convergence rate
+thetaBR = 0.9  # controls BR resolution in inactive set, and convergence rate
 
 # AVM parameters; attempts to do apples-to-apples vs UDOBR|VCDBR
 initialhAVM = 4.0 / m0
@@ -92,7 +93,8 @@ sp = {
     "snes_converged_reason": None,
 }
 
-for amrtype in ["uni", "udobr", "vcdbr", "avm", "nsv"]:
+#for amrtype in ["uni", "udobr", "vcdbr", "avm", "nsv"]:
+for amrtype in ["uni", "udobr", "nsv"]:
     print(f"solving by VIAMR using {amrtype.upper()} method ...")
 
     amr = VIAMR()
@@ -126,7 +128,7 @@ for amrtype in ["uni", "udobr", "vcdbr", "avm", "nsv"]:
         csvfile = open(f"sphere_{amrtype}.csv", "w")
         csvfile.write("I,NV,NE,HMIN,HMAX,ENORM,ENORMPREF,JACCARD,REFINETIME\n")
 
-    for i in range(levels + 1):
+    for i in range(maxlevels + 1):
         mesh = meshHist[i]
         x, y = SpatialCoordinate(mesh)
         r = sqrt(x * x + y * y)
@@ -164,8 +166,8 @@ for amrtype in ["uni", "udobr", "vcdbr", "avm", "nsv"]:
         jaccard = amr.jaccardUFL(activeexactUFL(r), activeh)
         print(f"  jaccard(A_u, A_uh) = {jaccard:.5f}")
 
+        Nv, Ne, hmin, hmax = amr.meshsizes(mesh)
         if writecsvs:
-            Nv, Ne, hmin, hmax = amr.meshsizes(mesh)
             csvfile.write(
                 f"{i},{Nv},{Ne},{hmin:.5f},{hmax:.5f},{en_no:.3e},{en_pre:.3e},{jaccard:.5f},{refinetime:.3e}\n"
             )
@@ -173,7 +175,7 @@ for amrtype in ["uni", "udobr", "vcdbr", "avm", "nsv"]:
         if amrtype == "uni" and i >= uniformlevels:
             break
 
-        if i >= levels:
+        if Ne > targetelements:
             break
 
         start_time = time.time()
@@ -184,7 +186,7 @@ for amrtype in ["uni", "udobr", "vcdbr", "avm", "nsv"]:
             mesh = amr.adaptaveragedmetric(mesh, uh, lb)
         elif amrtype == "nsv":
             g = Function(V).interpolate(g_ufl)
-            (mark, _, _, _) = amr.nsvmark(uh, lb, g, Constant(0.0), g_ufl, theta=thetaBR)
+            (mark, _, _, _) = amr.nsvmark(uh, lb, g, Constant(0.0), g_ufl)
             mesh = amr.refinemarkedelements(mesh, mark)
         else:
             if amrtype == "udobr":
@@ -205,11 +207,32 @@ for amrtype in ["uni", "udobr", "vcdbr", "avm", "nsv"]:
 
     outfile = "result_sphere_" + amrtype + ".pvd"
     print(f"done ... writing to {outfile} ...")
-    V = uh.function_space()
-    gap = Function(V, name="gap = u_h - lb").interpolate(uh - lb)
-    uexactint = Function(V, name="u_exact").interpolate(uexactUFL(r))
-    error = Function(V, name="error = |pi_h(u_exact) - u_h|").interpolate(
-        abs(uexactint - uh)
+    gap = Function(V, name="gap = uh-lb").interpolate(uh - lb)
+    uexact = Function(V, name="u_exact").interpolate(uexactUFL(r))
+    error = Function(V, name="error = |pi_h(uexact) - uh|").interpolate(
+        abs(uexact - uh)
     )
-    VTKFile(outfile).write(uh, lb, gap, uexactint, error)
+    if amrtype in ["udobr", "vcdbr"]:
+        # for output file, compute imark, mark on final mesh
+        residual = -div(grad(uh))
+        imark, _, _ = amr.brinactivemark(uh, lb, residual, theta=thetaBR)
+        if amrtype == "udobr":
+            mark = amr.udomark(uh, lb, n=1)
+        elif amrtype == "vcdbr":
+            mark = amr.vcdmark(uh, lb)
+        mark = amr.unionmarks(mark, imark)
+        imark.rename("imark (BR)")
+        mark.rename("mark")
+        VTKFile(outfile).write(uh, lb, gap, uexact, error, mark, imark)
+    elif amrtype == "nsv":
+        # for output file, compute mark, etainf, sigmah on final mesh FIXME
+        g = Function(V).interpolate(g_ufl)
+        (mark, etainf, sigmah, _) = amr.nsvmark(uh, lb, g, Constant(0.0), g_ufl)
+        mark.rename("mark")
+        dualtol = 1.0e-10
+        lnsigmah = Function(V, name="ln(sigma_h)").interpolate(ln(sigmah + dualtol))
+        lnetainf = Function(V, name="ln(eta_inf)").interpolate(ln(etainf))
+        VTKFile(outfile).write(uh, lb, gap, uexact, error, mark, sigmah, lnsigmah, etainf, lnetainf)
+    else:
+        VTKFile(outfile).write(uh, lb, gap, uexact, error)
     print("")
