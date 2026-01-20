@@ -22,11 +22,15 @@ class VIAMR(OptionsManager):
 
       gradreinactivemark(), brinactivemark():  2 classical a posterior error indicator marking methods applied in the computed inactive set
 
+      nsvmark():  mark using the "practical estimator" from Nochetto, Siebert, & Veeser (2003) = NSV03
+
       refinemarkedelements():  a method which calls PETSc for skeleton-based-refinement (SBR)
 
       adaptaveragedmetric():  a method which does metric-based mesh adaptation by combining an anisotropic metric with a free-boundary targeted isotropic metric
 
-      elemactive(), eleminactive():  element markings for computed active and inactive sets
+      eleminactive():  element markings for the computed inactive set
+
+      elemactive(), thinelemactive():  two versions of element markings for computed active sets
 
       unionmark():  a method for combining existing marks
 
@@ -41,8 +45,10 @@ class VIAMR(OptionsManager):
       amr = VIAMR()
       mark = amr.udomark(uh, lb)                     # free-boundary targeted marking method
       mark = amr.vcdmark(uh, lb)                     # same, but based on diffusion
-      mark = amr.gradrecinactivemark(uh, lb)         # classical gradient recovery in inactive set
-      mark = amr.brinactivemark(uh, lb, res_ufl)     # classical Babuska & Rheinboldt in inactive set
+      imark = amr.gradrecinactivemark(uh, lb)        # classical gradient recovery in inactive set
+      imark = amr.brinactivemark(uh, lb, res_ufl)    # classical Babuska & Rheinboldt in inactive set
+      mark = amr.unionmarks(mark, imark)             # mark according to two methods above
+      mark, _, _, _ = amr.nsvmark(uh, lb, g, f_ufl, g_ufl)  # method from NSV03
       rmesh = amr.refinemarkelements(mesh, mark)     # calls PETSc DMPlexTransform for SBR
       rmesh = amr.adaptaveragedmetric(mesh, uh, lb)  # use animate for metric-based adaptation
 
