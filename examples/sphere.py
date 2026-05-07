@@ -28,7 +28,7 @@ print = PETSc.Sys.Print  # enables correct printing in parallel
 # generally uniform can't reach high levels; suggest  uniformlevels = 0.6 levels,
 # e.g. levels=11 --> uniformlevels=7
 m0 = 10  # for UNI,UDOBR,VCDBR,NSV initial mesh is m0 x m0; see below for AVM
-maxlevels = 15  # backstop target complexity
+maxlevels = 11  # backstop target complexity; set to 15 for more data?
 targetelements = 3.0e5
 uniformlevels = 6
 writecsvs = True
@@ -93,7 +93,8 @@ sp = {
     "snes_converged_reason": None,
 }
 
-for amrtype in ["uni", "udobr", "avm", "nsv"]:  # note vcdbr very close to udobr
+#for amrtype in ["uni", "udobr", "avm", "nsv"]:
+for amrtype in ["uni", "udobr", "nsv"]:  # turn off AVM for now
     print(f"solving by VIAMR using {amrtype.upper()} method ...")
 
     amr = VIAMR()

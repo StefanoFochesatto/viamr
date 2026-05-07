@@ -20,14 +20,16 @@ def intvals(method, field):
 ms0 = 10.0
 fs0 = 14.0
 
-methods = ["uni", "udobr", "avm", "nsv"]
+methods = ["uni", "udobr", "nsv"]
+#methods = ["uni", "udobr", "avm", "nsv"]
 markers = ["k+", "ko", "k*", "ko"]
 fcolors = ["k", "k", "k", "w"]
 
-measure = ["ENORM", "JACCARD", "HAUSDORFF"]  # also "ENORMPREF"?
+#measure = ["ENORM", "JACCARD", "HAUSDORFF"]  # also "ENORMPREF"?
+measure = ["ENORM", "JACCARD"]
 ylabels = [r"$||u-u_h||_2$", "active set Jaccard distance", "free boundary Hausdorff distance"]
 
-for k in range(3):
+for k in range(len(measure)):
     plt.figure()
     for j in range(len(methods)):
         meth = methods[j]
