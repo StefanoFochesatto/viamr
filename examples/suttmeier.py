@@ -26,7 +26,7 @@ parser.add_argument(
     "-opvd",
     metavar="FILE",
     type=str,
-    default="",
+    default="result_suttmeier.pvd",
     help="output file name for Paraview format (.pvd)",
 )
 parser.add_argument(
@@ -136,10 +136,9 @@ for i in range(args.refinements + 1):
     meshhierarchy.append(mesh)
 
 print("done ...")
-if args.opvd:
-    print(f"writing u_h, psi, f, gap=u_h-psi, rank to {args.opvd} ...")
-    gap = Function(V, name="gap = u_h - psi").interpolate(u - psi)
-    rank = Function(FunctionSpace(mesh, "DG", 0))
-    rank.dat.data[:] = mesh.comm.rank
-    rank.rename("rank")
-    VTKFile(args.opvd).write(u, psi, fsource, gap, rank)
+print(f"writing u_h, psi, f, gap=u_h-psi, rank to {args.opvd} ...")
+gap = Function(V, name="gap = u_h - psi").interpolate(u - psi)
+rank = Function(FunctionSpace(mesh, "DG", 0))
+rank.dat.data[:] = mesh.comm.rank
+rank.rename("rank")
+VTKFile(args.opvd).write(u, psi, fsource, gap, rank)
