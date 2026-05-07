@@ -630,7 +630,7 @@ class VIAMR(OptionsManager):
         Optionally does uniform refinement."""
 
         # section for DG0 indicator
-        tdim = mesh.topological_dimension()
+        tdim = mesh.topological_dimension
         entity_dofs = np.zeros(tdim + 1, dtype=IntType)
         entity_dofs[-1] = 1
         indicatorSect, _ = dmcommon.create_section(mesh, entity_dofs)
