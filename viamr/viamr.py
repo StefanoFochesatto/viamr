@@ -5,12 +5,17 @@ from firedrake import *
 from firedrake.petsc import PETSc
 from firedrake.utils import IntType
 import firedrake.cython.dmcommon as dmcommon
-import animate
 
 try:
     from petsctools import OptionsManager
 except ImportError:
     from firedrake.petsc import OptionsManager
+
+haveanimate = True
+try:
+    import animate
+except:
+    haveanimate = False
 
 
 class VIAMR(OptionsManager):
@@ -705,6 +710,7 @@ class VIAMR(OptionsManager):
         """Construct a normalized free-boundary isotropic metric from abs(grad(s)),
         where s is the (smooth) output of vcdmark().  Compare "L2" option in
         animate.compute_isotropic_metric(); here we already have a P1 indicator.)"""
+        assert haveanimate, "animate import failed, method unavailable"
         s = self.vcdmark(uh, lb, returnSmooth=True)
         maggrads = Function(CG1).interpolate(sqrt(dot(grad(s), grad(s))))
         VIMetric = animate.RiemannianMetric(P1tensor)
@@ -716,6 +722,7 @@ class VIAMR(OptionsManager):
     def _hessianmetric(self, mesh, uh, P1tensor):
         """Construct a normalized metric from the Hessian of uh.  This is motivated
         by the interpolation error formula."""
+        assert haveanimate, "animate import failed, method unavailable"
         hessmetric = animate.RiemannianMetric(P1tensor)
         hessmetric.set_parameters(self.metricparameters)
         # re method: default "mixed_L2" is more expensive
@@ -737,6 +744,7 @@ class VIAMR(OptionsManager):
         If intersect=True then does Animate intersect (instead of gamma average).
         If metric=True then returns the metric itself, not the mesh."""
 
+        assert haveanimate, "animate import failed, method unavailable"
         assert (
             self.metricparameters is not None
         ), "call setmetricparameters() before calling adaptaveragedmetric()"

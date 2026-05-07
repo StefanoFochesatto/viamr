@@ -82,7 +82,7 @@ def test_elemactive():
     act = amr.elemactive(uh, psih)
     assert act.function_space().ufl_element() == DG0.ufl_element()
     correct = np.zeros(12)
-    correct[[0, 1, 3, 5]] = 1.0
+    correct[[0, 1, 2, 4]] = 1.0
     assert np.linalg.norm(act.dat.data_ro - correct) == 0
 
 
