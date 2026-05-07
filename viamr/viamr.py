@@ -787,7 +787,7 @@ class VIAMR(OptionsManager):
             assert a1DG0.ufl_element() == DG01.ufl_element()
             _, DG02 = self.spaces(mesh2)
             assert a2DG0.ufl_element() == DG02.ufl_element()
-        if submesh == False and (mesh1._comm.size > 1 or mesh1._comm.size > 1):
+        if submesh == False and (mesh1.comm.size > 1 or mesh1.comm.size > 1):
             raise ValueError("jaccard(.., submesh=False) is not valid in parallel")
         if self.debug:
             for a in [active1, active2]:
