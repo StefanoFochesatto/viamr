@@ -715,7 +715,7 @@ class VIAMR(OptionsManager):
         maggrads = Function(CG1).interpolate(sqrt(dot(grad(s), grad(s))))
         VIMetric = animate.RiemannianMetric(P1tensor)
         VIMetric.set_parameters(self.metricparameters)
-        VIMetric.interpolate(maggrads * ufl.Identity(mesh.topological_dimension()))
+        VIMetric.interpolate(maggrads * Identity(mesh.topological_dimension))
         VIMetric.normalise()  # normalize *before* averaging
         return VIMetric
 
