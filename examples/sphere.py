@@ -1,14 +1,13 @@
-# This example attempts to do apples-to-apples comparisons of five
-# algorithms on the "ball" problem:
+# This example attempts to do apples-to-apples comparisons of 4 algorithms
+# on the "ball" problem:
 #   1. UNI = uniform refinement
 #   2. UDOBR
-#   3. VCDBR
-#   4. AVM
-#   5. NSV
-# In this problem the exact solution is known and we can compute norm convergence rates.
-# We generate .pvd files: result_sphere_{uni,udobr,vcdbr,nsv,avm}.pvd
+#   3. NSV
+#   4. AVM                    <-- if USE_AVM == True
+# The exact solution is known and we can compute norm convergence rates.
+# We generate .pvd files: result_sphere_{uni,udobr,nsv,avm}.pvd
+# Optionally we measure Hausdorff convergence rates in serial.
 # Optionally we generate .csv files for norm and Jaccard convergence rates.
-# Note we are comparing n=1 UDO to default [0.2,0.8] VCD.
 
 import time
 import numpy as np
@@ -22,21 +21,30 @@ except ImportError:
     raise ImportError("Unable to import NetGen.  Exiting.")
 from netgen.geom2d import SplineGeometry
 
+
+refinetypes = ["uni", "udobr", "nsv"]
+try:
+    import animate
+except:
+    pass
+else:
+    refinetypes.append("avm")  # if import succeeded
+
 print = PETSc.Sys.Print  # enables correct printing in parallel
 
-# number of AMR refinements; use e.g. levels = 11, and parallel, for serious convergence
-# generally uniform can't reach high levels; suggest  uniformlevels = 0.6 levels,
+# use higher targetelements or maxlevels, and/or parallel, for serious convergence
 # e.g. levels=11 --> uniformlevels=7
-m0 = 10  # for UNI,UDOBR,VCDBR,NSV initial mesh is m0 x m0; see below for AVM
-maxlevels = 11  # backstop target complexity; set to 15 for more data?
-targetelements = 3.0e5
-uniformlevels = 6
+m0 = 10  # for UNI,UDOBR,NSV initial mesh is m0 x m0; see below for AVM
+targetelements = 3.0e5  # all methods stop refining once this is met
+maxlevels = 11  # backstop target element complexity; set to 15 for more data?
+uniformlevels = 6  # generally uniform can't reach high levels
 writecsvs = True
+dohausdorff = False
 
 # method parameters
 thetaBR = 0.9  # controls BR resolution in inactive set, and convergence rate
 
-# AVM parameters; attempts to do apples-to-apples vs UDOBR|VCDBR
+# AVM parameters; attempts to do apples-to-apples vs UDOBR
 initialhAVM = 4.0 / m0
 targetsAVM = [100, 300, 900, 3000, 7000, 18000, 50000, 100000, 250000, 600000, 1400000, 3000000]
 
@@ -93,8 +101,7 @@ sp = {
     "snes_converged_reason": None,
 }
 
-#for amrtype in ["uni", "udobr", "avm", "nsv"]:
-for amrtype in ["uni", "udobr", "nsv"]:  # turn off AVM for now
+for amrtype in refinetypes:
     print(f"solving by VIAMR using {amrtype.upper()} method ...")
 
     amr = VIAMR()
@@ -164,14 +171,14 @@ for amrtype in ["uni", "udobr", "nsv"]:  # turn off AVM for now
         print(f"  ||u_exact - tilde u_h||_2 = {en_pre:.3e}")
         jaccard = amr.jaccardUFL(activeexactUFL(r), activeh)
         print(f"  jaccard(A_u, A_uh) = {jaccard:.5f}")
-        if mesh.comm.size == 1:
+        if dohausdorff and mesh.comm.size == 1:
             uexact = Function(V, name="u_exact").interpolate(uexactUFL(r))
             _, fbexact = amr.freeboundarygraph(uexact, lb)
             _, fb = amr.freeboundarygraph(uh, lb)
             haus = amr.hausdorff(fbexact, fb)
             print(f"  hausdorff(Gamma_u, Gamma_uh) = {haus:.5f}")
         else:
-            print(f"  [parallel: skipping Hausdorff distance]")
+            print(f"  [parallel or turned off: skipping Hausdorff distance]")
             haus = PETSc.INFINITY
 
         # report, and break if targer complexity met
@@ -195,10 +202,7 @@ for amrtype in ["uni", "udobr", "nsv"]:  # turn off AVM for now
             (mark, _, _, _) = amr.nsvmark(uh, lb, g, Constant(0.0), g_ufl)
             mesh = amr.refinemarkedelements(mesh, mark)
         else:
-            if amrtype == "udobr":
-                mark = amr.udomark(uh, lb, n=1)
-            elif amrtype == "vcdbr":
-                mark = amr.vcdmark(uh, lb)
+            mark = amr.udomark(uh, lb, n=1)
             residual = -div(grad(uh))
             (imark, _, _) = amr.brinactivemark(uh, lb, residual, theta=thetaBR)
             mark = amr.unionmarks(mark, imark)
@@ -217,14 +221,11 @@ for amrtype in ["uni", "udobr", "nsv"]:  # turn off AVM for now
     error = Function(V, name="error = |pi_h(uexact) - uh|").interpolate(
         abs(uexact - uh)
     )
-    if amrtype in ["udobr", "vcdbr"]:
+    if amrtype == "udobr":
         # for output file, compute imark, mark on final mesh
         residual = -div(grad(uh))
         imark, _, _ = amr.brinactivemark(uh, lb, residual, theta=thetaBR)
-        if amrtype == "udobr":
-            mark = amr.udomark(uh, lb, n=1)
-        elif amrtype == "vcdbr":
-            mark = amr.vcdmark(uh, lb)
+        mark = amr.udomark(uh, lb, n=1)
         mark = amr.unionmarks(mark, imark)
         imark.rename("imark (BR)")
         mark.rename("mark")
