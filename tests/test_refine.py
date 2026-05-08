@@ -4,17 +4,19 @@ from viamr import VIAMR
 from test_basic import _get_netgen_mesh, _get_ball_obstacle
 
 
-def test_refine_udo():
+def test_overrefine_udo():
     mesh = _get_netgen_mesh(TriHeight=1.2)
     amr = VIAMR(debug=True)
-    CG1, _ = amr.spaces(mesh)
+    CG1, DG0 = amr.spaces(mesh)
     assert CG1.dim() == 19
+    assert DG0.dim() == 24
     (x, y) = SpatialCoordinate(mesh)
     psi = Function(CG1).interpolate(_get_ball_obstacle(x, y))
     u = Function(CG1).interpolate(conditional(psi > 0.0, psi, 0.0))
     unorm0 = norm(u)
     mark = amr.udomark(u, psi)
-    assert amr.countmark(mark) == 24
+    assert amr.countmark(mark) == DG0.dim()  # everything gets marked
+    #VTKFile("result_overrefine_udo.pvd").write(u, psi, mark)
     rmesh = mesh.refine_marked_elements(mark)  # netgen's refine method
     rCG1, _ = amr.spaces(rmesh)
     assert rCG1.dim() == 61
@@ -23,16 +25,41 @@ def test_refine_udo():
     assert abs(norm(ru) - unorm0) < 1.0e-10  # ... should be conservative
 
 
+def test_finer_udo():
+    mesh = _get_netgen_mesh(TriHeight=0.5)  # note smaller triangles
+    amr = VIAMR(debug=True)
+    CG1, DG0 = amr.spaces(mesh)
+    assert CG1.dim() == 86
+    (x, y) = SpatialCoordinate(mesh)
+    psi = Function(CG1).interpolate(_get_ball_obstacle(x, y))
+    u = Function(CG1).interpolate(conditional(psi > 0.0, psi, 0.0))
+    unorm0 = norm(u)
+    mark = amr.udomark(u, psi, n=1)  # note n=1 (default is n=2)
+    assert amr.countmark(mark) == 90
+    assert amr.countmark(mark) < DG0.dim()
+    #VTKFile("result_finer_udo.pvd").write(u, psi, mark)
+    rmesh = mesh.refine_marked_elements(mark)  # netgen's refine method
+    rCG1, _ = amr.spaces(rmesh)
+    assert rCG1.dim() == 256
+    rV = FunctionSpace(rmesh, "CG", 1)
+    ru = Function(rV).interpolate(u)  # cross-mesh interpolation
+    #VTKFile("result_rfiner_udo.pvd").write(ru)
+    assert abs(norm(ru) - unorm0) < 1.0e-10  # ... should be conservative
+
+
 def test_refine_vcd():
     mesh = _get_netgen_mesh(TriHeight=1.2)
     amr = VIAMR(debug=True)
-    CG1, _ = amr.spaces(mesh)
+    CG1, DG0 = amr.spaces(mesh)
     assert CG1.dim() == 19
     (x, y) = SpatialCoordinate(mesh)
     psi = Function(CG1).interpolate(_get_ball_obstacle(x, y))
     u = Function(CG1).interpolate(conditional(psi > 0.0, psi, 0.0))
     unorm0 = norm(u)
     mark = amr.vcdmark(u, psi)
+    assert amr.countmark(mark) == 13
+    assert amr.countmark(mark) < DG0.dim()  # not everything gets marked
+    #VTKFile("result_refine_vcd.pvd").write(u, psi, mark)
     rmesh = mesh.refine_marked_elements(mark)  # netgen's refine method
     rCG1, _ = amr.spaces(rmesh)
     assert rCG1.dim() == 49
@@ -180,7 +207,8 @@ def test_adapt_avm_intersect():
 
 
 if __name__ == "__main__":
-    test_refine_udo()
+    test_overrefine_udo()
+    test_finer_udo()
     test_refine_vcd()
     test_refine_vcd_petscsbr()
     test_refine_vcd_firedrake_petscsbr()

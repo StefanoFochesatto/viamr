@@ -194,6 +194,8 @@ class VIAMR(OptionsManager):
         """From *nodal* active set indicator, computes bordering element indicator.  Uses the fact that the DG0 degree of freedom is strictly inside the element, so use with caution if z is not in CG1.  Returns 1.0 for elements with
           0 < nu_h(x_K) < 1
         for nodal active set indicator nu_h (in CG1), where x_K is the DG0 dof for element K.
+        Actually used a tolerance: 0 + tol <= nu_h(x_K) <= 1 - tol.  (This tolerance is unitless,
+        whereas self.activetol may be set by user according to units.)
         """
         if self.debug:
             if len(nodalactive.dat.data_ro) > 0:
@@ -201,9 +203,12 @@ class VIAMR(OptionsManager):
                 assert max(nodalactive.dat.data_ro) <= 1.0
         _, DG0 = self.spaces(nodalactive.function_space().mesh())
         z = Function(DG0, name="Element Border")
+        bordertol = 1.0e-12
         z.interpolate(
             conditional(
-                nodalactive > 0.0, conditional(nodalactive < 1.0, 1.0, 0.0), 0.0
+                nodalactive >= 0.0 + bordertol,
+                conditional(nodalactive <= 1.0 - bordertol, 1.0, 0.0),
+                0.0
             )
         )
         return z
