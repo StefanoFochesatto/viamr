@@ -2,3 +2,10 @@
 .vscode
 .history
 .coverage
+__pycache__/
+viamr/*.c
+viamr/*.so
+build/
+dist/
+*.h5
+udo_ref_moments.txt

@@ -1,6 +1,9 @@
-.PHONY: clean
+.PHONY: clean build test
 
-test:
+build:
+	@pip install -e .
+
+test: build
 	@python -B -m pytest .  # -B option effectively reloads from source (instead of using?/writing cache)
 
 clean:

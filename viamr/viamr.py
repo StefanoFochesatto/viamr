@@ -295,8 +295,6 @@ class VIAMR(OptionsManager):
         # get mesh and border mark; added flag for restriction
         if restrict is not None:
             meshInit = uh.function_space().mesh()
-            dInit = meshInit.cell_dimension()
-            dmInit = meshInit.topology_dm
             if restrict == "active":  # restrict to active set plus border
                 indicator = Function(FunctionSpace(meshInit, "DG", 0)).interpolate(
                     self.elemactive(uh, lb)
@@ -320,54 +318,38 @@ class VIAMR(OptionsManager):
             border = self._elemborder(self._nodalactive(uh, lb))
 
         # get DMPlex
-        d = mesh.cell_dimension()
         dm = mesh.topology_dm
-        # FIXME Experiment implementation in cython, DMLabel to mark accumulation, dmplex with only vertex and cell connectivity to save memory
+        kmin, kmax = dm.getHeightStratum(0)
 
-        # Find range of indices for element stratum
-        kmin, kmax = dm.getHeightStratum(0)[:2]
+        # Create a DMLabel to mark accumulation
+        label = PETSc.DMLabel().create("udo")
+        label.setDefaultValue(0)
 
         # need map from DMPlex to firedrake indices
-        # (Is there a better way to do this in dmcommon?)
         plexelementlist = mesh.cell_closure[:, -1]
         dm2fd = np.argsort(plexelementlist)
 
-        # main loop: expand element border out to n levels, using only DMPlex indices
-        #   (index convention:  i for levels, j for nodes/vertices, k for elements)
-        for i in range(n):
-            # Pull DMPlex border element indices using dmplex cell indices
-            borderindices = [
-                plexelementlist[k]
-                for k, value in enumerate(border.dat.data_ro_with_halos)
-                if value != 0
-            ]
+        # Initial points: cells where border != 0
+        for k, value in enumerate(border.dat.data_ro_with_halos):
+            if value != 0:
+                label.setValue(plexelementlist[k], 1)
 
-            # closure: Pull indices of all vertices which are incident
-            # to some border element, then flatten and remove duplicates.
-            incidentVertices = [
-                dm.getTransitiveClosure(k)[0][-d - 1 :] for k in borderindices
-            ]
-            incidentVertices = np.unique(np.ravel(incidentVertices))
+        # Call Cython core for traversal
+        from viamr.viamrcore import udo_mark_cells
+        udo_mark_cells(dm, label, n)
 
-            # star: Pull indices of all elements which are incident to the
-            # incidentVertices.  Note that getTransitiveClosure() with useCone=False
-            # gives the star, and that the number of elements incident to a vertex
-            # is not predictable.  Then flatten and remove duplicates.
-            neighborindices = []
-            for j in incidentVertices:
-                star = dm.getTransitiveClosure(j, useCone=False)[0]
-                mark = np.where((star >= kmin) & (star < kmax))
-                neighborindices.extend(star[mark])
-            neighborindices = np.unique(np.ravel(neighborindices))
+        # Generate DG0 marking from label
+        mark = Function(DG0).interpolate(Constant(0.0))
+        is_marked = label.getStratumIS(1)
+        if is_marked:
+            marked_indices = is_marked.getIndices()
+            for plex_idx in marked_indices:
+                if plex_idx >= kmin and plex_idx < kmax:
+                    mark.dat.data_wo_with_halos[dm2fd[plex_idx - kmin]] = 1.0
+            is_marked.destroy()
+        label.destroy()
 
-            # re-generate DG0 element border indicator by adding neighbors
-            border = Function(DG0).interpolate(Constant(0.0))
-            for k in neighborindices:
-                # parallel communication *here*:
-                border.dat.data_wo_with_halos[dm2fd[k]] = 1
-
-        return Function(DG0).interpolate(border, allow_missing_dofs=True)
-
+        return mark
     def vcdmark(
         self,
         uh,
