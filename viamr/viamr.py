@@ -458,29 +458,41 @@ class VIAMR(OptionsManager):
         a posteriori gradient-recovery error indicator.  See Chapter 4 of
           M. Ainsworth & J. T. Oden (2000).  A Posteriori Error Estimation in
           Finite Element Analysis, John Wiley & Sons, Inc., New York."""
-        mesh = uh.function_space().mesh()
+        meshInit = uh.function_space().mesh()
+        imark = self.eleminactive(uh, lb)
+        mesh = self._filtermesh(meshInit, imark)
+        
+        if mesh.num_cells() == 0:
+            _, DG0Init = self.spaces(meshInit)
+            return (Function(DG0Init).assign(0.0), Function(DG0Init).assign(0.0), 0.0)
+
+        CG1_sub = FunctionSpace(mesh, "CG", 1)
+        uh_sub = Function(CG1_sub).interpolate(uh)
+
         v = CellVolume(mesh)
-        # recover a CG1 gradient of uh by projection
+        # recover a CG1 gradient of uh_sub by projection
         CG1vec = VectorFunctionSpace(mesh, "CG", 1)
-        gradrecu = Function(CG1vec).project(grad(uh))
+        gradrecu = Function(CG1vec).project(grad(uh_sub))
         # cell-wise error estimator
         _, DG0 = self.spaces(mesh)
         eta_sq = Function(DG0)
         w = TestFunction(DG0)
         G = (
             inner(eta_sq / v, w) * dx
-            - inner(inner(gradrecu - grad(uh), gradrecu - grad(uh)), w) * dx
+            - inner(inner(gradrecu - grad(uh_sub), gradrecu - grad(uh_sub)), w) * dx
         )
         # each cell needs an independent 1x1 solve, so Jacobi is an exact preconditioner
         sp = {"mat_type": "matfree", "ksp_type": "richardson", "pc_type": "jacobi"}
         solve(G == 0, eta_sq, solver_parameters=sp)
-        eta = Function(DG0).interpolate(sqrt(eta_sq))  # eta from eta^2
-        # restrict grad recovery eta to inactive set
-        imark = self.eleminactive(uh, lb)
-        ieta = Function(DG0, name="eta on inactive set").interpolate(eta * imark)
+        ieta = Function(DG0).interpolate(sqrt(eta_sq))  # eta from eta^2
         # compute mark in inactive set
-        mark, _, total_error_est = self._fixedrate(ieta, theta, method)
-        return (mark, ieta, total_error_est)
+        imark_sub, _, total_error_est = self._fixedrate(ieta, theta, method)
+        
+        _, DG0Init = self.spaces(meshInit)
+        mark = Function(DG0Init).interpolate(imark_sub, allow_missing_dofs=True)
+        ieta_parent = Function(DG0Init).interpolate(ieta, allow_missing_dofs=True)
+        
+        return (mark, ieta_parent, total_error_est)
 
     def brinactivemark(self, uh, lb, res_ufl, theta=0.5, method="max"):
         """Return marking within the computed inactive set by using the
@@ -496,8 +508,26 @@ class VIAMR(OptionsManager):
         and section 2.2 of
           M. Ainsworth & J. T. Oden (2000).  A Posteriori Error Estimation in
           Finite Element Analysis, John Wiley & Sons, Inc., New York."""
-        # mesh quantities
-        mesh = uh.function_space().mesh()
+        import ufl
+        meshInit = uh.function_space().mesh()
+        imark = self.eleminactive(uh, lb)
+        mesh = self._filtermesh(meshInit, imark)
+        
+        if mesh.num_cells() == 0:
+            _, DG0Init = self.spaces(meshInit)
+            return (Function(DG0Init).assign(0.0), Function(DG0Init).assign(0.0), 0.0)
+
+        CG1_sub = FunctionSpace(mesh, "CG", 1)
+        uh_sub = Function(CG1_sub).interpolate(uh)
+
+        # Replace parent symbols with submesh symbols in res_ufl
+        coords_init = SpatialCoordinate(meshInit)
+        coords_sub = SpatialCoordinate(mesh)
+        replace_dict = {uh: uh_sub}
+        for c_in, c_sub in zip(coords_init, coords_sub):
+            replace_dict[c_in] = c_sub
+        res_ufl_sub = ufl.replace(res_ufl, replace_dict)
+
         h = CellDiameter(mesh)
         v = CellVolume(mesh)
         n = FacetNormal(mesh)
@@ -507,19 +537,22 @@ class VIAMR(OptionsManager):
         w = TestFunction(DG0)
         G = (
             inner(eta_sq / v, w) * dx
-            - inner(h ** 2 * res_ufl ** 2, w) * dx
-            - inner(h("+") / 2 * jump(grad(uh), n) ** 2, w("+")) * dS
-            - inner(h("-") / 2 * jump(grad(uh), n) ** 2, w("-")) * dS
+            - inner(h ** 2 * res_ufl_sub ** 2, w) * dx
+            - inner(h("+") / 2 * jump(grad(uh_sub), n) ** 2, w("+")) * dS
+            - inner(h("-") / 2 * jump(grad(uh_sub), n) ** 2, w("-")) * dS
         )
         # each cell needs an independent 1x1 solve, so Jacobi is an exact preconditioner
         sp = {"mat_type": "matfree", "ksp_type": "richardson", "pc_type": "jacobi"}
         solve(G == 0, eta_sq, solver_parameters=sp)
-        eta = Function(DG0).interpolate(sqrt(eta_sq))  # eta from eta^2
-        # restrict BR eta to inactive set
-        imark = self.eleminactive(uh, lb)
-        ieta = Function(DG0, name="eta on inactive set").interpolate(eta * imark)
-        mark, _, total_error_est = self._fixedrate(ieta, theta, method)
-        return (mark, ieta, total_error_est)
+        ieta = Function(DG0).interpolate(sqrt(eta_sq))  # eta from eta^2
+        # compute mark in inactive set
+        mark_sub, _, total_error_est = self._fixedrate(ieta, theta, method)
+        
+        _, DG0Init = self.spaces(meshInit)
+        mark = Function(DG0Init).interpolate(mark_sub, allow_missing_dofs=True)
+        ieta_parent = Function(DG0Init).interpolate(ieta, allow_missing_dofs=True)
+        
+        return (mark, ieta_parent, total_error_est)
 
     def nsvmark(
         self, uh, lb, g, f_ufl, g_ufl, method="max", theta=0.5, dualtol=1.0e-10, C0=0.1, Cfb=1.0
@@ -913,7 +946,7 @@ class VIAMR(OptionsManager):
     def _filtermesh(self, mesh, indicator):
 
         # Create Section for DG0 indicator
-        tdim = mesh.topological_dimension()
+        tdim = mesh.topological_dimension
         entity_dofs = np.zeros(tdim + 1, dtype=IntType)
         entity_dofs[:] = 0
         entity_dofs[-1] = 1
