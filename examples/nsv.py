@@ -1,24 +1,24 @@
-# compare UDO+BR to the method from NSV03 on "7.2 Example: Constant Obstacle"
-# from the same source:
+# Compare UDO+BR to the method from
 #
 #   Nochetto, R. H., Siebert, K. G., & Veeser, A. (2003). Pointwise
 #   a posteriori error control for elliptic obstacle problems.
 #   Numerische Mathematik, 95(1), 163-195.
 #
-# the methods are VIAMR.{udomark,nsvmark}
-
-from firedrake import *
-from viamr import VIAMR
-from firedrake.petsc import PETSc
+# on "7.2 Example: Constant Obstacle".  The methods are VIAMR.{udomark,nsvmark}.
 
 # major parameters
 d = 2  # spatial dimension
 #  FIXME: for d=3 the NSV method generates an error with refine_marked_elements() from Netgen;
 #         maybe related to boundary refinement?
+
 m = 3  # initial mesh resolution
 levs = 7 if d == 2 else 4  # number of refinements
 nUDO = 0  # observe that {sigma_h * u_h > 0} is same as UDO mark with nUDO=0
 dualtol = 1.0e-8  # used for admissibility (sigma_h >= -dualtol) *and* in estimator
+
+from firedrake import *
+from viamr import VIAMR
+from firedrake.petsc import PETSc
 
 # initial mesh
 assert d in [2, 3]
@@ -96,7 +96,7 @@ for method in methods:
         # error relative to exact (UFL) solution
         u_ufl = conditional(x2 <= r ** 2, 0.0, circle ** 2)
         dofs.append(V.dim())
-        errs.append(float(errornorm(u_ufl, uh)))
+        errs.append(float(errornorm(u_ufl, uh)))  # default norm is L^2
         print(f"  level {j}: nodes = {dofs[-1]}, |u-u_h|_2 = {errs[-1]:.3e}")
 
         # compute marking; note fmark is written to file for comparison
@@ -182,6 +182,6 @@ if mesh.comm.rank == 0:
     plt.legend()
     plt.grid(True)
     plt.xlabel("DOFs")
-    plt.ylabel("error")
+    plt.ylabel("norm error |u-u_h|_2")
     plt.title("compare Figure 7.1 in Nochetto, Siebert, & Veeser (2003)")
     plt.show()
