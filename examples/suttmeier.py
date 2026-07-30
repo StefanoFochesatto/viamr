@@ -1,7 +1,7 @@
 import argparse
 
 parser = argparse.ArgumentParser(
-    description="""Solve the VI problem in section 10.3 of
+    description="""Solve the classical obstacle problem in section 10.3 of
    F.-T. Suttmeier (2008).  Numerical Solution of Variational Inequalities
    by Adaptive Finite Elements, Vieweg + Teubner, Wiesbaden
 Note there is an apparent typo there, since the source f(x,y) needs to be
