@@ -1,13 +1,25 @@
 # This example attempts to do apples-to-apples comparisons of 4 algorithms
 # on the "ball" problem:
-#   1. UNI = uniform refinement
-#   2. UDOBR
-#   3. NSV
-#   4. AVM                    <-- if USE_AVM == True
-# The exact solution is known and we can compute norm convergence rates.
-# We generate .pvd files: result_sphere_{uni,udobr,nsv,avm}.pvd
-# Optionally we measure Hausdorff convergence rates in serial.
+#   1. UDOBR = unstructured dilation operator plus Babuska & Rheinboldt (1989) in the inactive set
+#   2. NSV = Nochetto, Siebert, and Veeser (2003)
+#   3. UNI = uniform refinement
+#   4. AVM = averaged-metric mesh adaptation  <-- only runs if avm import succeeds
+#
+# The exact solution is known and so we can compute norm convergence rates.
+# We generate .pvd files: result_sphere_{udobr,nsv,uni,avm}.pvd
+# We measure Hausdorff convergence rates in serial.
 # Optionally we generate .csv files for norm and Jaccard convergence rates.
+
+
+# note: use higher targetelements and/or maxlevels for serious convergence
+# e.g. targetelements=1.0e6 & maxlevels=11 <--> uniformlevels=7
+m0 = 10  # for UDOBR,NSV,UNI initial mesh is m0 x m0; see below for AVM
+targetelements = 1.0e5  # all methods stop refining once this is met
+maxlevels = 11  # backstop target element complexity; set to 15 for more data?
+uniformlevels = 5  # generally uniform can't reach high levels ... which is the point
+writecsvs = False
+dohausdorff = True
+
 
 import time
 import numpy as np
@@ -15,38 +27,45 @@ from firedrake import *
 from firedrake.petsc import PETSc
 from viamr import VIAMR
 
+print = PETSc.Sys.Print  # enables correct printing in parallel
+
 try:
     import netgen
 except ImportError:
     raise ImportError("Unable to import NetGen.  Exiting.")
 from netgen.geom2d import SplineGeometry
 
-
-refinetypes = ["uni", "udobr", "nsv"]
+# what methods of adaptive refinement do we test
+refinetypes = ["udobr", "nsv", "uni"]
 try:
     import animate
 except:
+    print(
+        "WARNING: animate import failed, proceeding without it using Firedrake meshes only"
+    )
     pass
 else:
     refinetypes.append("avm")  # if import succeeded
-
-print = PETSc.Sys.Print  # enables correct printing in parallel
-
-# use higher targetelements or maxlevels, and/or parallel, for serious convergence
-# e.g. levels=11 --> uniformlevels=7
-m0 = 10  # for UNI,UDOBR,NSV initial mesh is m0 x m0; see below for AVM
-targetelements = 3.0e5  # all methods stop refining once this is met
-maxlevels = 11  # backstop target element complexity; set to 15 for more data?
-uniformlevels = 6  # generally uniform can't reach high levels
-writecsvs = True
-dohausdorff = False
 
 # method parameters
 thetaBR = 0.9  # controls BR resolution in inactive set, and convergence rate
 
 # AVM parameters; attempts to do apples-to-apples vs UDOBR
 initialhAVM = 4.0 / m0
-targetsAVM = [100, 300, 900, 3000, 7000, 18000, 50000, 100000, 250000, 600000, 1400000, 3000000]
+targetsAVM = [
+    100,
+    300,
+    900,
+    3000,
+    7000,
+    18000,
+    50000,
+    100000,
+    250000,
+    600000,
+    1400000,
+    3000000,
+]
 
 
 def psiUFL(r):
@@ -133,7 +152,9 @@ for amrtype in refinetypes:
 
     if writecsvs:
         csvfile = open(f"sphere_{amrtype}.csv", "w")
-        csvfile.write("I,NV,NE,HMIN,HMAX,ENORM,ENORMPREF,JACCARD,HAUSDORFF,REFINETIME\n")
+        csvfile.write(
+            "I,NV,NE,HMIN,HMAX,ENORM,ENORMPREF,JACCARD,HAUSDORFF,REFINETIME\n"
+        )
 
     for i in range(maxlevels + 1):
         print(f"solving on mesh {i} ...")
@@ -171,15 +192,19 @@ for amrtype in refinetypes:
         print(f"  ||u_exact - tilde u_h||_2 = {en_pre:.3e}")
         jaccard = amr.jaccardUFL(activeexactUFL(r), activeh)
         print(f"  jaccard(A_u, A_uh) = {jaccard:.5f}")
-        if dohausdorff and mesh.comm.size == 1:
-            uexact = Function(V, name="u_exact").interpolate(uexactUFL(r))
-            _, fbexact = amr.freeboundarygraph(uexact, lb)
-            _, fb = amr.freeboundarygraph(uh, lb)
-            haus = amr.hausdorff(fbexact, fb)
-            print(f"  hausdorff(Gamma_u, Gamma_uh) = {haus:.5f}")
-        else:
-            print(f"  [parallel or turned off: skipping Hausdorff distance]")
-            haus = PETSc.INFINITY
+        haus = PETSc.INFINITY
+        if dohausdorff:
+            if mesh.comm.size == 1:
+                uexact = Function(V, name="u_exact").interpolate(uexactUFL(r))
+                _, fbexact = amr.freeboundarygraph(uexact, lb)
+                _, fb = amr.freeboundarygraph(uh, lb)
+                haus = amr.hausdorff(fbexact, fb)
+                print(f"  hausdorff(Gamma_u, Gamma_uh) = {haus:.5f}")
+            else:
+                print(
+                    "WARNING: measuring Hausdorff distance between exact and approximate free boundary not possible in parallel ... turning it off"
+                )
+                dohausdorff = False
 
         # report, and break if targer complexity met
         Nv, Ne, hmin, hmax = amr.meshsizes(mesh)
@@ -193,9 +218,11 @@ for amrtype in refinetypes:
         # do an AMR level
         start_time = time.time()
         if amrtype == "uni":
-            mesh = unimh[i+1]
+            mesh = unimh[i + 1]
         elif amrtype == "avm":
-            amr.setmetricparameters(target_complexity=targetsAVM[i+1], h_min=1.0e-4, h_max=1.0)
+            amr.setmetricparameters(
+                target_complexity=targetsAVM[i + 1], h_min=1.0e-4, h_max=1.0
+            )
             mesh = amr.adaptaveragedmetric(mesh, uh, lb)
         elif amrtype == "nsv":
             g = Function(V).interpolate(g_ufl)
@@ -238,7 +265,9 @@ for amrtype in refinetypes:
         dualtol = 1.0e-10
         lnsigmah = Function(V, name="ln(sigma_h)").interpolate(ln(sigmah + dualtol))
         lnetainf = Function(V, name="ln(eta_inf)").interpolate(ln(etainf))
-        VTKFile(outfile).write(uh, lb, gap, uexact, error, mark, sigmah, lnsigmah, etainf, lnetainf)
+        VTKFile(outfile).write(
+            uh, lb, gap, uexact, error, mark, sigmah, lnsigmah, etainf, lnetainf
+        )
     else:
         VTKFile(outfile).write(uh, lb, gap, uexact, error)
     print("")
