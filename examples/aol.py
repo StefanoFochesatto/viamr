@@ -19,7 +19,7 @@ INF = Function(V).interpolate(Constant(PETSc.INFINITY))
 solver.solve(bounds=(psih, INF))
 
 amr = VIAMR()
-mark = amr.vcdmark(uh, psih)
+mark = amr.udomark(uh, psih, n=1)
 VTKFile("mesh.pvd").write(uh, mark)
 
 refinedmesh = amr.refinemarkedelements(mesh, mark)
