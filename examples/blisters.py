@@ -1,3 +1,15 @@
+# Solve a classical obstacle problem which generates a large active set,
+# covering more than 80% of the domain.  Resolving the connectedness of
+# the inactive set in this example requires high resolution.
+#
+# This example generates result_blisters.pvd.
+
+levels = 5
+m_initial = 30
+m_data = 500
+useVCD = False
+outfile = "result_blisters.pvd"
+
 import numpy as np
 from firedrake import *
 from firedrake.petsc import PETSc
@@ -5,17 +17,13 @@ from viamr import VIAMR
 
 print = PETSc.Sys.Print  # enables correct printing in parallel
 
-levels = 4
-m_initial = 30
-m_data = 500
-outfile = "result_blisters.pvd"
 
 def normal2d(mesh, x0, y0, sigma):
     # return UFL expression for one gaussian hump
     x, y = SpatialCoordinate(mesh)
-    C = 1.0 / (2.0 * pi * sigma**2)
+    C = 1.0 / (2.0 * pi * sigma ** 2)
     dsqr = (x - x0) ** 2 + (y - y0) ** 2
-    return C * exp(-dsqr / (2.0 * sigma**2))
+    return C * exp(-dsqr / (2.0 * sigma ** 2))
 
 
 def eval_fsource(mesh):
@@ -106,8 +114,11 @@ for i in range(levels + 1):
     if i == levels:
         break
 
-    # apply VCD+BR AMR
-    mark = amr.vcdmark(u, lb, bracket=[0.05, 0.85])
+    # apply UDO+BR AMR by default
+    if useVCD:
+        mark = amr.vcdmark(u, lb, bracket=[0.05, 0.85])
+    else:
+        mark = amr.udomark(u, lb, n=1)
     residual = -div(grad(u)) - fsource
     imark, _, _ = amr.brinactivemark(u, lb, residual)
     mark = amr.unionmarks(mark, imark)
