@@ -1,3 +1,6 @@
+# 3D advection-diffusion problem with upper and lower bounds
+# FIXME at least in 2d, use a Firedrake mesh instead
+
 import time
 import sys
 from firedrake.output import VTKFile
@@ -8,8 +11,6 @@ from firedrake import *
 import petsc4py
 from viamr import VIAMR
 from netgen.occ import *
-
-# 3D advection-diffusion problem with upper and lower bounds
 
 # FIXME issue about refinement along the surface will be fixed
 # in the next firedrake release?  Install the latest ngsPETSc changes for now.
