@@ -1,33 +1,38 @@
 # examples/
 
-## overview of the examples
+## overview
+
+All Python codes in this directory demonstrate the methods from the paper.  The examples are organized, below, into those that solve the classical obstacle problem, which is unilateral and which has the uniformly-elliptic Laplacian as the operator, one code that solves a different uniformly-elliptic problem, and two important non-trivial applications which solve degenerate-diffusion obstacle problems.
+
+The method acryonyms are as follows, with complete discussions given in the text of the paper:
+  * AMR = adaptive mesh refinement
+  * AVM = averaged-metric mesh adaptation
+  * BR = a posteriori estimator from Babuska & Rheinboldt (1989)
+  * GR = a posteriori estimator based on gradient recovery
+  * NSV = a posteriori estimator and AMR method from Nochetto, Siebert, and Veeser (2003)
+  * UDO = unstructured dilation operator, for refinement near the free boundary
+  * VCD = variable-coefficient diffusion, for refinement near the free boundary
+  * VI = variational inequality
+
+See the paper for citations to the literature.
+
+## the examples
 
 ### 1. classical obstacle problem examples
 
-The short programs `sphere.py`, `spiral.py`, and `aol.py` show many core abilities of the `VIAMR` class.  They are all basic model problems because they apply adaptive refinement to the classical obstacle problem, where the operator is the uniformly-elliptic Laplacian.
+The short programs `aol.py`, `sphere.py`, and `spiral.py` might be the examples to start with.  They show many core abilities of the `VIAMR` class.  They are all basic model problems because they apply adaptive refinement to the classical obstacle problem, where the operator is the uniformly-elliptic Laplacian.
 
-  * `sphere.py` refines an initially homogeneous mesh on a radially-symmetric problem from Chapter 12 of Bueler (2021).  Five algorithms are applied namely, UDO+BR, NSV, uniform refinement, and AVM.  The NSV method is from Nochetto, Siebert, and Veeser (2003).  Some methods mark elements for refinement near the free boundary, and in all methods refinement in the inactive set also occurs.  Note that the AVM method depends on the [animate](https://github.com/mesh-adaptation/animate) library; see below.  The target complexity set at the start of `sphere.py` is intended to generate a (more or less) apples-to-apples comparison of the methods.  View the `gap` variable in the output Paraview files to see the active, inactive, and free boundary sets.  See the `error` variable to see the distribution of numerical error.
+  * `aol.py` solves a problem from Ainsworth, Oden, & Lee (1993).  This simple example is quoted in full in the paper, and it produces a figure there.  It only does one level of refinement.
 
-  * `spiral.py` does a similar comparison on a classical obstacle problem from Graeser & Kornhuber (2009).  Only 2 methods are demonstrated by default, namely: UDO+BR and NSV.
+  * `sphere.py` solves a radially-symmetric problem from Chapter 12 of Bueler (2021).  Four algorithms are applied by default: UDO+BR, NSV, uniform refinement, and AVM.  In each case we refine an initially homogeneous mesh.  Some methods mark elements for refinement near the free boundary, and all methods refine in the inactive set.  Note that the AVM method depends on the [animate](https://github.com/mesh-adaptation/animate) library; see below.  The target complexity set at the start of `sphere.py` is intended to generate a (more or less) apples-to-apples comparison of the methods.  View the `gap` variable in the output Paraview files to see the active, inactive, and free boundary sets.  See the `error` variable to see the distribution of numerical error.
 
-  * `aol.py` is a simple example that only does one level of refinement on a problem from
+  * `spiral.py` does a similar comparison to `sphere.py`, but on a classical obstacle problem from Graeser & Kornhuber (2009).  Only 2 methods are demonstrated by default, namely: UDO+BR and NSV.
 
-    M. Ainsworth, J.T. Oden, and C. Lee, Local a posteriori error estimators for variational inequalities, Numerical Methods for Partial Differential Equations 9 (1993), pp. 23–33.
-
-  This code is quoted in full in the paper, and it produces a figure therein.
-
-Several more examples also solve the classical obstacle problem:
+These examples also solve the classical obstacle problem:
 
   * `blisters.py` solves a classical obstacle problem which generates a large active set, covering more than 80% of the domain.  Resolving the connectedness of the inactive set in this example requires high resolution.
 
-  * `nsv.py` compares UDO+BR to the method from
-
-    Nochetto, R. H., Siebert, K. G., & Veeser, A. (2003). Pointwise a posteriori error control for elliptic obstacle problems. Numerische Mathematik, 95(1), 163-195.
-
-  on "7.2 Example: Constant Obstacle" from that source.
-
-FIXME delete `suttmeier.py`?  I don't see what it offers
-
+  * `nsv.py` compares UDO+BR to the method from Nochetto, Siebert, & Veeser (2003).  The problem solved is "7.2 Example: Constant Obstacle" from that source.
 
 ### 2. other uniformly-elliptic examples
 
