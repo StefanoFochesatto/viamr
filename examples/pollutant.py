@@ -1,19 +1,16 @@
-# 3D advection-diffusion problem with upper and lower bounds
-# FIXME at least in 2d, use a Firedrake mesh instead
+# Solve 3D advection-diffusion problem with upper and lower bounds:
+#   0 <= u <= 1.
+# This problem is the d=3 version of Example 8.3 in
+#    E. Bueler and P. Farrell (2024). A full approximation scheme multilevel
+#    method for nonlinear variational inequalities, SIAM J. Sci. Comput. 46,
+#    A2421–A2444, https://doi.org/10.1137/23M1594200
 
-import time
-import sys
-from firedrake.output import VTKFile
 from firedrake.petsc import PETSc
 
 print = PETSc.Sys.Print  # enables correct printing in parallel
 from firedrake import *
-import petsc4py
 from viamr import VIAMR
 from netgen.occ import *
-
-# FIXME issue about refinement along the surface will be fixed
-# in the next firedrake release?  Install the latest ngsPETSc changes for now.
 
 refinements = 2
 
@@ -28,48 +25,46 @@ mesh = Mesh(
     },
 )
 
+# parameters for constructing the wind and source term
+alpha = 30.0  # strength of positive source
+beta = 4.0  # strength of negative removal
+x0, y0, z0, r0 = -0.5, 0.5, 0.5, 1.0 / 3.0
+x1, y1, z1, r1 = -0.5, -0.5, -0.2, 1.0 / 5.0
+
+# do AMR on the VI
 amr = VIAMR()
 for i in range(refinements + 1):
     print(f"solving on mesh {i} ...")
     amr.meshreport(mesh)
-    # obstacle and solution are in P1 or Q1
+
+    # obstacle and solution are in P1
     V = FunctionSpace(mesh, "CG", 1)
     Z = VectorFunctionSpace(mesh, "CG", 1)  # velocity in this space
 
-    # parameters
-    alpha = 30.0  # strength of positive source
-    beta = 4.0  # strength of negative removal
-
-    # fields: w = velocity, f = source
-    x0, y0, z0, r0 = -0.5, 0.5, 0.5, 1.0 / 3.0
-    x1, y1, z1, r1 = -0.5, -0.5, -0.2, 1.0 / 5.0
-
-    # generate source term from formulas found in
+    # generate wind and source term from formulas found in
     #   https://bitbucket.org/pefarrell/fascd/src/master/examples/pollutant.py
-    # see: https://doi.org/10.1137/23M1594200
     (x, y, z) = SpatialCoordinate(mesh)
     w = Function(Z, name="w (velocity)").interpolate(
         as_vector([7.0 + 5.0 * y, -5.0 * x, 2.0 * z])
     )
-    disc0 = (x - x0) * (x - x0) + (y - y0) * (y - y0) + (z - z0) * (z - z0)
-    disc1 = (x - x1) * (x - x1) + (y - y1) * (y - y1) + (z - z1) * (z - z1)
-    left_ufl = conditional(Or(disc0 < r0**2, disc1 < r1**2), alpha, 0.0)
-    right_ufl = conditional(x > 0, -beta * (1.0 - cos(6.0 * pi * x)), 0.0)
-    f = Function(V, name="f (source)").interpolate(left_ufl + right_ufl)
+    d0 = (x - x0) * (x - x0) + (y - y0) * (y - y0) + (z - z0) * (z - z0)
+    d1 = (x - x1) * (x - x1) + (y - y1) * (y - y1) + (z - z1) * (z - z1)
+    a_ufl = conditional(Or(d0 < r0 ** 2, d1 < r1 ** 2), alpha, 0.0)
+    b_ufl = conditional(x > 0, -beta * (1.0 - cos(6.0 * pi * x)), 0.0)
+    f = Function(V, name="f (source)").interpolate(a_ufl + b_ufl)
 
-    u = Function(V, name="u (FE soln)").interpolate(
-        Constant(0.5)
-    )  # initialized to 0.0, so admissible
+    # initialize strictly admissible
+    u = Function(V, name="u (FE soln)").interpolate(Constant(0.5))
+
+    # weak form
     v = TestFunction(V)
-    F = (
-        Constant(0.1) * inner(grad(u), grad(v)) * dx
-        + inner(dot(w, grad(u)) - f, v) * dx
-    )
+    C = Constant(0.1)
+    F = C * inner(grad(u), grad(v)) * dx + inner(dot(w, grad(u)) - f, v) * dx
     bdry_ids = (1,)  # Dirichlet only on x = -1 side
     bcs = DirichletBC(V, Constant(0.0), bdry_ids)
-    problem = NonlinearVariationalProblem(F, u, bcs)
+    prob = NonlinearVariationalProblem(F, u, bcs)
 
-    # Solve
+    # solve
     sp = {
         "snes_type": "vinewtonrsls",
         "snes_rtol": 1.0e-8,
@@ -82,13 +77,9 @@ for i in range(refinements + 1):
         "pc_type": "lu",
         "pc_factor_mat_solver_type": "mumps",
     }
-
     lb = Function(V).interpolate(Constant(0.0))
     ub = Function(V).interpolate(Constant(1.0))
-
-    solver = NonlinearVariationalSolver(
-        problem, solver_parameters=sp, options_prefix=""
-    )
+    solver = NonlinearVariationalSolver(prob, solver_parameters=sp, options_prefix="")
     solver.solve(bounds=(lb, ub))
 
     if i == refinements:
