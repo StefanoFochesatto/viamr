@@ -10,44 +10,38 @@ which only depends on horizontal location, where the exact solution is
 known.  Option -prob cap modifies this with a random, but smooth, bed topography,
 but keeps the dome SMB.  Option -prob range generates a different SMB, still
 depending only on horizontal location, and it results in a disconnected glacier.
+Finally, option -bdata reads the bed elevation from a NetCDF (.nc) file.
+
 An elevation-dependent surface mass balance model is also available, with
 options -elevdepend (to turn it on) and -sELA to set equilibrium line altitude.
 This case does not allow -newton.
 
 We apply the UDO or VCD methods for free-boundary refinement.  The default mode
-does n=1 UDO at the free boundary plus gradient-recovery refinement in the
+does n=1 UDO at the free boundary, plus gradient-recovery refinement in the
 inactive set.
 
-The default VI solver is Picard iteration on the tilt (Jouvet & Bueler, 2012),
-and vinewtonrsls (+ mumps) for each tilt.  A full Newton iteration, i.e. simply
-vinewtonrsls, is turned on with -newton, but it does not converge in many
-harder cases.
+The default VI solver is Picard iteration on the tilt; see (Jouvet & Bueler, 2012).
+We apply vinewtonrsls (+ mumps) for each tilt.  A full Newton iteration, simply
+vinewtonrsls, is turned on with -newton, but it does not converge in harder cases.
 """
 
 from argparse import ArgumentParser, RawTextHelpFormatter
 parser = ArgumentParser(description=des, formatter_class=RawTextHelpFormatter)
 
 parser.add_argument(
+    "-bdata",
+    metavar="FILE",
+    type=str,
+    default="",
+    help='read b(x,y) data from "topg" variable in this NetCDF file (.nc)',
+)
+parser.add_argument(
     "-box",
     metavar="X",
     type=float,
     nargs=4,
     default=[0.0, 1800.0e3, 0.0, 1800.0e3],
-    help="bounding box for -extractpvd; ignored if not -extractpvd",
-)
-parser.add_argument(
-    "-csv",
-    metavar="FILE",
-    type=str,
-    default="",
-    help="output file name for dome error report (.csv)",
-)
-parser.add_argument(
-    "-data",
-    metavar="FILE",
-    type=str,
-    default="",
-    help='read "topg" variable from NetCDF file (.nc)',
+    help="bounding box for -opvdsub output",
 )
 parser.add_argument(
     "-elevdepend",
@@ -56,17 +50,10 @@ parser.add_argument(
     help="compute surface mass balance from an elevation-dependent model",
 )
 parser.add_argument(
-    "-extractpvd",
-    metavar="FILE",
-    type=str,
-    default="",
-    help="extract a submesh, defined by -box, into Paraview-format file (.pvd)",
-)
-parser.add_argument(
     "-hmin",
     type=float,
     default=-1,
-    help="do not refine below this diameter (default: -1 .. so no hmin)",
+    help="do not refine below this diameter (default: -1; ignores hmin)",
 )
 parser.add_argument(
     "-jaccard",
@@ -88,11 +75,25 @@ parser.add_argument(
     help="use straight Newton instead of Picard+Newton",
 )
 parser.add_argument(
+    "-ocsv",
+    metavar="FILE",
+    type=str,
+    default="",
+    help="output file name for dome error report (.csv)",
+)
+parser.add_argument(
     "-opvd",
     metavar="FILE",
     type=str,
     default="",
     help="name for Paraview-format output file (.pvd)",
+)
+parser.add_argument(
+    "-opvdsub",
+    metavar="FILE",
+    type=str,
+    default="",
+    help="output file (.pvd) into which we extract a submesh defined by -box",
 )
 parser.add_argument(
     "-pcount",

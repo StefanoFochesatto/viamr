@@ -19,9 +19,9 @@ mpiexec -n 4 python3 steady.py -prob cap -elevdepend -sELA 800 -m 20 -refine 4 -
 
 In the paper there is an example showing norm and geometrical errors against mesh complexity (number of elements).  Uniform, UDO+GR, and VCD+GR mesh refinement methods are shown.  Here are these runs:
 ```
-mpiexec -n 12 python3 steady.py -newton -m 5 -refine 8 -uniform 8 -csv uniform.csv
-mpiexec -n 12 python3 steady.py -newton -m 5 -refine 13 -csv udo.csv
-mpiexec -n 12 python3 steady.py -newton -m 5 -refine 13 -vcd -csv vcd.csv
+mpiexec -n 12 python3 steady.py -newton -m 5 -refine 8 -uniform 8 -ocsv uniform.csv
+mpiexec -n 12 python3 steady.py -newton -m 5 -refine 13 -ocsv udo.csv
+mpiexec -n 12 python3 steady.py -newton -m 5 -refine 13 -vcd -ocsv vcd.csv
 ```
 
 ### bumpy bed examples

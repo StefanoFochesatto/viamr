@@ -1,6 +1,13 @@
 # Solves a 2D steady, isothermal shallow ice approximation glacier obstacle problem.
+#
+# A basic run to illustrate capabilities:
+#   python3 steady.py -prob cap -opvd result_cap.pvd -refine 5 -jaccard
+# Then use paraview 3D visualization, with warp by scalar on the surface elevation,
+# on the output file result_cap.pvd.
+#
 # For more info see README.md or run
 #   python3 steady.py -h
+
 
 from clargs import parser
 
@@ -13,8 +20,8 @@ assert (
     not args.elevdepend or args.prob != "dome"
 ), "combination invalid: -elevdepend & -prob dome"
 assert (
-    not args.elevdepend or not args.data
-), "combination invalid: -elevdepend & -data file.nc"
+    not args.elevdepend or not args.bdata
+), "combination invalid: -elevdepend & -bdata file.nc"
 assert (
     not args.elevdepend or not args.newton
 ), "combination invalid: -elevdepend & -newton"  # FIXME
@@ -44,27 +51,27 @@ from synthetic import (
     radiuserrordome,
 )
 
-if args.extractpvd:
+if args.opvdsub:
     bx = args.box  # [x_left, x_right, y_lower, y_upper]
-    assert bx[0] < bx[1] and bx[2] < bx[3], "-extract_box not valid"
-    assert args.data or (0.0 <= bx[0] < bx[1] <= L), "x range not valid for [0,L]"
-    assert args.data or (0.0 <= bx[2] < bx[3] <= L), "y range not valid for [0,L]"
+    assert bx[0] < bx[1] and bx[2] < bx[3], "-box not valid"
+    assert args.bdata or (0.0 <= bx[0] < bx[1] <= L), "x range not valid for [0,L]"
+    assert args.bdata or (0.0 <= bx[2] < bx[3] <= L), "y range not valid for [0,L]"
 
 # set up .csv if generating numerical error data
-if args.csv:
+if args.ocsv:
     if not args.prob == "dome":
-        raise ValueError("option -csv only valid for -prob dome")
-    csvfile = open(args.csv, "w")
+        raise ValueError("option -ocsv only valid for -prob dome")
+    csvfile = open(args.ocsv, "w")
     print("REFINE,NE,HMIN,UERRH1,HERRINF,DRMAX", file=csvfile)
 
 # read data for bed topography
-if args.data:
+if args.bdata:
     pprint("ignoring -prob choice ...")
     args.prob = None
-    pprint(f"reading topg from NetCDF file {args.data} with native data grid:")
+    pprint(f"reading topg from NetCDF file {args.bdata} with native data grid:")
     from datanetcdf import DataNetCDF
 
-    topg_nc = DataNetCDF(args.data, "topg")
+    topg_nc = DataNetCDF(args.bdata, "topg")
     # topg_nc.preview()
     topg_nc.describe_grid(print=PETSc.Sys.Print, indent=4)
     pprint(f"putting topg onto matching Firedrake structured data mesh ...")
@@ -79,7 +86,7 @@ dp = {
     "partition": True,
     "overlap_type": (DistributedMeshOverlapType.VERTEX, 1),
 }
-if args.data:
+if args.bdata:
     # generate mesh compatible with data mesh, but at user (-m) resolution, typically lower
     mesh = topg_nc.rectmesh(args.m)
 else:
@@ -201,7 +208,7 @@ for i in range(args.refine + 1):
     x = SpatialCoordinate(mesh)
 
     # bedrock on current mesh
-    if args.data:
+    if args.bdata:
         b = Function(V).project(topg)  # cross-mesh projection from data mesh
     else:
         if args.prob == "dome":
@@ -211,7 +218,7 @@ for i in range(args.refine + 1):
     b.rename("b = bedrock topography")
 
     # surface mass balance function on current mesh; depends on b in one case
-    if args.data:
+    if args.bdata:
         # SMB from linear model based on lapse rate; from linearizing dome case
         c0 = -3.4e-8
         c1 = (6.3e-8 - c0) / 3.6e3
@@ -278,14 +285,14 @@ for i in range(args.refine + 1):
     s = Function(V, name="s = surface elevation").interpolate(b + H)
 
     # report numerical errors if exact solution known
-    if not args.data and args.prob == "dome":
+    if not args.bdata and args.prob == "dome":
         uerr_H1, Herr_inf = normerrorsdome(u, H)
         vfb, _ = amr.freeboundarygraph(u, Function(V).interpolate(0.0))
         drmax = radiuserrordome(mesh, vfb)
         pprint(
             f"  |u-uexact|_H1 = {uerr_H1:.3e} rel, |H-Hexact|_inf = {Herr_inf:.3f} m, |dr|_inf = {drmax/1000.0:.3f} km"
         )
-        if args.csv:
+        if args.ocsv:
             print(
                 f"{i:d},{ne:d},{hmin:.2f},{uerr_H1:.3e},{Herr_inf:.3f},{drmax:.3f}",
                 file=csvfile,
@@ -296,20 +303,19 @@ for i in range(args.refine + 1):
     ei = amr.eleminactive(u, lb)
     area = assemble(ei * dx)
     pprint(
-        f"  glaciated area {area / 1000.0**4:.4f} million km^2, ice volume = {vol / 1000.0**4:.2f} thousand km^3",
-        end="",
+        f"  glaciated area {area / 1000.0**4:.4f} million km^2, ice volume = {vol / 1000.0**4:.2f} thousand km^3"
     )
     if args.jaccard and i > 0:
         jac = amr.jaccard(ei, oldei, submesh=True)
-        pprint(f"; levels {i-1},{i} Jaccard agreement {100*jac:.2f}%")
+        pprint(f"  levels {i-1},{i} Jaccard agreement {100*jac:.2f}%")
     else:
         pprint("")
     oldei = ei
 
-if args.csv:
+if args.ocsv:
     csvfile.close()
 
-if args.extractpvd:  # note boxind gets written into -opvd file
+if args.opvdsub:  # note boxind gets written into -opvd file
     x, y = SpatialCoordinate(mesh)
     bx = args.box  # [x_left, x_right, y_lower, y_upper]
     ibx = conditional(x >= bx[0], conditional(x <= bx[1], 1.0, 0.0), 0.0)
@@ -336,12 +342,12 @@ if args.opvd:
     rank.dat.data[:] = mesh.comm.rank
     rank.rename("rank")
     pprint("writing to %s ..." % args.opvd)
-    if args.extractpvd:
+    if args.opvdsub:
         VTKFile(args.opvd).write(u, H, s, Us, q, a, b, Gb, Gs, rank, boxind)
     else:
         VTKFile(args.opvd).write(u, H, s, Us, q, a, b, Gb, Gs, rank)
 
-if args.extractpvd:
+if args.opvdsub:
     mesh.mark_entities(boxind, 99)
     mesh = RelabeledMesh(mesh, [boxind], [99])
     subm = Submesh(mesh, mesh.topological_dimension(), 99)
@@ -351,5 +357,5 @@ if args.extractpvd:
     subs = Function(subV, name="s = surface elevation").interpolate(s)
     suba = Function(subV, name="a = accumulation").interpolate(a)
     subb = Function(subV, name="b = bedrock topography").interpolate(b)
-    pprint("writing box extract to %s ..." % args.extractpvd)
-    VTKFile(args.extractpvd).write(subu, subH, subs, suba, subb)
+    pprint("writing submesh quantities, for -box, to %s ..." % args.opvdsub)
+    VTKFile(args.opvdsub).write(subu, subH, subs, suba, subb)
