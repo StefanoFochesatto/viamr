@@ -1,12 +1,16 @@
-# VI-AMR/examples/glacier/
+# viamr/examples/glacier/
 
-This directory contains a shallow ice approximation model of glaciers on land, which exploits and illustrates the tag-and-refine UDO and VCD VIAMR methods, along with gradient refinement.  See `METHOD.md` for the mathematical content.
+This directory contains a shallow ice approximation model of glaciers on land, which exploits and illustrates the free-boundary-focussed tag-and-refine VIAMR methods, along with gradient refinement.
+
+See `METHOD.md` for the mathematical model of a glacier.
 
 ## synthetic steady-state glaciers
 
 ### illustrations
 
-The main code is `steady.py`, with formulas in `synthetic.py` and command-line argument processing in `clargs.py`.  To run a default steady-state glacier simulation for a synthetic "dome" glacier, with known exact solution, remember to activate the Firedrake virtual environment and then do
+The main code is `steady.py`.  It imports formulas from `synthetic.py` and command-line argument processing from `clargs.py`.
+
+To run a default steady-state glacier simulation for a synthetic "dome" glacier, with known exact solution, activate the Firedrake virtual environment and then do
 ```
 python3 steady.py
 ```
