@@ -26,7 +26,7 @@ Several more examples also solve the classical obstacle problem:
 
   on "7.2 Example: Constant Obstacle" from that source.
 
-FIXME `parabola1d.py1`, `suttmeier.py`
+FIXME delete `suttmeier.py`?  I don't see what it offers
 
 
 ### 2. other uniformly-elliptic examples
