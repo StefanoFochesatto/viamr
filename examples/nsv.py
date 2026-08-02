@@ -1,4 +1,4 @@
-# Compare UDO+BR to the method from
+# Compare n=0 UDO+BR to the method from
 #
 #   Nochetto, R. H., Siebert, K. G., & Veeser, A. (2003). Pointwise
 #   a posteriori error control for elliptic obstacle problems.
@@ -8,11 +8,8 @@
 
 # major parameters
 d = 2  # spatial dimension
-#  FIXME: for d=3 the NSV method generates an error with refine_marked_elements() from Netgen;
-#         maybe related to boundary refinement?
-
-m = 3  # initial mesh resolution
-levs = 7 if d == 2 else 4  # number of refinements
+targetnodes = 5e4 if d == 2 else 2e4  # target number of nodes; less in 3D because matrices
+maxlevs = 12  # backstop targetnodes
 nUDO = 0  # observe that {sigma_h * u_h > 0} is same as UDO mark with nUDO=0
 dualtol = 1.0e-8  # used for admissibility (sigma_h >= -dualtol) *and* in estimator
 
@@ -25,6 +22,7 @@ print = PETSc.Sys.Print  # enables correct printing in parallel
 # initial mesh
 assert d in [2, 3]
 if d == 2:
+    m = 3  # initial mesh resolution
     mesh0 = RectangleMesh(
         m, m, 1.0, 1.0, originX=-1.0, originY=-1.0, diagonal="crossed"
     )
@@ -33,7 +31,8 @@ else:
     from netgen.occ import *
 
     box = Box((-1.0, -1.0, -1.0), (1.0, 1.0, 1.0))
-    ngmesh = OCCGeometry(box, dim=3).GenerateMesh(maxh=0.8)
+    h0 = 0.5  # initial mesh resolution
+    ngmesh = OCCGeometry(box, dim=3).GenerateMesh(maxh=h0)
     mesh0 = Mesh(
         ngmesh,
         distribution_parameters={
@@ -55,8 +54,8 @@ sp = {
 
 
 def get_etad(mesh, amr, sigmah, tactive):
-    """For each closed triangle T within the thin active set, compute formula (7.1) from Nochetto, Siebert, & Veeser (2003):
-    \eta_d = C1 |h^2 \grad(\sigma_h)|_d"""
+    """For each closed triangle T within the thin active set, compute formula (7.1) from Nochetto, Siebert, & Veeser (2003):  \eta_d = C1 |h^2 \grad(\sigma_h)|_d
+    Throws an error in parallel."""
     C1 = 0.01
     sigslope = inner(grad(sigmah), grad(sigmah)) ** (d / 2)  # = |\grad\sigma_h|^d
     _, DG0 = amr.spaces(mesh)
@@ -69,11 +68,12 @@ def get_etad(mesh, amr, sigmah, tactive):
 print(f"solving {d}D example from Nochetto, Siebert, & Veeser (2003) ...")
 r = 0.7  # parameter in defining problem
 results = {}
-methods = ["UDOBR", "NSV", "NSVfb"]
+# FIXME disable "fb" variant for now:   methods = ["UDOBR", "NSV", "NSVfb"]
+methods = ["UDOBR", "NSV"]
 for method in methods:
     mesh = mesh0
     dofs, errs = [], []
-    for j in range(levs):
+    for j in range(maxlevs):
         print(f"using AMR by {method} ...")
         x = SpatialCoordinate(mesh)
         V = FunctionSpace(mesh, "CG", 1)
@@ -126,9 +126,11 @@ for method in methods:
                 uh, psih, g, f_ufl, g_ufl, theta=0.5, Cfb=Cfb, dualtol=dualtol
             )
 
-        # get next mesh by refinement
-        if j == levs - 1:
+        # done with this method if we reach target complexity
+        if dofs[-1] > targetnodes:
             break
+
+        # get next mesh by refinement
         if d == 2:
             mesh = amr.refinemarkedelements(mesh, mark)  # PETSc DM refinement
         else:
@@ -148,22 +150,23 @@ for method in methods:
         rank.dat.data[:] = mesh.comm.rank
         rank.rename("rank")
 
-    # write Paraview-readable output, with an additional field for NSV
+    # write Paraview-readable output
     outfile = f"result_{method}.pvd"
     print(f"generating output file {outfile} ...")
     if method == "UDOBR":
+        imark.rename("UDO inactive mark")
         fmark.rename("UDO FB mark")
         if mesh.comm.size > 1:
-            VTKFile(outfile).write(uh, uerr, fmark, active, tactive, rank)
+            VTKFile(outfile).write(uh, uerr, imark, fmark, active, tactive, rank)
         else:
-            VTKFile(outfile).write(uh, uerr, fmark, active, tactive)
+            VTKFile(outfile).write(uh, uerr, imark, fmark, active, tactive)
     else:
-        etad = get_etad(mesh, amr, sigmah, tactive)
         if mesh.comm.size > 1:
             VTKFile(outfile).write(
-                uh, uerr, sigmah, etainf, etad, active, tactive, rank
+                uh, uerr, sigmah, etainf, active, tactive, rank
             )
         else:
+            etad = get_etad(mesh, amr, sigmah, tactive)
             VTKFile(outfile).write(uh, uerr, sigmah, etainf, etad, active, tactive)
 
 # convergence figure
@@ -172,7 +175,7 @@ if mesh.comm.rank == 0:
     import numpy as np
 
     markers = ["ko", "bs", "rs"]
-    for j in range(3):
+    for j in range(len(methods)):
         meth = methods[j]
         dofs, errs = np.array(results[meth][0]), np.array(results[meth][1])
         # print(np.polyfit(np.log(dofs), np.log(errs), 1))
