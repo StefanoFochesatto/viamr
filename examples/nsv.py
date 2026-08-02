@@ -20,6 +20,8 @@ from firedrake import *
 from viamr import VIAMR
 from firedrake.petsc import PETSc
 
+print = PETSc.Sys.Print  # enables correct printing in parallel
+
 # initial mesh
 assert d in [2, 3]
 if d == 2:
@@ -51,7 +53,19 @@ sp = {
     "pc_factor_mat_solver_type": "mumps",
 }
 
-print = PETSc.Sys.Print  # enables correct printing in parallel
+
+def get_etad(mesh, amr, sigmah, tactive):
+    """For each closed triangle T within the thin active set, compute formula (7.1) from Nochetto, Siebert, & Veeser (2003):
+    \eta_d = C1 |h^2 \grad(\sigma_h)|_d"""
+    C1 = 0.01
+    sigslope = inner(grad(sigmah), grad(sigmah)) ** (d / 2)  # = |\grad\sigma_h|^d
+    _, DG0 = amr.spaces(mesh)
+    hT = project(CellSize(mesh), DG0)
+    v0 = TestFunction(DG0)
+    tmp = assemble(hT ** (2 * d) * sigslope * tactive * v0 * dx).riesz_representation()
+    return Function(DG0, name="eta_d").interpolate(C1 * tmp ** (1.0 / d))
+
+
 print(f"solving {d}D example from Nochetto, Siebert, & Veeser (2003) ...")
 r = 0.7  # parameter in defining problem
 results = {}
@@ -134,29 +148,17 @@ for method in methods:
         rank.dat.data[:] = mesh.comm.rank
         rank.rename("rank")
 
+    # write Paraview-readable output, with an additional field for NSV
     outfile = f"result_{method}.pvd"
     print(f"generating output file {outfile} ...")
     if method == "UDOBR":
         fmark.rename("UDO FB mark")
-        print(f"writing to {outfile} ...")
         if mesh.comm.size > 1:
             VTKFile(outfile).write(uh, uerr, fmark, active, tactive, rank)
         else:
             VTKFile(outfile).write(uh, uerr, fmark, active, tactive)
     else:
-        # FIXME etad could go into VIAMR.nsvmark()?
-        # compute *for each closed triangle T* within the thin active set, for formula (7.1):
-        #   \eta_d = C1 |h^2 grad(sigmah)|_d
-        C1 = 0.01
-        sigslope = inner(grad(sigmah), grad(sigmah)) ** (d / 2)  # = |\grad\sigma_h|^d
-        _, DG0 = amr.spaces(mesh)
-        hT = project(CellSize(mesh), DG0)
-        v0 = TestFunction(DG0)
-        tmp = assemble(
-            hT ** (2 * d) * sigslope * tactive * v0 * dx
-        ).riesz_representation()
-        etad = Function(DG0, name="eta_d").interpolate(C1 * tmp ** (1.0 / d))
-
+        etad = get_etad(mesh, amr, sigmah, tactive)
         if mesh.comm.size > 1:
             VTKFile(outfile).write(
                 uh, uerr, sigmah, etainf, etad, active, tactive, rank
