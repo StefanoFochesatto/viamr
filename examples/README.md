@@ -41,20 +41,22 @@ These 2 addtional examples solve the classical obstacle problem:
 
 ### 3. examples with degenerate operators
 
-FIXME `porous.py`
+  * `porous.py` FIXME
 
-The `glaciers/` directory contains another example; see `glaciers/README.md` and `glaciers/METHOD.md` for what it is doing and how to run it.
+  * The `glaciers/` directory contains another degenerate-operator example based on a realistic problem.  See `glaciers/METHOD.md` for the mathematical problem and the FE solution method.  See `glaciers/README.md` for how to run the example.  The main code is `glaciers/steady.py`.
 
 
 ## running the examples
 
-First install VIAMR using instructions in the [README.md in the parent directory](../README.md).  Make sure to activate the Firedrake virtual environment.  Then simply run, for example:
+First install VIAMR using instructions in the [README.md in the parent directory](../README.md).  Make sure to activate the Firedrake virtual environment.
+
+Then simply run, for example:
 
 ```
 python3 sphere.py
 ```
 
-All of the codes write `.pvd` files for viewing in Paraview.  Often the `gap` field will show the active and inactive sets most easily.
+All of the codes write `.pvd` files for viewing in Paraview.  Many unilateral codes write a `gap` field, the difference between the solution and the obstacle, and looking at that field, especially with a tight threshold, will show the active and inactive sets most easily.
 
 
 ### cleaning up
