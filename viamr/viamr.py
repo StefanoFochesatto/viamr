@@ -267,7 +267,7 @@ class VIAMR(OptionsManager):
             _, DG0 = self.spaces(mark1.function_space().mesh())
             assert mark1.function_space().ufl_element() == DG0.ufl_element()
             assert mark2.function_space().ufl_element() == DG0.ufl_element()
-        return Function(mark1.function_space()).interpolate(
+        return Function(mark1.function_space(), name="mark (unionmarks)").interpolate(
             (mark1 + mark2) - (mark1 * mark2)
         )
 
@@ -366,7 +366,7 @@ class VIAMR(OptionsManager):
                 # parallel communication *here*:
                 border.dat.data_wo_with_halos[dm2fd[k]] = 1
 
-        return Function(DG0).interpolate(border, allow_missing_dofs=True)
+        return Function(DG0, name="mark (udomark)").interpolate(border, allow_missing_dofs=True)
 
     def vcdmark(
         self,
@@ -437,7 +437,7 @@ class VIAMR(OptionsManager):
             return u
 
         # apply thresholding and interpolate into DG0
-        mark = Function(DG0, name="VCD Marking")
+        mark = Function(DG0, name="mark (vcdmark)")
         mark.interpolate(
             conditional(u > bracket[0], conditional(u < bracket[1], 1, 0), 0)
         )
@@ -468,7 +468,7 @@ class VIAMR(OptionsManager):
             total_error_est = sqrt(eta_.dot(eta_))
 
         DG0 = eta.function_space()
-        mark = Function(DG0).interpolate(conditional(gt(eta, ethresh), 1.0, 0.0))
+        mark = Function(DG0, name="mark (_fixedrate)").interpolate(conditional(gt(eta, ethresh), 1.0, 0.0))
         return mark, ethresh, total_error_est
 
     def gradrecinactivemark(self, uh, lb, theta=0.5, method="max"):
