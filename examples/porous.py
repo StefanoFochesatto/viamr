@@ -132,8 +132,8 @@ for i in range(levels + 1):
 outfile = "result_porous.pvd"
 print(f"done ... writing solution to {outfile} ...")
 err = Function(V, name="uerr = u-u_exact").interpolate(uh - uUFL)
-imark.rename("inactive set mark")
-mark.rename("UDOBR mark")
+imark.rename("inactive mark")
+mark.rename("UDO+BR mark")
 if mesh.comm.size > 1:
     # in parallel, write integer-valued element-wise process rank
     DG0 = FunctionSpace(mesh, "DG", 0)
