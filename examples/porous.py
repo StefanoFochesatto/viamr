@@ -1,11 +1,8 @@
-# Solve a porous-medium nonlinear obstacle problem, with
-# strong form
+# Solve a porous-medium nonlinear obstacle problem, with strong form
 #   - div(u grad(u)) = f,  u >= 0
 # The domain is a square, and u=g on boundary.  The source term
 # f(r) is a negative constant, in the center and linear outside
 # of that.  The exact solution is known.
-#
-# The AMR method is UDO+BR.
 #
 # The solver must handle the degeneracy of the coefficient at
 # the free boundary.  Thus the coefficient is regularized with
@@ -14,11 +11,10 @@
 # Also, the initial iterate is raised by eps_i above the obstacle.
 # Finally, simple backtracking line search is used.
 #
-# In this example, even though all data is quite smooth, large
-# BR inactive set estimator (=eta) values occur near the free
-# boundary.  By comparison, with a ordinary Laplacian that would
-# not be true; the solution would be smoother across the
-# free boundary.
+# The AMR method is UDO+BR.  Even though all data is quite smooth,
+# large BR inactive set estimator (=eta) values occur near the free
+# boundary.  (For the ordinary Laplacian that would not be true;
+# the solution would be smoother across the free boundary.)
 
 from firedrake import *
 from firedrake.petsc import PETSc
@@ -30,15 +26,12 @@ from pyop2.mpi import MPI  # for MPI reduce in parallel
 
 # major parameters
 m0 = 6  # initial mesh is m0 x m0
-levels = 7  # number of AMR levels, by
-gamma = 2.0  # solves:  - div(u^{gamma-1} grad(u)) = f  porous-media equation, as VI
+levels = 7  # number of AMR levels
+gamma = 2.0  # solves porous-media as VI:  - div(u^{gamma-1} grad(u)) = f
 a, b = 1.2, 1.0  # parameters in building exact solution
 
-# initial mesh
-mesh = RectangleMesh(m0, m0, 2.0, 2.0, originX=-2.0, originY=-2.0, diagonal="crossed")
-
 # schedule of eps_i for mesh i; must have length >= levels + 1
-epssched = [0.02, 0.01, 0.005, 0.002, 0.002, 0.002, 0.002, 0.002, 0.002, 0.002]
+eps = [0.02, 0.01, 0.005, 0.002, 0.002, 0.001, 0.001, 0.001, 0.001, 0.001]
 
 # solver parameters for VI
 sp = {
@@ -68,81 +61,77 @@ def get_uexact_ufl(x, y):
     return conditional(r <= 1.0, 0.0, (gamma * tmp) ** (1.0 / gamma))
 
 
-def maxeta(eta):  # maximum of BR estimator, even in parallel
+def maxeta(mesh, eta):  # maximum of BR estimator, even in parallel
     mine = max(eta.dat.data_ro)
     return float(eta.function_space().mesh().comm.allreduce(mine, op=MPI.MAX))
 
 
+print(f"solving porous-medium problem using UDO+BR ...")
+mesh = RectangleMesh(m0, m0, 2.0, 2.0, originX=-2.0, originY=-2.0, diagonal="crossed")
 amr = VIAMR()
 for i in range(levels + 1):
-    print(f"solving porous-type problem with UDO+BR on mesh {i} ...")
-    amr.meshreport(mesh)
+    # initialize on this mesh
     V = FunctionSpace(mesh, "CG", 1)
+    print(f"mesh {i}: nodes = {V.dim()}")
 
+    # initial iterate *above* solution, especially on active set
     if i == 0:
-        uh = Function(V, name="u_h")
-    else:
-        # initialize by cross-mesh interpolation to fine mesh
-        uUFL = conditional(uh < lb, lb, uh)  # use old data
-        uh = Function(V, name="u_h").interpolate(uUFL)
+        uh = Function(V, name="u_h").interpolate(Constant(eps[i]))
+    else:  # cross-mesh interpolation to new mesh
+        uUFL = conditional(uh < lb, lb, uh)  # uses old data uh, lb
+        uh = Function(V, name="u_h").interpolate(uUFL + Constant(eps[i]))
 
-    # source term which is -2.1 at (0,0) and +3.9 at (1,1)
+    # radial source term which is constant then linear
     x, y = SpatialCoordinate(mesh)
     r = sqrt(x * x + y * y)
     fUFL = conditional(r <= 1.0, -b, -b + a * (r - 1.0))
     fsource = Function(V, name="f_source").interpolate(fUFL)
 
-    # regularization for the problem on this mesh
-    eps = epssched[i]
-
-    # initial iterate *above* solution, especially on active set
-    uh = Function(V, name="u_h").interpolate(uh + eps)
-
     # weak form for porous media, with epsilon regularization
     v = TestFunction(V)
-    Z = (uh + eps) ** (gamma - 1.0)
+    Z = (uh + Constant(eps[i])) ** (gamma - 1.0)
     F = Z * inner(grad(uh), grad(v)) * dx - fsource * v * dx
 
-    # solve with u >= 0 and u=g on boundary
+    # boundary condition u=g needs exact solution
     uUFL = get_uexact_ufl(x, y)
     g = Function(V, name="g_bdry").interpolate(uUFL)
     bcs = DirichletBC(V, g, "on_boundary")
+
+    # solve with u >= 0
     prob = NonlinearVariationalProblem(F, uh, bcs)
     solver = NonlinearVariationalSolver(prob, solver_parameters=sp, options_prefix="s")
     lb = Function(V, name="psi").interpolate(Constant(0.0))
     ub = Function(V).interpolate(Constant(PETSc.INFINITY))
     solver.solve(bounds=(lb, ub))
 
-    # error relative to exact (UFL) solution
-    #   (we re-implement errornorm() for L^2, with control on quadrature degree)
+    # error relative to exact; re-implement L2 errornorm(), but fix degree
     expr = inner(uUFL - uh, uUFL - uh)
     err = assemble(expr * dx(degree=6)) ** (1 / 2)
-    print(f"  level {j}: nodes = {V.dim()}, |u-u_h|_2 = {err:.3e}")
 
-    # active set convergence measure by jaccard
+    # active set agreement by jaccard
     neweactive = amr.elemactive(uh, lb)
     if i > 0:
         jac = amr.jaccard(neweactive, eactive, submesh=True)
-        print(f"  Jaccard agreement {100*jac:.2f}% [levels {i-1}, {i}]")
     eactive = neweactive
 
-    # get BR estimator on this mesh, for refinement and reporting
+    # AMR with UDO+BR; note eta is written to final file
     residual_ufl = -div(uh ** (gamma - 1.0) * grad(uh)) - fsource
     imark, eta, _ = amr.brinactivemark(uh, Constant(0.0), residual_ufl)
-
-    # AMR with UDO+BR
-    mark = amr.udomark(uh, lb, n=1)
-    mark = amr.unionmarks(mark, imark)
+    mark = amr.unionmarks(amr.udomark(uh, lb, n=1), imark)
+    print(
+        f"  |u-u_h|_2 = {err:.3e}, eta <= {maxeta(mesh, eta):.3e}",
+        end="" if i > 0 else "\n",
+    )
+    if i > 0:
+        print(f", Jaccard agreement ({i-1},{i}) = {100*jac:.2f}%")
     if i == levels:
         break
-
-    # actually refine mesh
     mesh = amr.refinemarkedelements(mesh, mark)
 
 # generate Paraview-readable file
 outfile = "result_porous.pvd"
 print(f"done ... writing solution to {outfile} ...")
-err = Function(V, name="uerr = u - u_exact").interpolate(uh - uUFL)
+err = Function(V, name="uerr = u-u_exact").interpolate(uh - uUFL)
 imark.rename("inactive set mark")
 mark.rename("UDOBR mark")
 if mesh.comm.size > 1:
