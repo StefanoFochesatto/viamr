@@ -157,6 +157,28 @@ def test_refine_br_total():
     assert rCG1.dim() == 154
 
 
+def test_refine_br_coeff_ufl():
+    mesh = RectangleMesh(8, 8, 2.0, 2.0, originX=-2.0, originY=-2.0)
+    amr = VIAMR(debug=True)
+    CG1, _ = amr.spaces(mesh)
+    assert CG1.dim() == 81
+    (x, y) = SpatialCoordinate(mesh)
+    psi = Function(CG1).interpolate(_get_ball_obstacle(x, y))
+    u = Function(CG1).interpolate(conditional(psi > 0.0, psi + 1.0, psi))
+    residual = -div(grad(u))  # largest near circle psi==0
+    # non-constant, positive-everywhere coefficient
+    coeff_ufl = x * x + y * y + 1.0
+    (imark, eta, tot_eta) = amr.brinactivemark(u, psi, residual, theta=0.8, coeff_ufl=coeff_ufl)
+    # weighting by a non-constant coeff_ufl should differ from the
+    # unweighted (coeff_ufl=None) estimator, since it is not constant
+    (imark0, eta0, tot_eta0) = amr.brinactivemark(u, psi, residual, theta=0.8)
+    assert errornorm(eta, eta0) > 1.0e-10
+    assert abs(tot_eta - tot_eta0) > 1.0e-10
+    rmesh = amr.refinemarkedelements(mesh, imark)
+    rCG1, _ = amr.spaces(rmesh)
+    assert rCG1.dim() == 109
+
+
 def test_adapt_avm():
     mesh = RectangleMesh(8, 8, 2.0, 2.0, originX=-2.0, originY=-2.0)
     amr = VIAMR(debug=True)
