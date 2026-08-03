@@ -5,6 +5,9 @@
 #   Numerische Mathematik, 95(1), 163-195.
 #
 # on "7.2 Example: Constant Obstacle".  The methods are VIAMR.{udomark,nsvmark}.
+#
+# This code adds logging events for the timing of the marking routines.
+# See for how to generate flamegraphs: https://www.firedrakeproject.org/optimising.html
 
 # major parameters
 d = 2  # spatial dimension
@@ -116,15 +119,17 @@ for method in methods:
         # compute marking; note fmark is written to file for comparison
         amr = VIAMR(debug=True)
         if method == "UDOBR":
-            fmark = amr.udomark(uh, psih, n=nUDO)
-            residual = -div(grad(uh)) - f_ufl
-            (imark, _, _) = amr.brinactivemark(uh, psih, residual, theta=0.5)
-            mark = amr.unionmarks(fmark, imark)
+            with PETSc.Log.Event("nsv.py_calls_udomark"):
+                fmark = amr.udomark(uh, psih, n=nUDO)
+                residual = -div(grad(uh)) - f_ufl
+                (imark, _, _) = amr.brinactivemark(uh, psih, residual, theta=0.5)
+                mark = amr.unionmarks(fmark, imark)
         else:
-            Cfb = 10.0 if method == "NSVfb" else 1.0
-            (mark, etainf, sigmah, _) = amr.nsvmark(
-                uh, psih, g, f_ufl, g_ufl, theta=0.5, Cfb=Cfb, dualtol=dualtol
-            )
+            with PETSc.Log.Event("nsv.py_calls_nsvmark"):
+                Cfb = 10.0 if method == "NSVfb" else 1.0
+                (mark, etainf, sigmah, _) = amr.nsvmark(
+                    uh, psih, g, f_ufl, g_ufl, theta=0.5, Cfb=Cfb, dualtol=dualtol
+                )
 
         # done with this method if we reach target complexity
         if dofs[-1] > targetnodes:
