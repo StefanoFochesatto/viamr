@@ -11,7 +11,10 @@
 # Also, the initial iterate is raised by eps_i above the obstacle.
 # Finally, simple backtracking line search is used.
 #
-# The AMR method is UDO+BR.  Even though all data is quite smooth,
+# The AMR method is UDO+BR.  By default we use the (heuristic)
+# weighted-norm BV00 modification of the BR estimator.
+# 
+# Even though all data is quite smooth,
 # large BR inactive set estimator (=eta) values occur near the free
 # boundary.  (For the ordinary Laplacian that would not be true;
 # the solution would be smoother across the free boundary.)
@@ -26,12 +29,14 @@ from pyop2.mpi import MPI  # for MPI reduce in parallel
 
 # major parameters
 m0 = 6  # initial mesh is m0 x m0
-levels = 7  # number of AMR levels
+levels = 7  # number of AMR levels; converges to 9, at least, for gamma=2
 gamma = 2.0  # solves porous-media as VI:  - div(u^{gamma-1} grad(u)) = f
 a, b = 1.2, 1.0  # parameters in building exact solution
+useweightedBR = True  # when computing eta from brinactivemark(), use weighting by Zqn
+CQN = 1.0  # for quasi-norm regularization of eta: Zqn = (uh + CQN * hT)^{gamma-1}
 
 # schedule of eps_i for mesh i; must have length >= levels + 1
-eps = [0.02, 0.01, 0.005, 0.002, 0.002, 0.001, 0.001, 0.001, 0.001, 0.001]
+eps = [0.02, 0.01, 0.005, 0.002, 0.001, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005]
 
 # solver parameters for VI
 sp = {
@@ -53,8 +58,7 @@ sp = {
 
 
 def get_uexact_ufl(x, y):
-    """Exact radial solution to
-    - Div(grad(gamma^-1 u^gamma)) = f."""
+    """Exact radial solution to  - Div(grad(gamma^-1 u^gamma)) = f."""
     r = sqrt(x * x + y * y)
     tmp = ((a + b) / 2.0) * (0.5 * (r ** 2 - 1.0) - ln(r))
     tmp -= (a / 3.0) * ((r ** 3 - 1.0) / 3 - ln(r))
@@ -72,7 +76,8 @@ amr = VIAMR()
 for i in range(levels + 1):
     # initialize on this mesh
     V = FunctionSpace(mesh, "CG", 1)
-    print(f"mesh {i}: nodes = {V.dim()}")
+    print(f"mesh {i}:")
+    amr.meshreport(mesh)
 
     # initial iterate *above* solution, especially on active set
     if i == 0:
@@ -114,16 +119,30 @@ for i in range(levels + 1):
         jac = amr.jaccard(neweactive, eactive, submesh=True)
     eactive = neweactive
 
-    # AMR with UDO+BR; note eta is written to final file
-    residual_ufl = -div(uh ** (gamma - 1.0) * grad(uh)) - fsource
-    imark, eta, _ = amr.brinactivemark(uh, Constant(0.0), residual_ufl)
+    # H1-seminorm errors for apples-to-apples comparison ("effectivity indices")
+    # against eta and qeta
+    graderr = grad(uUFL - uh)
+    errH1 = assemble(inner(graderr, graderr) * dx(degree=6)) ** (1 / 2)
+
+    # apply BR in inactive set
+    # FIXME if it continues to work, just do one call of brinactivemark
+    Zexact = uh ** (gamma - 1.0)
+    res = -div(Zexact * grad(uh)) - fsource
+    imark, eta, tot_eta = amr.brinactivemark(uh, Constant(0.0), res)
+
+    # quasi-norm-weighted error and BR estimator: following Bernardi & Verfurth
+    # (2000) variable-coefficient theory; Zqn is a relatively-smooth mesh-native
+    # regularization of Zexact
+    hT = CellDiameter(mesh)
+    Zqn = (uh + CQN * hT) ** (gamma - 1.0)
+    errQH1 = assemble(Zqn * inner(graderr, graderr) * dx(degree=6)) ** (1 / 2)
+    imarkBV00, qeta, tot_qeta = amr.brinactivemark(uh, Constant(0.0), res, coeff_ufl=Zqn)
+
+    imark = imarkBV00 if useweightedBR else imark
     mark = amr.unionmarks(amr.udomark(uh, lb, n=1), imark)
-    print(
-        f"  |u-u_h|_2 = {err:.3e}, eta <= {maxeta(mesh, eta):.3e}",
-        end="" if i > 0 else "\n",
-    )
+    print(f"  ||u-u_h||_L2={err:.3e};  |u-u_h|_H1={errH1:.3e} (eff={float(tot_eta)/errH1:.2f});  |u-u_h|_QH1={errQH1:.3e} (eff={float(tot_qeta)/errQH1:.2f})")
     if i > 0:
-        print(f", Jaccard agreement ({i-1},{i}) = {100*jac:.2f}%")
+        print(f"  Jaccard agreement ({i-1},{i}) = {100*jac:.2f}%")
     if i == levels:
         break
     mesh = amr.refinemarkedelements(mesh, mark)
@@ -134,11 +153,12 @@ print(f"done ... writing solution to {outfile} ...")
 err = Function(V, name="uerr = u-u_exact").interpolate(uh - uUFL)
 imark.rename("inactive mark")
 mark.rename("UDO+BR mark")
+qeta.rename("qeta (weighted)")
 if mesh.comm.size > 1:
     # in parallel, write integer-valued element-wise process rank
     DG0 = FunctionSpace(mesh, "DG", 0)
     rank = Function(DG0, name="rank")
     rank.dat.data[:] = mesh.comm.rank
-    VTKFile(outfile).write(uh, fsource, err, imark, mark, eta, rank)
+    VTKFile(outfile).write(uh, fsource, err, imark, mark, eta, qeta, rank)
 else:
-    VTKFile(outfile).write(uh, fsource, err, imark, mark, eta)
+    VTKFile(outfile).write(uh, fsource, err, imark, mark, eta, qeta)
