@@ -540,7 +540,7 @@ class VIAMR(OptionsManager):
         return (mark, ieta, total_error_est)
 
     def nsvmark(
-        self, uh, lb, g, f_ufl, g_ufl, method="max", theta=0.5, dualtol=1.0e-10, C0=0.1, Cfb=1.0
+        self, uh, lb, g, f_ufl, g_ufl, method="max", theta=0.5, dualtol=1.0e-10, C0=0.1, Cfb=1.0, fdegree=3
     ):
         """Compute marking on entire domain according to the local 'practical estimator' from NSV03:
             Nochetto, R. H., Siebert, K. G., & Veeser, A. (2003). Pointwise a posteriori error control for elliptic obstacle problems. Numerische Mathematik, 95(1), 163-195.
@@ -572,7 +572,7 @@ class VIAMR(OptionsManager):
         # step 2: create cofunction with values  s_i = int_Omega phi_i dx  for *all*
         #   nodes i; we *do not* want riesz_representation() here
         scale = assemble(phi * dx)
-        # step 3: apply scale, divide by s_i
+        # step 3: apply scale, that is, divide by s_i
         sigmah = Function(CG1, name="sigma_h (residual)")
         sigmah.dat.data[:] = res.dat.data_ro / scale.dat.data_ro  # divide numpy arrays
         # FIXME use general g below
@@ -591,21 +591,24 @@ class VIAMR(OptionsManager):
         #    X = |f + sigma_h| if element neighborhood of T is active
         #    X = |f|           otherwise
         # and where
-        #    \|.\|* = \|.\|_{\infty; \partial T \setminus \partial \Omega}
+        #    \|.\|* = \|.\|_{\infty; \partial T \setminus \partial \Omega},
+        #             i.e. infinity norm along interior edges
         #    [[z]] is the jump in z along an edge
         v0 = TestFunction(DG0)
         # jumpu is in DG0
         with PETSc.Log.Event("nsvmark()_calls_assemble3"):  # FIXME riesz_rep..() expensive because solve()
             jumpu = assemble(jump(grad(uh), n) * v0("-") * dS).riesz_representation()
         tactive = self.thinelemactive(uh, lb)
-        X_ufl = tactive * abs(f_ufl + sigmah) + (1.0 - tactive) * abs(f_ufl)
-        # note pages 188-189 in NSV03 regarding expensive use of DG7, to deal
-        #   with the fact that f_ufl is generally not in CG1:
+        X_ufl = abs(f_ufl + tactive * sigmah)
+        # note pages 188-189 in NSV03 regarding use of DG7, to deal with the fact
+        # that f_ufl is generally not in CG1:
         #     "For terms involving non-polynomial data, the maximum norm is
         #      approximated by evaluating element point-values at the Lagrange
         #      nodes for 7th order polynomials.""
-        DG7 = FunctionSpace(mesh, "DG", 7)
-        Rinf = Function(DG7).interpolate((abs(jumpu) / hT) + X_ufl)
+        # BUT using DG7 this way is really slow because it is so big, so we drop
+        # to DG3 by default; see .dim() printing below
+        DGf = FunctionSpace(mesh, "DG", fdegree)
+        Rinf = Function(DGf).interpolate((abs(jumpu) / hT) + X_ufl)
         Rinf = self._elemmaxabs(Rinf)
 
         # admissibility check; FIXME removes term 2 "(\chi - u_h)_+" from
@@ -626,6 +629,10 @@ class VIAMR(OptionsManager):
             bdryerr = assemble(adg * v0 * ds).riesz_representation()
         etainf_ufl = C0 * hT ** 2 * Rinf + Cfb * blockgap + bdryerr
         etainf = Function(DG0, name="eta_inf").interpolate(etainf_ufl)
+
+        # DIAGNOSTIC. note DG3.dim()=10*DG0.dim() exactly, while DG7 is
+        # about 40 times, and CG4.dim() ~ 9*DG0.dim()
+        #PETSc.Sys.Print(f"VIAMR INFO for nsvmark():  DG0.dim()={DG0.dim()}, DG{fdegree}.dim()={DGf.dim()}, CG4.dim()={CG4.dim()}")
 
         # compute mark in whole domain
         mark, _, total_error_est = self._fixedrate(etainf, theta, method)
