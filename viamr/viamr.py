@@ -595,7 +595,8 @@ class VIAMR(OptionsManager):
         #    [[z]] is the jump in z along an edge
         v0 = TestFunction(DG0)
         # jumpu is in DG0
-        jumpu = assemble(jump(grad(uh), n) * v0("-") * dS).riesz_representation()
+        with PETSc.Log.Event("nsvmark()_calls_assemble3"):  # FIXME riesz_rep..() expensive because solve()
+            jumpu = assemble(jump(grad(uh), n) * v0("-") * dS).riesz_representation()
         tactive = self.thinelemactive(uh, lb)
         X_ufl = tactive * abs(f_ufl + sigmah) + (1.0 - tactive) * abs(f_ufl)
         # note pages 188-189 in NSV03 regarding expensive use of DG7, to deal
@@ -621,7 +622,8 @@ class VIAMR(OptionsManager):
         adg = self._elemmaxabs(Function(CG4).interpolate(g_ufl - g))
         # bdryerr is a DG0 function, but only nonzero along boundary
         # note restriction is implicit when using ds (versus dS)
-        bdryerr = assemble(adg * v0 * ds).riesz_representation()
+        with PETSc.Log.Event("nsvmark()_calls_assemble4"):  # FIXME riesz_rep..() expensive because solve()
+            bdryerr = assemble(adg * v0 * ds).riesz_representation()
         etainf_ufl = C0 * hT ** 2 * Rinf + Cfb * blockgap + bdryerr
         etainf = Function(DG0, name="eta_inf").interpolate(etainf_ufl)
 
