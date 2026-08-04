@@ -56,12 +56,6 @@ parser.add_argument(
     help="do not refine below this diameter (default: -1; ignores hmin)",
 )
 parser.add_argument(
-    "-jaccard",
-    action="store_true",
-    default=False,
-    help="compare successive active sets by Jaccard agreement",
-)
-parser.add_argument(
     "-m",
     type=int,
     default=10,

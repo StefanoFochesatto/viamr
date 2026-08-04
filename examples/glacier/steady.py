@@ -305,11 +305,9 @@ for i in range(args.refine + 1):
     pprint(
         f"  glaciated area {area / 1000.0**4:.4f} million km^2, ice volume = {vol / 1000.0**4:.2f} thousand km^3"
     )
-    if args.jaccard and i > 0:
+    if i > 0:
         jac = amr.jaccard(ei, oldei, submesh=True)
-        pprint(f"  levels {i-1},{i} Jaccard agreement {100*jac:.2f}%")
-    else:
-        pprint("")
+        pprint(f"  Jaccard({i-1},{i}) = {100*jac:.2f}%")
     oldei = ei
 
 if args.ocsv:
