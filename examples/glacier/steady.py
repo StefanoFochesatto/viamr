@@ -329,21 +329,23 @@ if args.opvd:
     Us.rename("Us = surface velocity (m/a)")
     q = Function(FunctionSpace(mesh, "BDM", 1))
     q.interpolate(Us * H)
-    q.rename("q = UH = *post-computed* ice flux")
+    q.rename("q = UH (ice flux)")
     Gb = Function(VectorFunctionSpace(mesh, "DG", degree=0))
     Gb.interpolate(grad(b))
     Gb.rename("Gb = grad(b)")
     Gs = Function(VectorFunctionSpace(mesh, "DG", degree=0))
     Gs.interpolate(grad(s))
     Gs.rename("Gs = grad(s)")
-    rank = Function(FunctionSpace(mesh, "DG", 0))
-    rank.dat.data[:] = mesh.comm.rank
-    rank.rename("rank")
-    pprint("writing to %s ..." % args.opvd)
+    fields = [u, H, s, Us, q, a, b, Gb, Gs]
     if args.opvdsub:
-        VTKFile(args.opvd).write(u, H, s, Us, q, a, b, Gb, Gs, rank, boxind)
-    else:
-        VTKFile(args.opvd).write(u, H, s, Us, q, a, b, Gb, Gs, rank)
+        fields.append(boxind)
+    if mesh.comm.size > 1:
+        rank = Function(FunctionSpace(mesh, "DG", 0))
+        rank.dat.data[:] = mesh.comm.rank
+        rank.rename("rank")
+        fields.append(rank)
+    pprint("writing solution fields to %s ..." % args.opvd)
+    VTKFile(args.opvd).write(*fields)
 
 if args.opvdsub:
     mesh.mark_entities(boxind, 99)
