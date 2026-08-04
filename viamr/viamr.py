@@ -500,40 +500,50 @@ class VIAMR(OptionsManager):
         mark, _, total_error_est = self._fixedrate(ieta, theta, method)
         return (mark, ieta, total_error_est)
 
-    def brinactivemark(self, uh, lb, res_ufl, theta=0.5, method="max", coeff_ufl=None):
+    def brinactivemark(self, uh, lb, res, theta=0.5, method="max", kappa=None):
         """Return marking within the computed inactive set by using the
-        a posteriori Babuška-Rheinboldt (1989) residual error indicator.
-        
-        The BR indicator eta is computed as a function in DG0.  Then we call
+        a posteriori Babuška-Rheinboldt (1978) residual error indicator.
+
+        The inputs are the current solution uh, the obstacle lb (to restrict
+        to the inactive set), and the residual res as a UFL expression.
+
+        The output BR indicator eta is computed as a function in DG0.  We call
         VIAMR._fixedrate() to mark using eta and a threshold theta.
         Returns the marking mark, estimator eta, and a scalar estimate for
         the total error in energy norm.
         
-        This function came from slide 109 of
-          https://github.com/pefarrell/icerm2024/blob/main/slides.pdf
-        See also
-          https://github.com/pefarrell/icerm2024/blob/main/02_netgen/01_l_shaped_adaptivity.py
+        For the basic unweighted method see
+          I. Babuvska & W. C. Rheinboldt (1978). Error estimates for adaptive
+          finite element computations, SIAM Journal on Numerical Analysis 15 (4),
+          736--754}, https://doi.org/10.1137/0715049
         and section 2.2 of
           M. Ainsworth & J. T. Oden (2000).  A Posteriori Error Estimation in
           Finite Element Analysis, John Wiley & Sons, Inc., New York.
 
-        The optional coeff_ufl is a scalar UFL expression for the local
+        The optional input kappa is a scalar UFL expression for the local
         diffusion coefficient kappa(uh) in a variable-coefficient operator
           -div(kappa(uh) grad(uh)) = f,
         e.g. kappa(uh) = uh^{gamma-1} for the porous medium equation.  When
         given, eta is reweighted following the classical variable-coefficient
-        residual estimator by Bernardi & Verfurth (2000).  That is, the volume
-        residual term is divided by kappa, evaluated locally, and the facet jump
-        term (in the *gradient* when kappa(uh) is continuous) is instead
-        multiplied by kappa.  Thus eta approximates the error in the kappa-weighted
-        energy norm.  Defaulting coeff_ufl to the constant 1 recovers the original
-        BR estimator exactly.  In the linear, uniformly-elliptic setting,
-        Bernardi & Verfurth (2000) justify this weighting.  Otherwise it is a
-        heuristic, frozen-coefficient generalization to nonlinear, possibly-
+        residual estimator by
+          C. Bernardi & R. Verfürth (2000). Adaptive finite element methods
+          for elliptic equations with non-smooth coefficients. Numerische
+          Mathematik, 85(4), 579-608.
+        Here the volume residual term is divided by kappa and the facet jump term
+        is multiplied by kappa.  Thus eta approximates the error in the kappa-weighted
+        energy norm.  (Setting kappa to constant 1 recovers the original
+        BR estimator exactly.)  In the linear, uniformly-elliptic setting,
+        Bernardi & Verfurth (2000) justifies this weighting, but otherwise it is
+        a heuristic, frozen-coefficient generalization to nonlinear, possibly-
         degenerate kappa(uh), not a proven reliable or efficient estimator.
-        
-        WARNING when passing coeff_ufl: We divide by this coefficient everywhere,
-        so it should be positive everywhere."""
+        WARNING when passing kappa: We divide by this coefficient everywhere,
+        so it should be positive everywhere.
+
+        The diagonal solve implementation of this function came from slide 109 of
+          https://github.com/pefarrell/icerm2024/blob/main/slides.pdf
+        See also
+          https://github.com/pefarrell/icerm2024/blob/main/02_netgen/01_l_shaped_adaptivity.py
+        """
         # mesh quantities
         mesh = uh.function_space().mesh()
         h = CellDiameter(mesh)
@@ -544,16 +554,16 @@ class VIAMR(OptionsManager):
         eta_sq = Function(DG0)
         w = TestFunction(DG0)
         G = inner(eta_sq / v, w) * dx
-        if coeff_ufl is None:
-            # original Babuska & Rheinboldt estimator (same as BV00 if coeff_ufl=1)
-            G -= inner(h ** 2 * res_ufl ** 2, w) * dx \
+        if kappa is None:
+            # original Babuska & Rheinboldt (1978) estimator; same as BV00 if kappa=1
+            G -= inner(h ** 2 * res ** 2, w) * dx \
                  + inner(h("+") / 2 * jump(grad(uh), n) ** 2, w("+")) * dS \
                  + inner(h("-") / 2 * jump(grad(uh), n) ** 2, w("-")) * dS
         else:
             # Bernardi & Verfurth (2000) weighted estimator
-            G -= inner(h ** 2 / coeff_ufl * res_ufl ** 2, w) * dx \
-                 + inner(h("+") / 2 * coeff_ufl("+") * jump(grad(uh), n) ** 2, w("+")) * dS \
-                 + inner(h("-") / 2 * coeff_ufl("-") * jump(grad(uh), n) ** 2, w("-")) * dS
+            G -= inner(h ** 2 / kappa * res ** 2, w) * dx \
+                 + inner(h("+") / 2 * kappa("+") * jump(grad(uh), n) ** 2, w("+")) * dS \
+                 + inner(h("-") / 2 * kappa("-") * jump(grad(uh), n) ** 2, w("-")) * dS
 
         # each cell needs an independent 1x1 solve, so Jacobi is an exact preconditioner
         sp = {"mat_type": "matfree", "ksp_type": "richardson", "pc_type": "jacobi"}
