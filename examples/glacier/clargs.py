@@ -79,7 +79,7 @@ parser.add_argument(
     "-opvd",
     metavar="FILE",
     type=str,
-    default="",
+    default="result.pvd",
     help="name for Paraview-format output file (.pvd)",
 )
 parser.add_argument(
