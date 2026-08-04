@@ -99,10 +99,10 @@ parser.add_argument(
 parser.add_argument(
     "-prob",
     type=str,
-    default="dome",
+    default="cap",
     metavar="X",
-    choices=["dome", "cap", "range"],
-    help="choose problem from {dome, cap, range}",
+    choices=["cap", "range", "dome"],
+    help="choose problem from {cap, range, dome}",
 )
 parser.add_argument(
     "-qdegree",
