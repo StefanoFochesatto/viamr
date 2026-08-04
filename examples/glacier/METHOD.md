@@ -2,7 +2,7 @@
 
 ## introduction
 
-This Markdown file documents the more mathematical aspects of `steady.py`, and its numerical methods.
+This file documents the more mathematical aspects of `steady.py`, and its numerical methods.
 
 The mathematical glacier problem is to determine the steady-state surface elevation, equivalently thickness, of a glacier in a fixed time-independent climate and on a fixed bedrock topography.  The ice flow model is the shallow ice approximation (SIA).
 
@@ -17,7 +17,7 @@ In default runs done by `steady.py`, $b$ and $a$ are given by synthetic formulas
 
 Note that the surface elevation $z=s(x,y)$ and the corresponding thickness $H(x,y)=s(x,y)-b(x,y)$ are primary unknowns of the model.
 
-Fix an overall flow constant $\Gamma>0$ and a Glen flow law power $n\ge 1$.  Let $p=n+1$.  The traditional case for glaciology has $n=3$ and $p=4$.
+To write the model equations, fix an overall flow constant $\Gamma>0$ and a Glen flow law power $n\ge 1$.  Let $p=n+1$.  The traditional glaciology choices are $n=3$ and $p=4$.
 
 Now the steady, isothermal, non-sliding SIA equation is:
 
@@ -25,13 +25,13 @@ Now the steady, isothermal, non-sliding SIA equation is:
 -\nabla \cdot \left(\Gamma H^{p+1} |\nabla s|^{p-2} \nabla s\right) = a(s) \qquad (1)
 ```
 
-This PDE resembles two simpler and better-known nonlinear and degenerate diffusion equations, the porous media equation and the $p$-Laplacian equation.  Written with generic unknown $u$ and source $f$, the porous media equation is $-\nabla\cdot (C u^{\gamma-1} \nabla u)=f$ [E10].  The $p$-Laplacian equation is $-\nabla \cdot (C |\nabla u|^{p-2} \nabla u)=f$ [BL93, E10].  Since equation (1) combines aspects of both of these equations it is known as a "doubly-nonlinear" and "doubly-degenerate" diffusion [R70].
+This PDE resembles two simpler and better-known nonlinear and degenerate diffusion equations, the porous media equation and the $p$-Laplacian equation.  Written with generic unknown $u$ and source $f$, the porous media equation is $-\nabla\cdot (C u^{\gamma-1} \nabla u)=f$ [E10].  The $p$-Laplacian equation is $-\nabla \cdot (C |\nabla u|^{p-2} \nabla u)=f$ [BL93, E10].  Since equation (1) combines aspects of both of these equations it is a "doubly-nonlinear" and "doubly-degenerate" diffusion, first addressed mathematically by [R70].
 
-Equation (1) is actually the interior condition in a variational inequality (VI) [E10] or nonlinear complementarity problem (NCP) subject to the constraint $s\ge b$, equivalently $H\ge 0$ [JB12].
+Equation (1) is actually the interior condition in a variational inequality (VI) [E10, KS80], or nonlinear complementarity problem, subject to the constraint $s\ge b$, equivalently $H\ge 0$ [JB12].
 
 ### power transformation
 
-The following transformation, introduced in [R70], and discussed and extended to non-flat beds in [JB12], converts the SIA equation (1) to a $p$-Laplacian equation.
+The following transformation, introduced in [R70], and discussed and extended to non-flat beds in [JB12], converts the SIA equation (1) to a modified $p$-Laplacian equation.
 
 For this transformation we define constant powers:
 
@@ -39,15 +39,13 @@ For this transformation we define constant powers:
 \omega = \frac{p-1}{2p}, \qquad \phi = \frac{p+1}{2p}.
 ```
 
-The standard $p=4$ case for glaciology has $\omega=3/8$ and $\phi=5/8$.
-
-Now define
+(The standard $p=4$ case for glaciology has $\omega=3/8$ and $\phi=5/8$.)  Now define
 
 ```math
 H = u^\omega
 ```
 
-The following calculations allow us to transform parts of equation (1):
+The following calculations transform parts of equation (1):
 
 ```math
 \begin{align*}
@@ -58,9 +56,9 @@ H^{p+1} &= u^{(p^2-1)/2p} \\
 
 Let
 
-$$\Phi(u) = - \omega^{-1} u^\phi \nabla b$$
+$$\Phi(u) = - \omega^{-1} u^\phi \nabla b,$$
 
-Note that [JB12] calls $\Phi(u)$ the "tilt" because it arises from the bed elevation gradient.  Thus
+called the "tilt" [JB12] because it arises from the bed elevation gradient.  Thus
 
 $$|\nabla s|^{p-2} \nabla s = \omega^{p-1} u^{-(p^2-1)/2p} |\nabla u - \Phi(u)|^{p-2} (\nabla u - \Phi(u))$$
 
@@ -165,5 +163,8 @@ However, with $u \in CG_1$ in this primal form, mass conservation issues remain 
 [JB12] G. Jouvet and E. Bueler (2012). _Steady, shallow ice sheets as obstacle problems: Well-posedness and finite element approximation_, SIAM J. Appl. Math 72 (4), 1292--1314
 
 [JRBB11] G. Jouvet, J. Rappaz, E. Bueler, and H. Blatter (2011). _Existence and stability of steady-state solutions of the shallow-ice-sheet equation by an energy-minimization approach_, Journal of Glaciology, 57 (202), 345--354
+
+[KS80] D. Kinderlehrer and G. Stampacchia (1980). _An Introduction to Variational Inequalities and
+their Applications_, Academic Press, New York
 
 [R70] P. A. Raviart (1970). _Sur la resolution de certaines equations paraboliques non lineaires_, J. Funct. Analysis 5, 299--328

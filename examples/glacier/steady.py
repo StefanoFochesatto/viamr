@@ -1,9 +1,9 @@
 # Solves a 2D steady, isothermal shallow ice approximation glacier obstacle problem.
 #
 # A basic run to illustrate capabilities:
-#   python3 steady.py -prob cap -opvd result_cap.pvd -refine 5 -jaccard
+#   python3 steady.py -refine 5
 # Then use paraview 3D visualization, with warp by scalar on the surface elevation,
-# on the output file result_cap.pvd.
+# on the output file result.pvd.
 #
 # For more info see README.md or run
 #   python3 steady.py -h

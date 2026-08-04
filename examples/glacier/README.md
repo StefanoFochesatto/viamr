@@ -10,13 +10,19 @@ See `METHOD.md` for the mathematical model of a glacier.
 
 The main code is `steady.py`.  It imports formulas from `synthetic.py` and command-line argument processing from `clargs.py`.
 
-To run a default steady-state glacier simulation for a synthetic "dome" glacier, with known exact solution, activate the Firedrake virtual environment and then do
+To run a default steady-state glacier simulation, activate the Firedrake virtual environment and then do
 ```
 python3 steady.py
 ```
-To get help add `-h`.  Here is an interesting bumpy bed and elevation-dependent surface mass balance case with Paraview-readable output, run in parallel:
+To get help add `-h`.
+
+To demonstrate options, here we add elevation-dependent surface mass balance, refine differently, and run in parallel:
 ```
-mpiexec -n 4 python3 steady.py -prob cap -elevdepend -sELA 800 -m 20 -refine 4 -uniform 1 -opvd result_cap.pvd
+mpiexec -n 4 python3 steady.py -elevdepend -sELA 800 -m 20 -refine 4 -uniform 1 -opvd result_cap.pvd
+```
+To simulate a synthetic "dome" glacier, with known exact solution:
+```
+python3 steady.py -prob dome -opvd result_dome.pvd
 ```
 
 ### convergence and AMR efficiency

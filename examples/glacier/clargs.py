@@ -5,12 +5,12 @@ See README.md for examples and METHOD.md for documentation of the mathematics.
 The domain is a square [0,L]^2 with L = 1800.0 km, except that with -data
 the domain is read from the file.
 
-By default (-prob dome) we solve a flat bed case, with surface mass balance
-which only depends on horizontal location, where the exact solution is
-known.  Option -prob cap modifies this with a random, but smooth, bed topography,
-but keeps the dome SMB.  Option -prob range generates a different SMB, still
-depending only on horizontal location, and it results in a disconnected glacier.
-Finally, option -bdata reads the bed elevation from a NetCDF (.nc) file.
+By default (-prob cap) we use a random, but smooth, bed topography, while the
+surface mass balance is radially-symmetric and depends on horizontal location.
+Option -prob range generates a different SMB, and it results in a disconnected
+glacier.  Option -prob dome solves a flat bed case with radially-symmetric
+surface mass balance, where the exact solution is known.  Finally, option
+-bdata reads the bed elevation from a NetCDF (.nc) file.
 
 An elevation-dependent surface mass balance model is also available, with
 options -elevdepend (to turn it on) and -sELA to set equilibrium line altitude.
