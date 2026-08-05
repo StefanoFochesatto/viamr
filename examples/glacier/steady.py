@@ -171,9 +171,18 @@ for i in range(args.refine + 1):
             mark = Function(DG0).interpolate(Constant(1.0))
             mesh = amr.refinemarkedelements(mesh, mark, isUniform=True)
         else:
-            pprint(f"refining free boundary by UDO+GR ...", end="")
+            #pprint(f"refining free boundary by UDO+GR ...", end="")
+            pprint(f"refining free boundary by UDO+BR weighted ...", end="")
             fbmark = amr.udomark(u, lb, n=args.udo_n)
-            imark, _, _ = amr.gradrecinactivemark(u, lb, theta=args.theta, method="max")
+            #imark, _, _ = amr.gradrecinactivemark(u, lb, theta=args.theta, method="max")
+            du_tilt = grad(u) + Beta(u, b)
+            epsreg = 0.01
+            Dp = (inner(du_tilt, du_tilt) + epsreg) ** ((p - 2) / 2)
+            C = Gamma * omega ** (p - 1)
+            Z = C * Dp
+            res = -div(Z * du_tilt) - a
+            imark, _, _ = amr.brinactivemark(u, lb, res, theta=args.theta, method="total", kappa=Z)
+            # FIXME print effectivity index in -prob dome case
             if args.hmin > 0.0:
                 fbmark = amr.lowerboundcelldiameter(fbmark, args.hmin)
                 imark = amr.lowerboundcelldiameter(imark, args.hmin)
