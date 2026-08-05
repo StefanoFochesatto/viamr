@@ -146,9 +146,3 @@ parser.add_argument(
     metavar="R",
     help="initial R refinements are uniform [default 0]",
 )
-parser.add_argument(
-    "-vcd",
-    action="store_true",
-    default=False,
-    help="apply VCD free-boundary marking (instead of UDO)",
-)

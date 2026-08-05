@@ -164,16 +164,8 @@ for i in range(args.refine + 1):
             mark = Function(DG0).interpolate(Constant(1.0))
             mesh = amr.refinemarkedelements(mesh, mark, isUniform=True)
         else:
-            pprint(f"refining free boundary by {'VCD' if args.vcd else 'UDO'}", end="")
-            if args.vcd:
-                # change bracket vs default [0.2, 0.8], to provide more high-res
-                #   for ice near margin (0.2 -> 0.1), i.e. on inactive side
-                fbmark = amr.vcdmark(u, lb, bracket=[0.1, 0.8])
-            else:
-                fbmark = amr.udomark(u, lb, n=args.udo_n)
-            pprint(", and by gradient recovery in inactive ...")
-            # FIXME: sporadic parallel bug with method="total" apparently ...
-            # imark, _, _ = amr.gradrecinactivemark(u, lb, theta=args.theta, method="total")
+            pprint(f"refining free boundary by UDO+GR ...", end="")
+            fbmark = amr.udomark(u, lb, n=args.udo_n)
             imark, _, _ = amr.gradrecinactivemark(u, lb, theta=args.theta, method="max")
             if args.hmin > 0.0:
                 fbmark = amr.lowerboundcelldiameter(fbmark, args.hmin)
