@@ -19,9 +19,6 @@ assert args.udo_n >= 0, "cannot use UDO with negative levels"
 assert (
     not args.elevdepend or args.prob != "dome"
 ), "combination invalid: -elevdepend & -prob dome"
-assert (
-    not args.elevdepend or not args.bdata
-), "combination invalid: -elevdepend & -bdata file.nc"
 
 import numpy as np
 import petsc4py
@@ -84,7 +81,7 @@ else:
 # solver parameters
 sp = {
     "snes_type": "vinewtonrsls",
-    "snes_vi_zero_tolerance": 1.0e-2,  # max u ~ 10^9, so roughly within 1 part in 10^-11 for u=H^{8/3}
+    "snes_vi_zero_tolerance": 1.0e-2,  # max u=H^{8/3} is about 10^9; tol is 1 part in 10^-11
     "snes_rtol": 1.0e-6,
     "snes_atol": 1.0e-10,
     "snes_stol": 0.0,
@@ -106,7 +103,8 @@ p = n + 1  # typical:  p = 4
 omega = (p - 1) / (2 * p)  #  omega = 3/8
 phi = (p + 1) / (2 * p)  #  phi = 5/8
 r = p / (p - 1)  #  r = 4/3
-debug = True  # debugging solver failures
+debug = False  # debugging solver failures
+
 
 def Beta(u, b):
     return (1.0 / omega) * (u + 1.0) ** phi * grad(b)  # eps=1 regularization is small
@@ -127,6 +125,7 @@ def scalarrange(w):
     gmin = w.function_space().mesh().comm.allreduce(locmin, op=MPI.MIN)
     gmax = w.function_space().mesh().comm.allreduce(locmax, op=MPI.MAX)
     return gmin, gmax
+
 
 def weakform(u, a, b, Z=None, epsreg=0.01):
     """When Z=None this is the weak form corresponding to (3) in METHOD.md.
