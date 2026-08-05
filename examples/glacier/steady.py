@@ -14,7 +14,7 @@ from clargs import parser
 args, passthroughoptions = parser.parse_known_args()
 assert args.m >= 1, "at least one cell in mesh"
 assert args.refine >= 0, "cannot refine a negative number of times"
-assert args.pcount >= 1, "at least one Picard iteration required"
+assert args.newton or args.pcount >= 1, "at least one Picard iteration required"
 assert args.udo_n >= 0, "cannot use UDO with negative levels"
 assert (
     not args.elevdepend or args.prob != "dome"
@@ -81,19 +81,12 @@ else:
         f"generating synthetic {args.m} x {args.m} initial mesh for problem {args.prob} ..."
     )
 
-# setting distribution parameters should not be necessary ...
-dp = {
-    "partition": True,
-    "overlap_type": (DistributedMeshOverlapType.VERTEX, 1),
-}
 if args.bdata:
     # generate mesh compatible with data mesh, but at user (-m) resolution, typically lower
     mesh = topg_nc.rectmesh(args.m)
 else:
     # generate [0,L]^2 mesh via Firedrake
-    mesh = RectangleMesh(
-        args.m, args.m, L, L, diagonal="crossed", distribution_parameters=dp
-    )
+    mesh = RectangleMesh(args.m, args.m, L, L, diagonal="crossed")
 
 # solver parameters
 sp = {
