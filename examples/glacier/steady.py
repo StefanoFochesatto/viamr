@@ -59,8 +59,7 @@ if args.opvdsub:
 
 # set up .csv if generating numerical error data
 if args.ocsv:
-    if not args.prob == "dome":
-        raise ValueError("option -ocsv only valid for -prob dome")
+    assert args.prob == "dome", "option -ocsv only valid for -prob dome"
     csvfile = open(args.ocsv, "w")
     print("REFINE,NE,HMIN,UERRH1,HERRINF,DRMAX", file=csvfile)
 
@@ -174,11 +173,9 @@ for i in range(args.refine + 1):
             mesh = amr.refinemarkedelements(mesh, mark)
             # report percentages of elements marked
             inactive = amr.eleminactive(u, lb)
-            perfb = 100.0 * amr.countmark(fbmark) / ne
-            perin = 100.0 * amr.countmark(imark) / amr.countmark(inactive)
-            pprint(
-                f"  {perfb:.2f}% all elements free-boundary marked, {perin:.2f}% inactive elements marked"
-            )
+            pfb = 100.0 * amr.countmark(fbmark) / ne
+            pin = 100.0 * amr.countmark(imark) / amr.countmark(inactive)
+            pprint(f"  elements marked: {pfb:.2f}% free-bdry, {pin:.2f}% inactive")
 
     # describe current mesh
     nv, ne, hmin, hmax = amr.meshsizes(mesh)
