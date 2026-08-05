@@ -6,6 +6,7 @@ class DataNetCDF():   # FIXME should it subclass something?
     def __init__(self, filename, vname, xname='x1', yname='y1'):
         '''constructor opens NetCDF4 file (filename) and reads variable (varname)
         into 2d numpy array; this defines a rectangular structured grid'''
+        self.filename = filename
         import netCDF4
         data = netCDF4.Dataset(filename)
         data.set_auto_mask(False)  # otherwise irritating masked arrays
@@ -26,8 +27,8 @@ class DataNetCDF():   # FIXME should it subclass something?
         indentstr = indent * ' '
         llstr = f'({self.ll[0]/1000.0:.3f},{self.ll[1]/1000.0:.3f})'
         urstr = f'({self.ur[0]/1000.0:.3f},{self.ur[1]/1000.0:.3f})'
-        print(f'{indentstr}rectangle {llstr}-->{urstr} km')
-        print(f'{indentstr}{self.mx} x {self.my} grid with {self.hx/1000.0:.3f} x {self.hy/1000.0:.3f} km spacing')
+        print(f'{indentstr}rectangle from {self.filename}: {llstr}-->{urstr} km')
+        print(f'{indentstr}  {self.mx} x {self.my} grid with {self.hx/1000.0:.3f} x {self.hy/1000.0:.3f} km spacing')
 
 
     def preview(self):

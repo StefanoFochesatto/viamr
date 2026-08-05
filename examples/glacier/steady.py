@@ -36,7 +36,7 @@ from pyop2.mpi import MPI
 
 pprint = PETSc.Sys.Print  # parallel print
 from viamr import VIAMR
-
+from datanetcdf import DataNetCDF
 from synthetic import (
     secpera,
     n,
@@ -66,11 +66,8 @@ if args.ocsv:
 
 # read data for bed topography
 if args.bdata:
-    pprint("ignoring -prob choice ...")
+    pprint(f"reading topg from {args.bdata} and ignoring -prob choice ...")
     args.prob = None
-    pprint(f"reading topg from NetCDF file {args.bdata} with native data grid:")
-    from datanetcdf import DataNetCDF
-
     topg_nc = DataNetCDF(args.bdata, "topg")
     # topg_nc.preview()
     topg_nc.describe_grid(print=PETSc.Sys.Print, indent=4)
