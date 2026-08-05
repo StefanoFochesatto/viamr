@@ -90,7 +90,7 @@ sp = {
     "snes_vi_zero_tolerance": 1.0e-2,  # max u ~ 10^9, so roughly within 1 part in 10^-11 for u=H^{8/3}
     "snes_rtol": 1.0e-6,
     "snes_atol": 1.0e-10,
-    "snes_stol": 1.0e-10,  # FIXME??  why does it even matter?  in any case, keep it tight
+    "snes_stol": 0.0,
     # "snes_monitor": None,
     # "snes_vi_monitor": None,
     "snes_converged_reason": None,
