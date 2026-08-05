@@ -58,9 +58,9 @@ parser.add_argument(
 parser.add_argument(
     "-m",
     type=int,
-    default=10,
+    default=20,
     metavar="M",
-    help="number of cells in each direction on initial mesh [default=10]",
+    help="number of cells in each direction on initial mesh [default=20]",
 )
 parser.add_argument(
     "-newton",
@@ -114,9 +114,9 @@ parser.add_argument(
 parser.add_argument(
     "-refine",
     type=int,
-    default=3,
+    default=2,
     metavar="R",
-    help="number of AMR refinements [default 3]",
+    help="number of AMR refinements [default=2]",
 )
 parser.add_argument(
     "-sELA",
