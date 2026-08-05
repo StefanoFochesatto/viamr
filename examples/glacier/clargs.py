@@ -2,27 +2,26 @@ des="""
 Solves a 2D steady, isothermal shallow ice approximation glacier obstacle problem.
 See README.md for examples and METHOD.md for documentation of the mathematics.
 
-The domain is a square [0,L]^2 with L = 1800.0 km, except that with -data
+The domain is a square [0,L]^2 with L = 1800.0 km, except that with option -bdata
 the domain is read from the file.
 
 By default (-prob cap) we use a random, but smooth, bed topography, while the
 surface mass balance is radially-symmetric and depends on horizontal location.
-Option -prob range generates a different SMB, and it results in a disconnected
+Option -prob range generates a different SMB; results in a disconnected
 glacier.  Option -prob dome solves a flat bed case with radially-symmetric
-surface mass balance, where the exact solution is known.  Finally, option
--bdata reads the bed elevation from a NetCDF (.nc) file.
+surface mass balance, where the exact solution is known and the numerical error
+is reported.  Option -bdata reads the bed elevation from a NetCDF (.nc) file.
 
-An elevation-dependent surface mass balance model is also available, with
-options -elevdepend (to turn it on) and -sELA to set equilibrium line altitude.
-This case does not allow -newton.
+An elevation-dependent surface mass balance model is turned on with -elevdepend.
+Set -sELA for equilibrium line altitude.  This case does not allow -newton.
 
-We apply the UDO or VCD methods for free-boundary refinement.  The default mode
-does n=1 UDO at the free boundary, plus gradient-recovery refinement in the
+We apply the UDO method for free-boundary refinement.  The default mode
+does n=1 UDO at the free boundary, plus gradient-recovery estimation in the
 inactive set.
 
 The default VI solver is Picard iteration on the tilt; see (Jouvet & Bueler, 2012).
 We apply vinewtonrsls (+ mumps) for each tilt.  A full Newton iteration, simply
-vinewtonrsls, is turned on with -newton, but it does not converge in harder cases.
+vinewtonrsls, is turned on with -newton, but it may not converge in harder cases.
 """
 
 from argparse import ArgumentParser, RawTextHelpFormatter
@@ -144,5 +143,5 @@ parser.add_argument(
     type=int,
     default=0,
     metavar="R",
-    help="initial R refinements are uniform [default 0]",
+    help="initial R refinements are uniform [default=0]",
 )
