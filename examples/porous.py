@@ -123,8 +123,8 @@ for i in range(levels + 1):
     eactive = neweactive
 
     # mark and refine by UDO+BR; tot_eta from this is used in reported effectivity index
-    Zexact = uh ** (gamma - 1.0)
-    res = -div(Zexact * grad(uh)) - fsource
+    Zunreg = uh ** (gamma - 1.0)
+    res = -div(Zunreg * grad(uh)) - fsource
     if not useweightedBR:
         Zqn = None
     imark, eta, tot_eta = amr.brinactivemark(uh, Constant(0.0), res, kappa=Zqn)
