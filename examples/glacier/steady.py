@@ -134,7 +134,7 @@ def amodel(s, sELA=1000.0, dsNEXT=100.0, alpha=0.0001 / secpera, alpharat=0.01):
     return conditional(s < sELA, alpha * (s - sELA), beta * (ln(s + tau) - ln(dsNEXT)))
 
 
-def weakform(u, a, b, Z=None, softening=1.0):
+def weakform(u, a, b, Z=None):
     """When Z=None this is the weak form corresponding to (3) in METHOD.md.
     If Z is given then this is (4).  In either case a(x) is given, so elevation
     -dependent surface mass balance *must* be handled by an outer iteration.
@@ -148,7 +148,7 @@ def weakform(u, a, b, Z=None, softening=1.0):
     else:
         du_tilt = grad(u) + Beta(u, b)
     Dp = inner(du_tilt, du_tilt) ** ((p - 2) / 2)
-    C = softening * Gamma * omega ** (p - 1)
+    C = Gamma * omega ** (p - 1)
     return C * Dp * inner(du_tilt, grad(v)) * dx(degree=args.qdegree) - a * v * dx
 
 
@@ -257,7 +257,7 @@ for i in range(args.refine + 1):
         DirichletBC(V, Constant(0.0), "on_boundary"),
     ]
     if args.newton:
-        F = weakform(u, a, b, softening=args.softening)
+        F = weakform(u, a, b)
         problem = NonlinearVariationalProblem(F, u, bcs=bcs)
         solver = NonlinearVariationalSolver(
             problem, solver_parameters=sp, options_prefix="s"
@@ -268,11 +268,11 @@ for i in range(args.refine + 1):
         for k in range(args.pcount):
             # pprint(f'  Picard iteration {k+1} ...')
             if args.elevdepend:
-                sold = b + uold**omega
+                sold = b + uold ** omega
                 a = Function(V).interpolate(amodel(sold, sELA=args.sELA))
                 a.rename("a = accumulation")
             Ztilt = Beta(uold, b)
-            F = weakform(u, a, b, Z=Ztilt, softening=args.softening)
+            F = weakform(u, a, b, Z=Ztilt)
             problem = NonlinearVariationalProblem(F, u, bcs=bcs)
             solver = NonlinearVariationalSolver(
                 problem, solver_parameters=sp, options_prefix="s"
@@ -281,7 +281,7 @@ for i in range(args.refine + 1):
             uold = Function(V).interpolate(u)
 
     # update true geometry variables
-    H = Function(V, name="H = thickness").interpolate(u**omega)
+    H = Function(V, name="H = thickness").interpolate(u ** omega)
     s = Function(V, name="s = surface elevation").interpolate(b + H)
 
     # report numerical errors if exact solution known
@@ -323,7 +323,7 @@ if args.opvdsub:  # note boxind gets written into -opvd file
 
 if args.opvd:
     CU = ((n + 2) / (n + 1)) * Gamma
-    Us_ufl = CU * H**p * inner(grad(s), grad(s)) ** ((p - 2) / 2) * grad(s)
+    Us_ufl = CU * H ** p * inner(grad(s), grad(s)) ** ((p - 2) / 2) * grad(s)
     Us = Function(VectorFunctionSpace(mesh, "CG", degree=2))
     Us.project(secpera * Us_ufl)  # smoother than .interpolate()
     Us.rename("Us = surface velocity (m/a)")

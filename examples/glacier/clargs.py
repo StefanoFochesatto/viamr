@@ -126,13 +126,6 @@ parser.add_argument(
     help="equilibrium line altitude to use if -elevdepend [default=1000.0]",
 )
 parser.add_argument(
-    "-softening",
-    type=float,
-    default=1.0,
-    metavar="X",
-    help="multiply Gamma by softening factor X; X>1 softens, 0<X<1 hardens [default=1.0]",
-)
-parser.add_argument(
     "-theta",
     type=float,
     default=0.5,
