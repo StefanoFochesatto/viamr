@@ -135,9 +135,9 @@ parser.add_argument(
 parser.add_argument(
     "-udo_n",
     type=int,
-    default=2,
+    default=1,
     metavar="N",
-    help="use udomark(.., n=N) [default 2]",
+    help="use udomark(.., n=N) [default=1]",
 )
 parser.add_argument(
     "-uniform",
