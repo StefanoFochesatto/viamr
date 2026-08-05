@@ -94,7 +94,9 @@ def test_thinelemactive():
     x, y = SpatialCoordinate(mesh)
     r2 = x ** 2 + y ** 2
     R0 = 1.4
-    uh = Function(CG1, name="uh").interpolate(conditional(r2 > R0 ** 2, r2 - R0 ** 2, 0.0))
+    uh = Function(CG1, name="uh").interpolate(
+        conditional(r2 > R0 ** 2, r2 - R0 ** 2, 0.0)
+    )
     psih = Function(CG1, name="psih").interpolate(Constant(0.0))
     act = amr.elemactive(uh, psih)
     tact = amr.thinelemactive(uh, psih)
@@ -185,7 +187,7 @@ def test_elemmaxabs():
     CG1, DG0 = amr.spaces(mesh)
     f = Function(CG1).interpolate(x * y)
     eamax = amr._elemmaxabs(f)
-    #VTKFile("foo.pvd").write(f, amax)
+    # VTKFile("foo.pvd").write(f, amax)
     assert eamax.function_space().ufl_element() == DG0.ufl_element()
     diff = eamax.dat.data_ro - np.array([1.0, 0.5, 0.5, 0.0])
     assert np.linalg.norm(diff) == 0.0

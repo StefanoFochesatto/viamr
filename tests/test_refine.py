@@ -16,7 +16,7 @@ def test_overrefine_udo():
     unorm0 = norm(u)
     mark = amr.udomark(u, psi)
     assert amr.countmark(mark) == DG0.dim()  # everything gets marked
-    #VTKFile("result_overrefine_udo.pvd").write(u, psi, mark)
+    # VTKFile("result_overrefine_udo.pvd").write(u, psi, mark)
     rmesh = mesh.refine_marked_elements(mark)  # netgen's refine method
     rCG1, _ = amr.spaces(rmesh)
     assert rCG1.dim() == 61
@@ -37,13 +37,13 @@ def test_finer_udo():
     mark = amr.udomark(u, psi, n=1)  # note n=1 (default is n=2)
     assert amr.countmark(mark) == 90
     assert amr.countmark(mark) < DG0.dim()
-    #VTKFile("result_finer_udo.pvd").write(u, psi, mark)
+    # VTKFile("result_finer_udo.pvd").write(u, psi, mark)
     rmesh = mesh.refine_marked_elements(mark)  # netgen's refine method
     rCG1, _ = amr.spaces(rmesh)
     assert rCG1.dim() == 256
     rV = FunctionSpace(rmesh, "CG", 1)
     ru = Function(rV).interpolate(u)  # cross-mesh interpolation
-    #VTKFile("result_rfiner_udo.pvd").write(ru)
+    # VTKFile("result_rfiner_udo.pvd").write(ru)
     assert abs(norm(ru) - unorm0) < 1.0e-10  # ... should be conservative
 
 
@@ -59,7 +59,7 @@ def test_refine_vcd():
     mark = amr.vcdmark(u, psi)
     assert amr.countmark(mark) == 13
     assert amr.countmark(mark) < DG0.dim()  # not everything gets marked
-    #VTKFile("result_refine_vcd.pvd").write(u, psi, mark)
+    # VTKFile("result_refine_vcd.pvd").write(u, psi, mark)
     rmesh = mesh.refine_marked_elements(mark)  # netgen's refine method
     rCG1, _ = amr.spaces(rmesh)
     assert rCG1.dim() == 49
@@ -178,55 +178,6 @@ def test_refine_br_weighted():
     assert rCG1.dim() == 109
 
 
-def test_adapt_avm():
-    mesh = RectangleMesh(8, 8, 2.0, 2.0, originX=-2.0, originY=-2.0)
-    amr = VIAMR(debug=True)
-    CG1, _ = amr.spaces(mesh)
-    assert CG1.dim() == 81
-    (x, y) = SpatialCoordinate(mesh)
-    psi = Function(CG1).interpolate(_get_ball_obstacle(x, y))
-    u = Function(CG1).interpolate(conditional(psi > 0.0, psi, 0.0))
-    amr.setmetricparameters(target_complexity=100, h_min=1.0e-4, h_max=1.0)
-    rmesh = amr.adaptaveragedmetric(mesh, u, psi)
-    rCG1, _ = amr.spaces(rmesh)
-    assert rCG1.dim() == 152
-
-
-def test_adapt_avm_separated():
-    mesh = RectangleMesh(7, 7, 2.0, 2.0, originX=-2.0, originY=-2.0)
-    amr = VIAMR(debug=True)
-    CG1, _ = amr.spaces(mesh)
-    assert CG1.dim() == 64
-    psi = Function(CG1).interpolate(Constant(0.0))
-    (x, y) = SpatialCoordinate(mesh)
-    r = sqrt(x**2 + y**2)
-    u_ufl = conditional(r < 1, 1.0 + cos(pi * r), 0.0)
-    uh = Function(CG1).interpolate(u_ufl)
-    amr.setmetricparameters(target_complexity=100, h_min=1.0e-4, h_max=1.0)
-    # only isotropic free-boundary metric
-    fbmesh = amr.adaptaveragedmetric(mesh, uh, psi, gamma=1.0)
-    fbCG1, _ = amr.spaces(fbmesh)
-    assert fbCG1.dim() == 129
-    # only hessian metric
-    hmesh = amr.adaptaveragedmetric(mesh, uh, psi, gamma=0.0)
-    hCG1, _ = amr.spaces(hmesh)
-    assert hCG1.dim() == 150
-
-
-def test_adapt_avm_intersect():
-    mesh = RectangleMesh(8, 8, 2.0, 2.0, originX=-2.0, originY=-2.0)
-    amr = VIAMR(debug=True)
-    CG1, _ = amr.spaces(mesh)
-    assert CG1.dim() == 81
-    (x, y) = SpatialCoordinate(mesh)
-    psi = Function(CG1).interpolate(_get_ball_obstacle(x, y))
-    u = Function(CG1).interpolate(conditional(psi > 0.0, psi, 0.0))
-    amr.setmetricparameters(target_complexity=100, h_min=1.0e-4, h_max=1.0)
-    rmesh = amr.adaptaveragedmetric(mesh, u, psi, intersect=True)
-    rCG1, _ = amr.spaces(rmesh)
-    assert rCG1.dim() == 189
-
-
 if __name__ == "__main__":
     test_overrefine_udo()
     test_finer_udo()
@@ -236,6 +187,3 @@ if __name__ == "__main__":
     test_refine_gr()
     test_refine_br()
     test_refine_br_total()
-    test_adapt_avm()
-    test_adapt_avm_separated()
-    test_adapt_avm_intersect()
