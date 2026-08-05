@@ -109,7 +109,7 @@ p = n + 1  # typical:  p = 4
 omega = (p - 1) / (2 * p)  #  omega = 3/8
 phi = (p + 1) / (2 * p)  #  phi = 5/8
 r = p / (p - 1)  #  r = 4/3
-
+debug = True  # debugging solver failures
 
 def Beta(u, b):
     return (1.0 / omega) * (u + 1.0) ** phi * grad(b)  # eps=1 regularization is small
@@ -123,7 +123,15 @@ def amodel(s, sELA=1000.0, dsNEXT=100.0, alpha=0.0001 / secpera, alpharat=0.01):
     return conditional(s < sELA, alpha * (s - sELA), beta * (ln(s + tau) - ln(dsNEXT)))
 
 
-def weakform(u, a, b, Z=None):
+def scalarrange(w):
+    """Utility function to return the range of a generic scalar field.  Correct in parallel."""
+    locmin = w.dat.data.min()
+    locmax = w.dat.data.max()
+    gmin = w.function_space().mesh().comm.allreduce(locmin, op=MPI.MIN)
+    gmax = w.function_space().mesh().comm.allreduce(locmax, op=MPI.MAX)
+    return gmin, gmax
+
+def weakform(u, a, b, Z=None, epsreg=0.01):
     """When Z=None this is the weak form corresponding to (3) in METHOD.md.
     If Z is given then this is (4).  In either case a(x) is given, so elevation
     -dependent surface mass balance *must* be handled by an outer iteration.
@@ -136,7 +144,11 @@ def weakform(u, a, b, Z=None):
         du_tilt = grad(u) + Z
     else:
         du_tilt = grad(u) + Beta(u, b)
-    Dp = inner(du_tilt, du_tilt) ** ((p - 2) / 2)
+    if debug:
+        dumag = Function(u.function_space()).interpolate(sqrt(inner(du_tilt, du_tilt)))
+        dumin, dumax = scalarrange(dumag)
+        print(f"  DEBUG: {dumin:.2e} <= |du_tilt| <= {dumax:.2e}")
+    Dp = (inner(du_tilt, du_tilt) + epsreg) ** ((p - 2) / 2)
     C = Gamma * omega ** (p - 1)
     return C * Dp * inner(du_tilt, grad(v)) * dx(degree=args.qdegree) - a * v * dx
 
