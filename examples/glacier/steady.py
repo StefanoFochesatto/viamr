@@ -268,7 +268,7 @@ for i in range(args.refine + 1):
 
     # report numerical errors if exact solution known
     if not args.bdata and args.prob == "dome":
-        uerr_H1, Herr_inf = normerrorsdome(u, H)
+        uerr_H1, Herr_inf, uexact = normerrorsdome(u, H)
         vfb, _ = amr.freeboundarygraph(u, Function(V).interpolate(0.0))
         drmax = radiuserrordome(mesh, vfb)
         pprint(
@@ -319,6 +319,10 @@ if args.opvd:
     Gs.interpolate(grad(s))
     Gs.rename("Gs = grad(s)")
     fields = [u, H, s, Us, q, a, b, Gb, Gs]
+    if not args.bdata and args.prob == "dome":
+        uerr = Function(uexact.function_space()).interpolate(u - uexact)
+        uerr.rename("uerr = u-u_exact")
+        fields.append(uerr)
     if args.opvdsub:
         fields.append(boxind)
     if mesh.comm.size > 1:

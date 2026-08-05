@@ -103,9 +103,9 @@ def normerrorsdome(uh, Hh):
     p = n + 1  # typical:  p = 4
     omega = (p - 1) / (2 * p)  #  omega = 3/8
     uexact = fd.Function(CG2).interpolate(dome_exact(x) ** (1.0 / omega))
-    uexact.rename("uexact")
+    uexact.rename("u_exact")
     uerr = fd.errornorm(uexact, uh, norm_type="H1") / fd.norm(uexact, norm_type="H1")
-    return uerr, Herr
+    return uerr, Herr, uexact
 
 
 def radiuserrordome(mesh, vfb):
