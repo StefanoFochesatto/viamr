@@ -22,9 +22,6 @@ assert (
 assert (
     not args.elevdepend or not args.bdata
 ), "combination invalid: -elevdepend & -bdata file.nc"
-assert (
-    not args.elevdepend or not args.newton
-), "combination invalid: -elevdepend & -newton"  # FIXME
 
 import numpy as np
 import petsc4py
