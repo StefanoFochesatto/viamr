@@ -444,6 +444,7 @@ class VIAMR(OptionsManager):
         return mark
 
     def _fixedrate(self, eta, theta, method):
+        # FIXME think more about this and see if we can make "total" (essentially?) process-independent
         """Marks elements according to the values of estimator eta in DG0 and a threshold which depends on the scalar theta.  The number of elements marked is an increasing function of theta.  The default 'max' strategy marks all elements with eta greater than
           ethresh = theta * max eta
         The 'total' strategy sorts the elements owned by the process by decreasing eta value.  Then the threshold
@@ -455,7 +456,7 @@ class VIAMR(OptionsManager):
 
         with eta.dat.vec_ro as eta_:
             if method == "max":
-                ethresh = theta * eta_.max()[1]  # FIXME looks process-dependent
+                ethresh = theta * eta_.max()[1]  # process independent
             elif method == "total":
                 values = eta_.array_r
                 sorted_values = np.sort(values)[::-1]  # sort in descending order
@@ -465,7 +466,7 @@ class VIAMR(OptionsManager):
                 ethresh = sorted_values[idx]
             else:
                 raise ValueError("unknown method for VIAMR._fixedrate()")
-            total_error_est = sqrt(eta_.dot(eta_))
+            total_error_est = sqrt(eta_.dot(eta_))  # l^2 norm of eta as Vec
 
         DG0 = eta.function_space()
         mark = Function(DG0, name="mark (_fixedrate)").interpolate(conditional(gt(eta, ethresh), 1.0, 0.0))
