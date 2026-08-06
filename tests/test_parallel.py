@@ -61,7 +61,8 @@ class VIAMRRegression(VIAMR):
         return self._bfsneighbors(mesh, elemborder, n)
 
 
-def PARtest_refine_udo_parallelUDO():
+@pytest.mark.skip
+def test_refine_udo_parallelUDO():
     mesh1 = _get_netgen_mesh(TriHeight=0.1)
     amr = VIAMR(debug=True)
     CG1, _ = amr.spaces(mesh1)
@@ -87,8 +88,9 @@ def PARtest_refine_udo_parallelUDO():
     assert r1CG1.dim() == r2CG1.dim()
 
 
+@pytest.mark.skip
 @pytest.mark.parallel(nprocs=3)
-def PARtest_parallel_udo():
+def test_parallel_udo():
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
 
@@ -139,7 +141,8 @@ def PARtest_parallel_udo():
         assert globalActive[0] == 506
 
 
-def PARtest_udo_regression():
+@pytest.mark.skip
+def test_udo_regression():
     # This test utilizes the the old implementation of UDO which builds the neighborhood of the free boundary using breadth first search,
     # as a regression test for the dmplex based implementation.
 
@@ -183,6 +186,6 @@ def PARtest_udo_regression():
 
 
 if __name__ == "__main__":
-    PARtest_refine_udo_parallelUDO()
-    PARtest_udo_regression()
-    PARtest_parallel_udo()
+    test_refine_udo_parallelUDO()
+    test_udo_regression()
+    test_parallel_udo()

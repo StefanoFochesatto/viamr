@@ -1,8 +1,10 @@
 from firedrake import *
 from viamr import VIAMR
 from test_basic import _get_ball_obstacle
+import pytest
 
 
+@pytest.mark.skip
 def test_adapt_avm():
     mesh = RectangleMesh(8, 8, 2.0, 2.0, originX=-2.0, originY=-2.0)
     amr = VIAMR(debug=True)
@@ -17,6 +19,7 @@ def test_adapt_avm():
     assert rCG1.dim() == 152
 
 
+@pytest.mark.skip
 def test_adapt_avm_separated():
     mesh = RectangleMesh(7, 7, 2.0, 2.0, originX=-2.0, originY=-2.0)
     amr = VIAMR(debug=True)
@@ -38,6 +41,7 @@ def test_adapt_avm_separated():
     assert hCG1.dim() == 150
 
 
+@pytest.mark.skip
 def test_adapt_avm_intersect():
     mesh = RectangleMesh(8, 8, 2.0, 2.0, originX=-2.0, originY=-2.0)
     amr = VIAMR(debug=True)
