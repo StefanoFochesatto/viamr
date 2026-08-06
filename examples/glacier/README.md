@@ -2,7 +2,7 @@
 
 This directory contains a shallow ice approximation model of glaciers on land, which exploits and illustrates the free-boundary-focussed tag-and-refine VIAMR methods, along with gradient refinement.
 
-See `METHOD.md` for the mathematical model of a glacier.
+See `METHOD.md` for the mathematical model of a glacier, an obstacle problem for a highly-nonlinear diffusion-type operator.
 
 ## synthetic steady-state glaciers
 

@@ -36,10 +36,10 @@ The following transformation, introduced in [R70], and discussed and extended to
 For this transformation we define constant powers:
 
 ```math
-\omega = \frac{p-1}{2p}, \qquad \phi = \frac{p+1}{2p}.
+\omega = \frac{p-1}{2p}, \qquad \mu = \frac{p+1}{2p}.
 ```
 
-(The standard $p=4$ case for glaciology has $\omega=3/8$ and $\phi=5/8$.)  Now define
+(The standard $p=4$ case for glaciology has $\omega=3/8$ and $\mu=5/8$.)  Now define
 
 ```math
 H = u^\omega
@@ -50,13 +50,13 @@ The following calculations transform parts of equation (1):
 ```math
 \begin{align*}
 H^{p+1} &= u^{(p^2-1)/2p} \\
-\nabla s &= \nabla (H + b) = \omega u^{-\phi} (\nabla u + \omega^{-1} u^\phi \nabla b)
+\nabla s &= \nabla (H + b) = \omega u^{-\mu} (\nabla u + \omega^{-1} u^\mu \nabla b)
 \end{align*}
 ```
 
 Let
 
-$$\Phi(u) = - \omega^{-1} u^\phi \nabla b,$$
+$$\Phi(u) = - \omega^{-1} u^\mu \nabla b,$$
 
 called the "tilt" [JB12] because it arises from the bed elevation gradient.  Thus
 

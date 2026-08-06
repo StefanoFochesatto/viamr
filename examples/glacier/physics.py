@@ -16,8 +16,8 @@ Gamma = 2 * A * (rho * g) ** n / (n + 2)  # coefficient in shallow ice approxima
 
 # transformed SIA
 _p = n + 1  # typical:  p = 4
-_omega = (_p - 1) / (2 * _p)  #  omega = 3/8
-_phi = (_p + 1) / (2 * _p)  #  phi = 5/8
+_omega = (_p - 1) / (2 * _p)  #  \omega = 3/8
+_mu = (_p + 1) / (2 * _p)  #  \mu = 5/8
 _r = _p / (_p - 1)  #  r = 4/3
 
 
@@ -38,10 +38,15 @@ def H2u(H):
     return H ** (1.0 / _omega)
 
 
-def beta_u(u, b):
+def Phi_u(u, b):
+    """Computes the tilting effect of the bed gradient:
+      \Phi(u) = (1/\omega) u^\mu \grad b.
+    In fact we regularize the power to avoid NaN or Inf from the fractional power:
+      u^\mu --> (u + eps)^\mu."""
+    eps = 1.0  # eps=1 regularization is small; typical u is 1e3 to 1e9
     return (
-        (1.0 / _omega) * (u + 1.0) ** _phi * fd.grad(b)
-    )  # eps=1 regularization is small
+        (1.0 / _omega) * (u + eps) ** _mu * fd.grad(b)
+    )
 
 
 def weakform_u(u, a, b, Z=None, epsreg=0.01, qdegree=5):
@@ -59,7 +64,7 @@ def weakform_u(u, a, b, Z=None, epsreg=0.01, qdegree=5):
     if Z is not None:
         du_tilt = fd.grad(u) + Z
     else:
-        du_tilt = fd.grad(u) + beta_u(u, b)
+        du_tilt = fd.grad(u) + Phi_u(u, b)
     if debug:
         dumag = fd.Function(u.function_space()).interpolate(
             fd.inner(du_tilt, du_tilt) ** 0.5
@@ -77,7 +82,7 @@ def residual_u(u, a, b):
     """Return a UFL expression for the strong form residual of the
     u (transformed thickness) form of the shallows ice approximation.
     Also return the coefficient Z"""
-    du_tilt = fd.grad(u) + beta_u(u, b)
+    du_tilt = fd.grad(u) + Phi_u(u, b)
     epsreg = 0.01
     Dp = (fd.inner(du_tilt, du_tilt) + epsreg) ** ((_p - 2) / 2)
     C = Gamma * _omega ** (_p - 1)

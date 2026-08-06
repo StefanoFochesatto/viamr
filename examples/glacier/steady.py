@@ -37,7 +37,7 @@ from physics import (
     Gamma,
     H2u,
     u2H,
-    beta_u,
+    Phi_u,
     weakform_u,
     residual_u,
     surfacevelocity,
@@ -203,7 +203,7 @@ for i in range(args.refine + 1):
                 sold = b + u2H(uold)
                 a = Function(V).interpolate(model_a_ufl(sold, sELA=args.sELA))
                 a.rename("a = accumulation")
-            Ztilt = beta_u(uold, b)
+            Ztilt = Phi_u(uold, b)
             F = weakform_u(u, a, b, Z=Ztilt)
             vinewtonsolve(F, u, bcs=bcs, lower=lb, upper=ub)
             uold = Function(V).interpolate(u)
