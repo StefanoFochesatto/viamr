@@ -4,7 +4,7 @@ import firedrake as fd
 
 debug = False  # debugging solver failures
 
-# constants
+# physical constants
 secpera = 31556926.0  # seconds per year
 n = 3.0  # exponent in Glen-Nye flow law
 g = 9.81  # acceleration of gravity on earth
@@ -12,13 +12,13 @@ rho = 910.0  # density of ice
 A = 1.0e-16 / secpera  # ice softness in flow law
 
 # derived constants
+p = n + 1  # typical:  p = 4
 Gamma = 2 * A * (rho * g) ** n / (n + 2)  # coefficient in shallow ice approximation
 
-# transformed SIA
-_p = n + 1  # typical:  p = 4
-_omega = (_p - 1) / (2 * _p)  #  \omega = 3/8
-_mu = (_p + 1) / (2 * _p)  #  \mu = 5/8
-_r = _p / (_p - 1)  #  r = 4/3
+# private constants of transformed SIA
+_omega = (p - 1) / (2 * p)  #  \omega = 3/8
+_mu = (p + 1) / (2 * p)  #  \mu = 5/8
+_r = p / (p - 1)  #  r = 4/3
 
 
 def scalarrange(w):
@@ -49,15 +49,15 @@ def Phi_u(u, b):
 
 def weakform_u(u, a, b, Z=None, epsreg=0.01, qdegree=5):
     """Return the nonlinear weak form for the u (transformed thickness) form
-    of the shallows ice approximation.
+    of the shallow ice approximation.
 
     When Z=None this is the weak form corresponding to (3) in METHOD.md.
-    If Z is given then this is (4).  In either case a(x) is given, so elevation
-    -dependent surface mass balance *must* be handled by an outer iteration.
-    Even for steep beds, the quadrature degree in the weak form, for the first
-    "dx", can apparently be handled by Firedrake's automatic mechanism.  For
-    testing this, note that "dx(degree=Q)" with Q=4,5,6,7 seems to produce about
-    the same result as the automatic mechanism, while Q=2 is distinctly worse."""
+    If Z is given then this is (4).  In either case a(x) is given.  (Elevation
+    -dependent surface mass balance *must* be handled by an outer iteration.)
+
+    Even for steep beds, setting the quadrature degree in the weak form, i.e.
+    "dx(degree=Q)" with Q=4,5,6,7, seems to produce about the same result as
+    the automatic mechanism.  However, Q=2 is distinctly worse."""
     v = fd.TestFunction(u.function_space())
     if Z is not None:
         du_tilt = fd.grad(u) + Z
@@ -69,21 +69,20 @@ def weakform_u(u, a, b, Z=None, epsreg=0.01, qdegree=5):
         )
         dumin, dumax = scalarrange(dumag)
         print(f"  DEBUG: {dumin:.2e} <= |du_tilt| <= {dumax:.2e}")
-    Dp = (fd.inner(du_tilt, du_tilt) + epsreg) ** ((_p - 2) / 2)
-    C = Gamma * _omega ** (_p - 1)
+    Dp = (fd.inner(du_tilt, du_tilt) + epsreg) ** ((p - 2) / 2)
+    C = Gamma * _omega ** (p - 1)
     return (
         C * Dp * fd.inner(du_tilt, fd.grad(v)) * fd.dx(degree=qdegree) - a * v * fd.dx
     )
 
 
-def residual_u(u, a, b):
+def residual_u_ufl(u, a, b, epsreg = 0.01):
     """Return a UFL expression for the strong form residual of the
-    u (transformed thickness) form of the shallows ice approximation.
-    Also return the coefficient Z"""
+    u (transformed thickness) form of the shallow ice approximation.
+    Also return the coefficient Z."""
     du_tilt = fd.grad(u) + Phi_u(u, b)
-    epsreg = 0.01
-    Dp = (fd.inner(du_tilt, du_tilt) + epsreg) ** ((_p - 2) / 2)
-    C = Gamma * _omega ** (_p - 1)
+    Dp = (fd.inner(du_tilt, du_tilt) + epsreg) ** ((p - 2) / 2)
+    C = Gamma * _omega ** (p - 1)
     Z = C * Dp
     res = -fd.div(Z * du_tilt) - a  # formally a Poisson equation here
     return res, Z
@@ -92,4 +91,4 @@ def residual_u(u, a, b):
 def surfacevelocity(s, H):
     CU = ((n + 2) / (n + 1)) * Gamma
     dss = fd.inner(fd.grad(s), fd.grad(s))
-    return CU * H ** _p * dss ** ((_p - 2) / 2) * fd.grad(s)
+    return CU * H ** p * dss ** ((p - 2) / 2) * fd.grad(s)

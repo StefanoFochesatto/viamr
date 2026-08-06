@@ -39,7 +39,7 @@ from physics import (
     u2H,
     Phi_u,
     weakform_u,
-    residual_u,
+    residual_u_ufl,
     surfacevelocity,
     debug,
 )
@@ -234,7 +234,7 @@ for i in range(args.refine + 1):
     else:
         fbmark = amr.udomark(H, lb, n=args.udo_n)
         # FIXME OLD METHOD: imark, _, total_eta = amr.gradrecinactivemark(u, lb, theta=args.theta, method="max")
-        res, Z = residual_u(u, a, b)
+        res, Z = residual_u_ufl(u, a, b)
         # FIXME: "total" seems better than "max"
         imark, _, total_eta = amr.brinactivemark(
             u, lb, res, theta=args.theta, method="total", kappa=Z
