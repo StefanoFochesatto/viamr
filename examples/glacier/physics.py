@@ -38,13 +38,13 @@ def H2u(H):
     return H ** (1.0 / _omega)
 
 
-def Beta(u, b):
+def beta_u(u, b):
     return (
         (1.0 / _omega) * (u + 1.0) ** _phi * fd.grad(b)
     )  # eps=1 regularization is small
 
 
-def weakform(u, a, b, Z=None, epsreg=0.01, qdegree=5):
+def weakform_u(u, a, b, Z=None, epsreg=0.01, qdegree=5):
     """Return the nonlinear weak form for the u (transformed thickness) form
     of the shallows ice approximation.
 
@@ -59,7 +59,7 @@ def weakform(u, a, b, Z=None, epsreg=0.01, qdegree=5):
     if Z is not None:
         du_tilt = fd.grad(u) + Z
     else:
-        du_tilt = fd.grad(u) + Beta(u, b)
+        du_tilt = fd.grad(u) + beta_u(u, b)
     if debug:
         dumag = fd.Function(u.function_space()).interpolate(
             fd.inner(du_tilt, du_tilt) ** 0.5
@@ -73,11 +73,11 @@ def weakform(u, a, b, Z=None, epsreg=0.01, qdegree=5):
     )
 
 
-def residual(u, a, b):
+def residual_u(u, a, b):
     """Return a UFL expression for the strong form residual of the
     u (transformed thickness) form of the shallows ice approximation.
     Also return the coefficient Z"""
-    du_tilt = fd.grad(u) + Beta(u, b)
+    du_tilt = fd.grad(u) + beta_u(u, b)
     epsreg = 0.01
     Dp = (fd.inner(du_tilt, du_tilt) + epsreg) ** ((_p - 2) / 2)
     C = Gamma * _omega ** (_p - 1)

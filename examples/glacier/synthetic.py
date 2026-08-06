@@ -12,32 +12,31 @@ L = 1800.0e3  # domain is [0,L]^2, with fields centered at (xc,xc)
 xc = L / 2
 
 # dome parameters
-domeL = 750.0e3
-domeH0 = 3600.0
+dome_L = 750.0e3
+dome_H0 = 3600.0
 
 
-# exact solution to prob=='dome'
-def dome_exact_ufl(x, n=3.0):
+# exact solution for surface elevation s, and thickness H, to dome problem
+def dome_s_ufl(x, n=3.0):
     # https://github.com/bueler/sia-fve/blob/master/petsc/base/exactsia.c#L83
     r = fd.sqrt(fd.dot(x - fd.as_vector([xc, xc]), x - fd.as_vector([xc, xc])))
     mm = 1 + 1 / n
     qq = n / (2 * n + 2)
-    CC = domeH0 / (1 - 1 / n) ** qq
-    z = r / domeL
+    CC = dome_H0 / (1 - 1 / n) ** qq
+    z = r / dome_L
     tmp = mm * z - 1 / n + (1 - z) ** mm - z ** mm
     expr = CC * tmp ** qq
-    sexact = fd.conditional(fd.lt(r, domeL), expr, 0)
-    return sexact
+    return fd.conditional(fd.lt(r, dome_L), expr, 0)
 
 
-# accumulation; uses dome parameters
-def accumulation_ufl(x, n=3.0, problem="cap"):
+# accumulation a for dome problem
+def dome_a_ufl(x, n=3.0, problem="cap"):
     # https://github.com/bueler/sia-fve/blob/master/petsc/base/exactsia.c#L51
     R = fd.sqrt(fd.dot(x - fd.as_vector([xc, xc]), x - fd.as_vector([xc, xc])))
     r = fd.conditional(fd.lt(R, 0.01), 0.01, R)
-    r = fd.conditional(fd.gt(r, domeL - 0.01), domeL - 0.01, r)
-    s = r / domeL
-    C = domeH0 ** (2 * n + 2) * Gamma / (2 * domeL * (1 - 1 / n)) ** n
+    r = fd.conditional(fd.gt(r, dome_L - 0.01), dome_L - 0.01, r)
+    s = r / dome_L
+    C = dome_H0 ** (2 * n + 2) * Gamma / (2 * dome_L * (1 - 1 / n)) ** n
     pp = 1 / n
     tmp1 = s ** pp + (1 - s) ** pp - 1
     tmp2 = 2 * s ** pp + (1 - s) ** (pp - 1) * (1 - 2 * s) - 1
@@ -48,7 +47,7 @@ def accumulation_ufl(x, n=3.0, problem="cap"):
         dd = L / 30
         aneg = -3.0e-8  # roughly the min of a0
         return fd.conditional(
-            fd.gt(R, domeL),
+            fd.gt(R, dome_L),
             a0,
             fd.conditional(
                 fd.lt(dxc ** 2, (1.9 * dd) ** 2),
@@ -60,7 +59,57 @@ def accumulation_ufl(x, n=3.0, problem="cap"):
         return a0
 
 
-def bumps_ufl(x, problem="cap"):
+def _exactdome_H(V, returnu=False):
+    """Put the exact dome solution H=s, or u = H^(1/omega), into a Function(V)."""
+    x = fd.SpatialCoordinate(V.mesh())
+    if returnu:
+        p = n + 1  # typical:  p = 4
+        omega = (p - 1) / (2 * p)  #  omega = 3/8
+        uexact = fd.Function(V).interpolate(dome_s_ufl(x) ** (1.0 / omega))
+        uexact.rename("u_exact")
+        return uexact
+    else:
+        return fd.Function(V, name="H_exact").interpolate(dome_s_ufl(x))
+
+
+def dome_normerrors(uh, Hh):
+    """Returns:
+      * H^1 seminorm error in u
+      * relative H^1 norm error in u,
+      * L^infty norm error in H,
+      * uexact itself (in CG2).
+    For L^infty error in H we want the max nodal error, so V=CG1 is fine."""
+    V = uh.function_space()
+    x = fd.SpatialCoordinate(V.mesh())
+    Hdiff = fd.Function(V).interpolate(Hh - dome_s_ufl(x))
+    with Hdiff.dat.vec_ro as v:
+        HerrLinf = abs(v).max()[1]
+    CG2 = fd.FunctionSpace(V.mesh(), "CG", 2)
+    uexact = _exactdome_H(CG2, returnu=True)
+    dus = fd.inner(fd.grad(uexact - uh), fd.grad(uexact - uh))
+    uerrH1semi = fd.assemble(dus * fd.dx(degree=6)) ** 0.5
+    uerrH1rel = fd.errornorm(uexact, uh, norm_type="H1") / fd.norm(
+        uexact, norm_type="H1"
+    )
+    return uerrH1semi, uerrH1rel, HerrLinf, uexact
+
+
+def dome_radiuserror(mesh, vfb):
+    """For -prob "dome", compute the maximum of free-boundary radius errors
+    from the output of VIAMR.freeboundarygraph().  The exact free boundary
+    is a circle of radius domeL with center (L/2,L/2).  Returns the maximum
+    radius error."""
+    vfb = np.array(vfb)
+    mymax = PETSc.NINFINITY
+    if len(vfb) > 0:
+        x, y = vfb[:, 0], vfb[:, 1]
+        drfb = np.abs(np.sqrt((x - L / 2) ** 2 + (y - L / 2) ** 2) - dome_L)
+        mymax = np.max(drfb)
+    return float(mesh.comm.allreduce(mymax, op=MPI.MAX))
+
+
+# bed elevation b for cap and range problems
+def bumps_b_ufl(x, problem="cap"):
     if problem == "range":
         B0 = 400.0  # (m); amplitude of bumps
     else:
@@ -82,60 +131,9 @@ def bumps_ufl(x, problem="cap"):
     return B0 * b
 
 
-def _Hexactdome(V, returnu=False):
-    """Put the exact dome solution H=s, or u = H^(1/omega), into a Function(V)."""
-    x = fd.SpatialCoordinate(V.mesh())
-    if returnu:
-        p = n + 1  # typical:  p = 4
-        omega = (p - 1) / (2 * p)  #  omega = 3/8
-        uexact = fd.Function(V).interpolate(dome_exact_ufl(x) ** (1.0 / omega))
-        uexact.rename("u_exact")
-        return uexact
-    else:
-        Hexact = fd.Function(V, name="H_exact").interpolate(dome_exact_ufl(x))
-        return Hexact
-
-
-def normerrorsdome(uh, Hh):
-    """Returns:
-      * H^1 seminorm error in u
-      * relative H^1 norm error in u,
-      * L^infty norm error in H,
-      * uexact itself (in CG2).
-    For L^infty error in H we want the max nodal error, so V=CG1 is fine."""
-    V = uh.function_space()
-    x = fd.SpatialCoordinate(V.mesh())
-    Hdiff = fd.Function(V).interpolate(Hh - dome_exact_ufl(x))
-    with Hdiff.dat.vec_ro as v:
-        HerrLinf = abs(v).max()[1]
-    CG2 = fd.FunctionSpace(V.mesh(), "CG", 2)
-    uexact = _Hexactdome(CG2, returnu=True)
-    dus = fd.inner(fd.grad(uexact - uh), fd.grad(uexact - uh))
-    uerrH1semi = fd.assemble(dus * fd.dx(degree=6)) ** 0.5
-    uerrH1rel = fd.errornorm(uexact, uh, norm_type="H1") / fd.norm(
-        uexact, norm_type="H1"
-    )
-    return uerrH1semi, uerrH1rel, HerrLinf, uexact
-
-
-def radiuserrordome(mesh, vfb):
-    """For -prob "dome", compute the maximum of free-boundary radius errors
-    from the output of VIAMR.freeboundarygraph().  The exact free boundary
-    is a circle of radius domeL with center (L/2,L/2).  Returns the maximum
-    radius error."""
-    vfb = np.array(vfb)
-    mymax = PETSc.NINFINITY
-    if len(vfb) > 0:
-        x, y = vfb[:, 0], vfb[:, 1]
-        drfb = np.abs(np.sqrt((x - L / 2) ** 2 + (y - L / 2) ** 2) - domeL)
-        mymax = np.max(drfb)
-    drmax = float(mesh.comm.allreduce(mymax, op=MPI.MAX))
-    return drmax
-
-
-def amodel(s, sELA=1000.0, dsNEXT=100.0, alpha=0.0001 / secpera, alpharat=0.01):
+def model_a_ufl(s, sELA=1000.0, dsNEXT=100.0, alpha=0.0001 / secpera, alpharat=0.01):
     """Model of surface mass balance a(s) where alpha is lapse rate below sELA
     and above sELA there is a lower-slope (by alpharat) logarithmic function."""
     tau = dsNEXT - sELA
     beta = alpharat * alpha * dsNEXT
-    return conditional(s < sELA, alpha * (s - sELA), beta * (ln(s + tau) - ln(dsNEXT)))
+    return fd.conditional(s < sELA, alpha * (s - sELA), beta * (fd.ln(s + tau) - fd.ln(dsNEXT)))
