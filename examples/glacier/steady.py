@@ -37,22 +37,22 @@ from physics import (
     Gamma,
     H2u,
     u2H,
-    Beta,
-    weakform,
-    residual,
+    beta_u,
+    weakform_u,
+    residual_u,
     surfacevelocity,
     debug,
 )
 from synthetic import (
     L,
-    domeL,
-    domeH0,
-    dome_exact_ufl,
-    accumulation_ufl,
-    bumps_ufl,
-    normerrorsdome,
-    radiuserrordome,
-    amodel,
+    dome_L,
+    dome_H0,
+    dome_s_ufl,
+    dome_a_ufl,
+    dome_normerrors,
+    dome_radiuserror,
+    bumps_b_ufl,
+    model_a_ufl,
 )
 
 if args.opvdsub:
@@ -120,6 +120,16 @@ def glaciermeshreport(amr, mesh, indent=2):
     return None
 
 
+# encapsulate solve to avoid code duplication
+def vinewtonsolve(G, w, bcs=None, lower=None, upper=None):
+    problem = NonlinearVariationalProblem(G, w, bcs=bcs)
+    solver = NonlinearVariationalSolver(
+        problem, solver_parameters=sp, options_prefix="s"
+    )
+    solver.solve(bounds=(lower, upper))
+    return None
+
+
 # outer mesh refinement loop
 amr = VIAMR(debug=True)
 for i in range(args.refine + 1):
@@ -139,7 +149,7 @@ for i in range(args.refine + 1):
         if args.prob == "dome":
             b = Function(V).interpolate(Constant(0.0))
         else:
-            b = Function(V).interpolate(bumps_ufl(x, problem=args.prob))
+            b = Function(V).interpolate(bumps_b_ufl(x, problem=args.prob))
     b.rename("b = bedrock topography")
 
     # surface mass balance function on current mesh; depends on b in one case
@@ -153,9 +163,9 @@ for i in range(args.refine + 1):
         )  # also cross-mesh re nearb
     elif args.elevdepend:
         # initialize from s = b assumption
-        a = Function(V).interpolate(amodel(b, sELA=args.sELA))
+        a = Function(V).interpolate(model_a_ufl(b, sELA=args.sELA))
     else:
-        a = Function(V).interpolate(accumulation_ufl(x, problem=args.prob))
+        a = Function(V).interpolate(dome_a_ufl(x, problem=args.prob))
     a.rename("a = accumulation")
 
     # initialize transformed thickness variable; depends on b and a
@@ -174,44 +184,37 @@ for i in range(args.refine + 1):
         assemble(uold * dx) > 0
     ), "initialization failure; u must correspond to positive ice"
 
-    # solve on current mesh
+    # set-up for solve on current mesh
     u = Function(V, name="u = transformed thickness").interpolate(uold)
     lb = Function(V).interpolate(Constant(0.0))  # lower bound *in solver*
     ub = Function(V).interpolate(Constant(PETSc.INFINITY))
     bcs = [
         DirichletBC(V, Constant(0.0), "on_boundary"),
     ]
+
+    # solve, or solve loop
     if args.newton:
-        F = weakform(u, a, b)
-        problem = NonlinearVariationalProblem(F, u, bcs=bcs)
-        solver = NonlinearVariationalSolver(
-            problem, solver_parameters=sp, options_prefix="s"
-        )
-        solver.solve(bounds=(lb, ub))
+        F = weakform_u(u, a, b)
+        vinewtonsolve(F, u, bcs=bcs, lower=lb, upper=ub)
     else:
-        # outer loop for Picard (freeze-tilt) iteration, and a(s) if -elevdepend
+        # outer loop for Picard (freeze-tilt) iteration, with a=a(s) if -elevdepend
         for k in range(args.pcount):
-            # pprint(f'  Picard iteration {k+1} ...')
             if args.elevdepend:
                 sold = b + u2H(uold)
-                a = Function(V).interpolate(amodel(sold, sELA=args.sELA))
+                a = Function(V).interpolate(model_a_ufl(sold, sELA=args.sELA))
                 a.rename("a = accumulation")
-            Ztilt = Beta(uold, b)
-            F = weakform(u, a, b, Z=Ztilt)
-            problem = NonlinearVariationalProblem(F, u, bcs=bcs)
-            solver = NonlinearVariationalSolver(
-                problem, solver_parameters=sp, options_prefix="s"
-            )
-            solver.solve(bounds=(lb, ub))
+            Ztilt = beta_u(uold, b)
+            F = weakform_u(u, a, b, Z=Ztilt)
+            vinewtonsolve(F, u, bcs=bcs, lower=lb, upper=ub)
             uold = Function(V).interpolate(u)
 
-    # update true geometry variables
+    # update geometry variables
     H = Function(V, name="H = thickness").interpolate(u2H(u))
     s = Function(V, name="s = surface elevation").interpolate(b + H)
 
-    # report glaciated area and inactive set agreement using Jaccard index
+    # report glaciated area and Jaccard inactive set agreement
     vol = assemble(H * dx)
-    ei = amr.eleminactive(u, lb)
+    ei = amr.eleminactive(H, lb)
     area = assemble(ei * dx)
     pprint(
         f"  ice area {area / 1000.0**4:.3f} million km^2;  ice vol = {vol / 1000.0**5:.3f} million km^3",
@@ -224,34 +227,33 @@ for i in range(args.refine + 1):
         pprint("")
     oldei = ei
 
-    # mark and refine based on constraint u >= 0
-    uni = i < args.uniform
+    # mark and refine based on constraint H >= 0
+    uni = (i < args.uniform)
     if uni:
         mark = Function(DG0).interpolate(Constant(1.0))
     else:
-        fbmark = amr.udomark(u, lb, n=args.udo_n)
-        # imark, _, _ = amr.gradrecinactivemark(u, lb, theta=args.theta, method="max")
-        res, Z = residual(u, a, b)
+        fbmark = amr.udomark(H, lb, n=args.udo_n)
+        # FIXME OLD METHOD: imark, _, total_eta = amr.gradrecinactivemark(u, lb, theta=args.theta, method="max")
+        res, Z = residual_u(u, a, b)
         imark, _, total_eta = amr.brinactivemark(
-            u, lb, res, theta=args.theta, method="total", kappa=Z
+            u, lb, res, theta=args.theta, method="total", kappa=Z  # FIXME seems better than "max"
         )
         if args.hmin > 0.0:
             fbmark = amr.lowerboundcelldiameter(fbmark, args.hmin)
             imark = amr.lowerboundcelldiameter(imark, args.hmin)
         mark = amr.unionmarks(fbmark, imark)
         # report percentages of elements marked
-        inactive = amr.eleminactive(u, lb)
         pfb = 100.0 * amr.countmark(fbmark) / ne
-        pin = 100.0 * amr.countmark(imark) / amr.countmark(inactive)
+        pin = 100.0 * amr.countmark(imark) / amr.countmark(ei)
         pprint(
             f"  elements marked by UDO+BR weighted: {pfb:.2f}% free-bdry, {pin:.2f}% inactive"
         )
 
     # report numerical errors if exact solution known
     if not args.bdata and args.prob == "dome":
-        uerr_H1_semi, uerr_H1_rel, Herr_Linf, uexact = normerrorsdome(u, H)
+        uerr_H1_semi, uerr_H1_rel, Herr_Linf, uexact = dome_normerrors(u, H)
         vfb, _ = amr.freeboundarygraph(u, Function(V).interpolate(0.0))
-        drmax = radiuserrordome(mesh, vfb)
+        drmax = dome_radiuserror(mesh, vfb)
         pprint(
             f"  |u-uexact|_H1rel = {uerr_H1_rel:.3e};  |H-Hexact|_Linf = {Herr_Linf:.3f} m;  |dr|_Linf = {drmax/1000.0:.3f} km",
             end="",
@@ -268,7 +270,7 @@ for i in range(args.refine + 1):
                 file=csvfile,
             )
 
-    # refine if we are going to solve on the next mesh
+    # refine (when proceeding to next mesh)
     if i < args.refine:
         pprint(f"  refining" + (" uniformly" if uni else "") + " ...")
         mesh = amr.refinemarkedelements(mesh, mark, isUniform=uni)
@@ -314,7 +316,7 @@ if args.opvd:
 if args.opvdsub:
     mesh.mark_entities(boxind, 99)
     mesh = RelabeledMesh(mesh, [boxind], [99])
-    subm = Submesh(mesh, mesh.topological_dimension(), 99)
+    subm = Submesh(mesh, mesh.topological_dimension, 99)
     subV = FunctionSpace(subm, "CG", 1)
     subu = Function(subV, name="u = transformed thickness").interpolate(u)
     subH = Function(subV, name="H = thickness").interpolate(H)
