@@ -5,16 +5,11 @@ import numpy as np
 from pyop2.mpi import MPI
 import firedrake as fd
 from firedrake.petsc import PETSc
+from physics import secpera, n, Gamma
 
 # constants (same for all problems)
 L = 1800.0e3  # domain is [0,L]^2, with fields centered at (xc,xc)
 xc = L / 2
-secpera = 31556926.0
-n = 3.0
-g = 9.81
-rho = 910.0
-A = 1.0e-16 / secpera
-Gamma = 2 * A * (rho * g) ** n / (n + 2)
 
 # dome parameters
 domeL = 750.0e3
@@ -29,8 +24,8 @@ def dome_exact_ufl(x, n=3.0):
     qq = n / (2 * n + 2)
     CC = domeH0 / (1 - 1 / n) ** qq
     z = r / domeL
-    tmp = mm * z - 1 / n + (1 - z) ** mm - z**mm
-    expr = CC * tmp**qq
+    tmp = mm * z - 1 / n + (1 - z) ** mm - z ** mm
+    expr = CC * tmp ** qq
     sexact = fd.conditional(fd.lt(r, domeL), expr, 0)
     return sexact
 
@@ -44,8 +39,8 @@ def accumulation_ufl(x, n=3.0, problem="cap"):
     s = r / domeL
     C = domeH0 ** (2 * n + 2) * Gamma / (2 * domeL * (1 - 1 / n)) ** n
     pp = 1 / n
-    tmp1 = s**pp + (1 - s) ** pp - 1
-    tmp2 = 2 * s**pp + (1 - s) ** (pp - 1) * (1 - 2 * s) - 1
+    tmp1 = s ** pp + (1 - s) ** pp - 1
+    tmp2 = 2 * s ** pp + (1 - s) ** (pp - 1) * (1 - 2 * s) - 1
     a0 = (C / r) * tmp1 ** (n - 1) * tmp2
     if problem == "range":
         dxc = x[0] - xc
@@ -56,9 +51,9 @@ def accumulation_ufl(x, n=3.0, problem="cap"):
             fd.gt(R, domeL),
             a0,
             fd.conditional(
-                fd.lt(dxc**2, (1.9 * dd) ** 2),
+                fd.lt(dxc ** 2, (1.9 * dd) ** 2),
                 aneg,
-                fd.conditional(fd.lt(dyc**2, (1.1 * dd) ** 2), aneg, a0),
+                fd.conditional(fd.lt(dyc ** 2, (1.1 * dd) ** 2), aneg, a0),
             ),
         )
     else:
@@ -117,7 +112,9 @@ def normerrorsdome(uh, Hh):
     uexact = _Hexactdome(CG2, returnu=True)
     dus = fd.inner(fd.grad(uexact - uh), fd.grad(uexact - uh))
     uerrH1semi = fd.assemble(dus * fd.dx(degree=6)) ** 0.5
-    uerrH1rel = fd.errornorm(uexact, uh, norm_type="H1") / fd.norm(uexact, norm_type="H1")
+    uerrH1rel = fd.errornorm(uexact, uh, norm_type="H1") / fd.norm(
+        uexact, norm_type="H1"
+    )
     return uerrH1semi, uerrH1rel, HerrLinf, uexact
 
 
@@ -134,3 +131,11 @@ def radiuserrordome(mesh, vfb):
         mymax = np.max(drfb)
     drmax = float(mesh.comm.allreduce(mymax, op=MPI.MAX))
     return drmax
+
+
+def amodel(s, sELA=1000.0, dsNEXT=100.0, alpha=0.0001 / secpera, alpharat=0.01):
+    """Model of surface mass balance a(s) where alpha is lapse rate below sELA
+    and above sELA there is a lower-slope (by alpharat) logarithmic function."""
+    tau = dsNEXT - sELA
+    beta = alpharat * alpha * dsNEXT
+    return conditional(s < sELA, alpha * (s - sELA), beta * (ln(s + tau) - ln(dsNEXT)))
