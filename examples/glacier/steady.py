@@ -163,37 +163,6 @@ def glaciermeshreport(amr, mesh, indent=2):
 # outer mesh refinement loop
 amr = VIAMR(debug=True)
 for i in range(args.refine + 1):
-    # mark and refine based on constraint u >= 0
-    if i > 0:
-        if i < args.uniform + 1:
-            pprint(f"refining uniformly ...")
-            _, DG0 = amr.spaces(mesh)
-            mark = Function(DG0).interpolate(Constant(1.0))
-            mesh = amr.refinemarkedelements(mesh, mark, isUniform=True)
-        else:
-            #pprint(f"refining free boundary by UDO+GR ...", end="")
-            pprint(f"refining free boundary by UDO+BR weighted ...", end="")
-            fbmark = amr.udomark(u, lb, n=args.udo_n)
-            #imark, _, _ = amr.gradrecinactivemark(u, lb, theta=args.theta, method="max")
-            du_tilt = grad(u) + Beta(u, b)
-            epsreg = 0.01
-            Dp = (inner(du_tilt, du_tilt) + epsreg) ** ((p - 2) / 2)
-            C = Gamma * omega ** (p - 1)
-            Z = C * Dp
-            res = -div(Z * du_tilt) - a
-            imark, _, _ = amr.brinactivemark(u, lb, res, theta=args.theta, method="total", kappa=Z)
-            # FIXME print effectivity index in -prob dome case
-            if args.hmin > 0.0:
-                fbmark = amr.lowerboundcelldiameter(fbmark, args.hmin)
-                imark = amr.lowerboundcelldiameter(imark, args.hmin)
-            mark = amr.unionmarks(fbmark, imark)
-            mesh = amr.refinemarkedelements(mesh, mark)
-            # report percentages of elements marked
-            inactive = amr.eleminactive(u, lb)
-            pfb = 100.0 * amr.countmark(fbmark) / ne
-            pin = 100.0 * amr.countmark(imark) / amr.countmark(inactive)
-            pprint(f"  elements marked: {pfb:.2f}% free-bdry, {pin:.2f}% inactive")
-
     # describe current mesh
     nv, ne, hmin, hmax = amr.meshsizes(mesh)
     pprint(f"solving problem {args.prob} on mesh level {i}:")
@@ -280,31 +249,66 @@ for i in range(args.refine + 1):
     H = Function(V, name="H = thickness").interpolate(u ** omega)
     s = Function(V, name="s = surface elevation").interpolate(b + H)
 
-    # report numerical errors if exact solution known
-    if not args.bdata and args.prob == "dome":
-        uerr_H1, Herr_inf, uexact = normerrorsdome(u, H)
-        vfb, _ = amr.freeboundarygraph(u, Function(V).interpolate(0.0))
-        drmax = radiuserrordome(mesh, vfb)
-        pprint(
-            f"  |u-uexact|_H1 = {uerr_H1:.3e} rel, |H-Hexact|_inf = {Herr_inf:.3f} m, |dr|_inf = {drmax/1000.0:.3f} km"
-        )
-        if args.ocsv:
-            print(
-                f"{i:d},{ne:d},{hmin:.2f},{uerr_H1:.3e},{Herr_inf:.3f},{drmax:.3f}",
-                file=csvfile,
-            )
-
     # report glaciated area and inactive set agreement using Jaccard index
     vol = assemble(H * dx)
     ei = amr.eleminactive(u, lb)
     area = assemble(ei * dx)
     pprint(
-        f"  glaciated area {area / 1000.0**4:.4f} million km^2, ice volume = {vol / 1000.0**4:.2f} thousand km^3"
+        f"  ice area {area / 1000.0**4:.3f} million km^2;  ice vol = {vol / 1000.0**5:.3f} million km^3", end=""
     )
     if i > 0:
         jac = amr.jaccard(ei, oldei, submesh=True)
-        pprint(f"  Jaccard({i-1},{i}) = {100*jac:.2f}%")
+        pprint(f";  Jaccard({i-1},{i}) = {100*jac:.2f}%")
+    else:
+        pprint("")
     oldei = ei
+
+    # mark and refine based on constraint u >= 0
+    uni = (i < args.uniform)
+    if uni:
+        mark = Function(DG0).interpolate(Constant(1.0))
+    else:
+        fbmark = amr.udomark(u, lb, n=args.udo_n)
+        #imark, _, _ = amr.gradrecinactivemark(u, lb, theta=args.theta, method="max")
+        du_tilt = grad(u) + Beta(u, b)
+        epsreg = 0.01
+        Dp = (inner(du_tilt, du_tilt) + epsreg) ** ((p - 2) / 2)
+        C = Gamma * omega ** (p - 1)
+        Z = C * Dp
+        res = -div(Z * du_tilt) - a  # formally a Poisson equation here
+        imark, _, total_eta = amr.brinactivemark(u, lb, res, theta=args.theta, method="total", kappa=Z)
+        if args.hmin > 0.0:
+            fbmark = amr.lowerboundcelldiameter(fbmark, args.hmin)
+            imark = amr.lowerboundcelldiameter(imark, args.hmin)
+        mark = amr.unionmarks(fbmark, imark)
+        # report percentages of elements marked
+        inactive = amr.eleminactive(u, lb)
+        pfb = 100.0 * amr.countmark(fbmark) / ne
+        pin = 100.0 * amr.countmark(imark) / amr.countmark(inactive)
+        pprint(f"  elements marked by UDO+BR weighted: {pfb:.2f}% free-bdry, {pin:.2f}% inactive")
+
+    # report numerical errors if exact solution known
+    if not args.bdata and args.prob == "dome":
+        uerr_H1_semi, uerr_H1_rel, Herr_Linf, uexact = normerrorsdome(u, H)
+        vfb, _ = amr.freeboundarygraph(u, Function(V).interpolate(0.0))
+        drmax = radiuserrordome(mesh, vfb)
+        pprint(
+            f"  |u-uexact|_H1rel = {uerr_H1_rel:.3e};  |H-Hexact|_Linf = {Herr_Linf:.3f} m;  |dr|_Linf = {drmax/1000.0:.3f} km", end=""
+        )
+        if uni:
+            pprint("")
+        else:
+            pprint(f";  eff_H1 = {total_eta / uerr_H1_semi:.3f}")  # FIXME what do I expect?
+        if args.ocsv:
+            print(
+                f"{i:d},{ne:d},{hmin:.2f},{uerr_H1_rel:.3e},{Herr_inf:.3f},{drmax:.3f}",
+                file=csvfile,
+            )
+
+    # refine if we are going to solve on the next mesh
+    if i < args.refine:
+        pprint(f"  refining" + (" uniformly" if uni else "") + " ...")
+        mesh = amr.refinemarkedelements(mesh, mark, isUniform=uni)
 
 if args.ocsv:
     csvfile.close()
