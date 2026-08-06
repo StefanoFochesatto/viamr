@@ -1,4 +1,4 @@
-des="""
+des = """
 Solves a 2D steady, isothermal shallow ice approximation glacier obstacle problem.
 See README.md for examples and METHOD.md for documentation of the mathematics.
 
@@ -25,6 +25,7 @@ vinewtonrsls, is turned on with -newton, but it may not converge in harder cases
 """
 
 from argparse import ArgumentParser, RawTextHelpFormatter
+
 parser = ArgumentParser(description=des, formatter_class=RawTextHelpFormatter)
 
 parser.add_argument(

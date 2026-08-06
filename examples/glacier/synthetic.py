@@ -136,4 +136,6 @@ def model_a_ufl(s, sELA=1000.0, dsNEXT=100.0, alpha=0.0001 / secpera, alpharat=0
     and above sELA there is a lower-slope (by alpharat) logarithmic function."""
     tau = dsNEXT - sELA
     beta = alpharat * alpha * dsNEXT
-    return fd.conditional(s < sELA, alpha * (s - sELA), beta * (fd.ln(s + tau) - fd.ln(dsNEXT)))
+    return fd.conditional(
+        s < sELA, alpha * (s - sELA), beta * (fd.ln(s + tau) - fd.ln(dsNEXT))
+    )

@@ -44,9 +44,7 @@ def Phi_u(u, b):
     In fact we regularize the power to avoid NaN or Inf from the fractional power:
       u^\mu --> (u + eps)^\mu."""
     eps = 1.0  # eps=1 regularization is small; typical u is 1e3 to 1e9
-    return (
-        (1.0 / _omega) * (u + eps) ** _mu * fd.grad(b)
-    )
+    return (1.0 / _omega) * (u + eps) ** _mu * fd.grad(b)
 
 
 def weakform_u(u, a, b, Z=None, epsreg=0.01, qdegree=5):

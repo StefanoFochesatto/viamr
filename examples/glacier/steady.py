@@ -228,15 +228,16 @@ for i in range(args.refine + 1):
     oldei = ei
 
     # mark and refine based on constraint H >= 0
-    uni = (i < args.uniform)
+    uni = i < args.uniform
     if uni:
         mark = Function(DG0).interpolate(Constant(1.0))
     else:
         fbmark = amr.udomark(H, lb, n=args.udo_n)
         # FIXME OLD METHOD: imark, _, total_eta = amr.gradrecinactivemark(u, lb, theta=args.theta, method="max")
         res, Z = residual_u(u, a, b)
+        # FIXME: "total" seems better than "max"
         imark, _, total_eta = amr.brinactivemark(
-            u, lb, res, theta=args.theta, method="total", kappa=Z  # FIXME seems better than "max"
+            u, lb, res, theta=args.theta, method="total", kappa=Z
         )
         if args.hmin > 0.0:
             fbmark = amr.lowerboundcelldiameter(fbmark, args.hmin)
