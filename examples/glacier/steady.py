@@ -31,18 +31,28 @@ from pyop2.mpi import MPI
 pprint = PETSc.Sys.Print  # parallel print
 from viamr import VIAMR
 from datanetcdf import DataNetCDF
-from synthetic import (
+from physics import (
     secpera,
     n,
     Gamma,
+    H2u,
+    u2H,
+    Beta,
+    weakform,
+    residual,
+    surfacevelocity,
+    debug,
+)
+from synthetic import (
     L,
+    domeL,
+    domeH0,
     dome_exact_ufl,
     accumulation_ufl,
     bumps_ufl,
-    domeL,
-    domeH0,
     normerrorsdome,
     radiuserrordome,
+    amodel,
 )
 
 if args.opvdsub:
@@ -97,56 +107,6 @@ sp = {
     "pc_type": "lu",
     "pc_factor_mat_solver_type": "mumps",
 }
-
-# transformed SIA
-p = n + 1  # typical:  p = 4
-omega = (p - 1) / (2 * p)  #  omega = 3/8
-phi = (p + 1) / (2 * p)  #  phi = 5/8
-r = p / (p - 1)  #  r = 4/3
-debug = False  # debugging solver failures
-
-
-def Beta(u, b):
-    return (1.0 / omega) * (u + 1.0) ** phi * grad(b)  # eps=1 regularization is small
-
-
-def amodel(s, sELA=1000.0, dsNEXT=100.0, alpha=0.0001 / secpera, alpharat=0.01):
-    """Model of surface mass balance a(s) where alpha is lapse rate below sELA
-    and above sELA there is a lower-slope (by alpharat) logarithmic function."""
-    tau = dsNEXT - sELA
-    beta = alpharat * alpha * dsNEXT
-    return conditional(s < sELA, alpha * (s - sELA), beta * (ln(s + tau) - ln(dsNEXT)))
-
-
-def scalarrange(w):
-    """Utility function to return the range of a generic scalar field.  Correct in parallel."""
-    locmin = w.dat.data.min()
-    locmax = w.dat.data.max()
-    gmin = w.function_space().mesh().comm.allreduce(locmin, op=MPI.MIN)
-    gmax = w.function_space().mesh().comm.allreduce(locmax, op=MPI.MAX)
-    return gmin, gmax
-
-
-def weakform(u, a, b, Z=None, epsreg=0.01):
-    """When Z=None this is the weak form corresponding to (3) in METHOD.md.
-    If Z is given then this is (4).  In either case a(x) is given, so elevation
-    -dependent surface mass balance *must* be handled by an outer iteration.
-    Even for steep beds, the quadrature degree in the weak form, for the first
-    "dx", can apparently be handled by Firedrake's automatic mechanism.  For
-    testing this, note that "dx(degree=Q)" with Q=4,5,6,7 seems to produce about
-    the same result as the automatic mechanism, while Q=2 is distinctly worse."""
-    v = TestFunction(u.function_space())
-    if Z is not None:
-        du_tilt = grad(u) + Z
-    else:
-        du_tilt = grad(u) + Beta(u, b)
-    if debug:
-        dumag = Function(u.function_space()).interpolate(sqrt(inner(du_tilt, du_tilt)))
-        dumin, dumax = scalarrange(dumag)
-        print(f"  DEBUG: {dumin:.2e} <= |du_tilt| <= {dumax:.2e}")
-    Dp = (inner(du_tilt, du_tilt) + epsreg) ** ((p - 2) / 2)
-    C = Gamma * omega ** (p - 1)
-    return C * Dp * inner(du_tilt, grad(v)) * dx(degree=args.qdegree) - a * v * dx
 
 
 def glaciermeshreport(amr, mesh, indent=2):
@@ -203,7 +163,7 @@ for i in range(args.refine + 1):
         # build pile of ice from accumulation
         pileage = 400.0  # years
         Hinit = pileage * secpera * conditional(a > 0.0, a, 0.0)
-        uold = Function(V).interpolate(Hinit ** (1.0 / omega))
+        uold = Function(V).interpolate(H2u(Hinit))
     else:
         # cross-mesh interpolation of previous solution
         uold = Function(V).interpolate(u)
@@ -233,7 +193,7 @@ for i in range(args.refine + 1):
         for k in range(args.pcount):
             # pprint(f'  Picard iteration {k+1} ...')
             if args.elevdepend:
-                sold = b + uold ** omega
+                sold = b + u2H(uold)
                 a = Function(V).interpolate(amodel(sold, sELA=args.sELA))
                 a.rename("a = accumulation")
             Ztilt = Beta(uold, b)
@@ -246,7 +206,7 @@ for i in range(args.refine + 1):
             uold = Function(V).interpolate(u)
 
     # update true geometry variables
-    H = Function(V, name="H = thickness").interpolate(u ** omega)
+    H = Function(V, name="H = thickness").interpolate(u2H(u))
     s = Function(V, name="s = surface elevation").interpolate(b + H)
 
     # report glaciated area and inactive set agreement using Jaccard index
@@ -254,7 +214,8 @@ for i in range(args.refine + 1):
     ei = amr.eleminactive(u, lb)
     area = assemble(ei * dx)
     pprint(
-        f"  ice area {area / 1000.0**4:.3f} million km^2;  ice vol = {vol / 1000.0**5:.3f} million km^3", end=""
+        f"  ice area {area / 1000.0**4:.3f} million km^2;  ice vol = {vol / 1000.0**5:.3f} million km^3",
+        end="",
     )
     if i > 0:
         jac = amr.jaccard(ei, oldei, submesh=True)
@@ -264,19 +225,16 @@ for i in range(args.refine + 1):
     oldei = ei
 
     # mark and refine based on constraint u >= 0
-    uni = (i < args.uniform)
+    uni = i < args.uniform
     if uni:
         mark = Function(DG0).interpolate(Constant(1.0))
     else:
         fbmark = amr.udomark(u, lb, n=args.udo_n)
-        #imark, _, _ = amr.gradrecinactivemark(u, lb, theta=args.theta, method="max")
-        du_tilt = grad(u) + Beta(u, b)
-        epsreg = 0.01
-        Dp = (inner(du_tilt, du_tilt) + epsreg) ** ((p - 2) / 2)
-        C = Gamma * omega ** (p - 1)
-        Z = C * Dp
-        res = -div(Z * du_tilt) - a  # formally a Poisson equation here
-        imark, _, total_eta = amr.brinactivemark(u, lb, res, theta=args.theta, method="total", kappa=Z)
+        # imark, _, _ = amr.gradrecinactivemark(u, lb, theta=args.theta, method="max")
+        res, Z = residual(u, a, b)
+        imark, _, total_eta = amr.brinactivemark(
+            u, lb, res, theta=args.theta, method="total", kappa=Z
+        )
         if args.hmin > 0.0:
             fbmark = amr.lowerboundcelldiameter(fbmark, args.hmin)
             imark = amr.lowerboundcelldiameter(imark, args.hmin)
@@ -285,7 +243,9 @@ for i in range(args.refine + 1):
         inactive = amr.eleminactive(u, lb)
         pfb = 100.0 * amr.countmark(fbmark) / ne
         pin = 100.0 * amr.countmark(imark) / amr.countmark(inactive)
-        pprint(f"  elements marked by UDO+BR weighted: {pfb:.2f}% free-bdry, {pin:.2f}% inactive")
+        pprint(
+            f"  elements marked by UDO+BR weighted: {pfb:.2f}% free-bdry, {pin:.2f}% inactive"
+        )
 
     # report numerical errors if exact solution known
     if not args.bdata and args.prob == "dome":
@@ -293,12 +253,15 @@ for i in range(args.refine + 1):
         vfb, _ = amr.freeboundarygraph(u, Function(V).interpolate(0.0))
         drmax = radiuserrordome(mesh, vfb)
         pprint(
-            f"  |u-uexact|_H1rel = {uerr_H1_rel:.3e};  |H-Hexact|_Linf = {Herr_Linf:.3f} m;  |dr|_Linf = {drmax/1000.0:.3f} km", end=""
+            f"  |u-uexact|_H1rel = {uerr_H1_rel:.3e};  |H-Hexact|_Linf = {Herr_Linf:.3f} m;  |dr|_Linf = {drmax/1000.0:.3f} km",
+            end="",
         )
         if uni:
             pprint("")
         else:
-            pprint(f";  eff_H1 = {total_eta / uerr_H1_semi:.3f}")  # FIXME what do I expect?
+            pprint(
+                f";  eff_H1 = {total_eta / uerr_H1_semi:.3f}"
+            )  # FIXME what do I expect?
         if args.ocsv:
             print(
                 f"{i:d},{ne:d},{hmin:.2f},{uerr_H1_rel:.3e},{Herr_inf:.3f},{drmax:.3f}",
@@ -322,13 +285,10 @@ if args.opvdsub:  # note boxind gets written into -opvd file
     boxind = Function(DG0, name="box indicator").interpolate(ibx * iby)
 
 if args.opvd:
-    CU = ((n + 2) / (n + 1)) * Gamma
-    Us_ufl = CU * H ** p * inner(grad(s), grad(s)) ** ((p - 2) / 2) * grad(s)
     Us = Function(VectorFunctionSpace(mesh, "CG", degree=2))
-    Us.project(secpera * Us_ufl)  # smoother than .interpolate()
+    Us.project(secpera * surfacevelocity(s, H))  # smoother than .interpolate()
     Us.rename("Us = surface velocity (m/a)")
-    q = Function(FunctionSpace(mesh, "BDM", 1))
-    q.interpolate(Us * H)
+    q = Function(FunctionSpace(mesh, "BDM", 1)).interpolate(Us * H)
     q.rename("q = UH (ice flux)")
     Gb = Function(VectorFunctionSpace(mesh, "DG", degree=0))
     Gb.interpolate(grad(b))
