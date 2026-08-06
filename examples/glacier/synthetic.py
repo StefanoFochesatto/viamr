@@ -87,24 +87,38 @@ def bumps_ufl(x, problem="cap"):
     return B0 * b
 
 
+def _Hexactdome(V, returnu=False):
+    """Put the exact dome solution H=s, or u = H^(1/omega), into a Function(V)."""
+    x = fd.SpatialCoordinate(V.mesh())
+    if returnu:
+        p = n + 1  # typical:  p = 4
+        omega = (p - 1) / (2 * p)  #  omega = 3/8
+        uexact = fd.Function(V).interpolate(dome_exact_ufl(x) ** (1.0 / omega))
+        uexact.rename("u_exact")
+        return uexact
+    else:
+        Hexact = fd.Function(V, name="H_exact").interpolate(dome_exact_ufl(x))
+        return Hexact
+
+
 def normerrorsdome(uh, Hh):
-    """Return relative H^1 norm error in u and L^infty norm error in H.
-    For the first, generate uexact in better space (and UFL from
-    dome_exact()).  For L^infty error in H we merely want the max nodal
-    error, so using V=CG1 is fine."""
+    """Returns:
+      * H^1 seminorm error in u
+      * relative H^1 norm error in u,
+      * L^infty norm error in H,
+      * uexact itself (in CG2).
+    For L^infty error in H we want the max nodal error, so V=CG1 is fine."""
     V = uh.function_space()
     x = fd.SpatialCoordinate(V.mesh())
-    Hdiff = fd.Function(V).interpolate(Hh - dome_exact(x))
-    Hdiff.rename("Hdiff = H - Hexact")
+    Hdiff = fd.Function(V).interpolate(Hh - dome_exact_ufl(x))
     with Hdiff.dat.vec_ro as v:
-        Herr = abs(v).max()[1]
+        HerrLinf = abs(v).max()[1]
     CG2 = fd.FunctionSpace(V.mesh(), "CG", 2)
-    p = n + 1  # typical:  p = 4
-    omega = (p - 1) / (2 * p)  #  omega = 3/8
-    uexact = fd.Function(CG2).interpolate(dome_exact(x) ** (1.0 / omega))
-    uexact.rename("u_exact")
-    uerr = fd.errornorm(uexact, uh, norm_type="H1") / fd.norm(uexact, norm_type="H1")
-    return uerr, Herr, uexact
+    uexact = _Hexactdome(CG2, returnu=True)
+    dus = fd.inner(fd.grad(uexact - uh), fd.grad(uexact - uh))
+    uerrH1semi = fd.assemble(dus * fd.dx(degree=6)) ** 0.5
+    uerrH1rel = fd.errornorm(uexact, uh, norm_type="H1") / fd.norm(uexact, norm_type="H1")
+    return uerrH1semi, uerrH1rel, HerrLinf, uexact
 
 
 def radiuserrordome(mesh, vfb):
