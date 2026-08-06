@@ -1,7 +1,7 @@
 import numpy as np
 import firedrake as fd
 
-class DataNetCDF():   # FIXME should it subclass something?
+class DataNetCDF():
 
     def __init__(self, filename, vname, xname='x1', yname='y1'):
         '''constructor opens NetCDF4 file (filename) and reads variable (varname)
