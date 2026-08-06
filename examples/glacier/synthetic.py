@@ -1,6 +1,5 @@
-# Formulas for synthetic glacier examples.  The "dome" case with
-# exact solution is here.  Also the bumpy bed formula used by
-# steady.py with -prob cap|range
+# Formulas for synthetic glacier examples.  The "dome" case exact solution
+# is here, and the bumpy bed formula used by steady.py with -prob cap|range.
 
 import numpy as np
 from pyop2.mpi import MPI
@@ -23,7 +22,7 @@ domeH0 = 3600.0
 
 
 # exact solution to prob=='dome'
-def dome_exact(x, n=3.0):
+def dome_exact_ufl(x, n=3.0):
     # https://github.com/bueler/sia-fve/blob/master/petsc/base/exactsia.c#L83
     r = fd.sqrt(fd.dot(x - fd.as_vector([xc, xc]), x - fd.as_vector([xc, xc])))
     mm = 1 + 1 / n
@@ -37,7 +36,7 @@ def dome_exact(x, n=3.0):
 
 
 # accumulation; uses dome parameters
-def accumulation(x, n=3.0, problem="cap"):
+def accumulation_ufl(x, n=3.0, problem="cap"):
     # https://github.com/bueler/sia-fve/blob/master/petsc/base/exactsia.c#L51
     R = fd.sqrt(fd.dot(x - fd.as_vector([xc, xc]), x - fd.as_vector([xc, xc])))
     r = fd.conditional(fd.lt(R, 0.01), 0.01, R)
@@ -66,7 +65,7 @@ def accumulation(x, n=3.0, problem="cap"):
         return a0
 
 
-def bumps(x, problem="cap"):
+def bumps_ufl(x, problem="cap"):
     if problem == "range":
         B0 = 400.0  # (m); amplitude of bumps
     else:

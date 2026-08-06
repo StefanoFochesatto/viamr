@@ -1,7 +1,7 @@
 # Solves a 2D steady, isothermal shallow ice approximation glacier obstacle problem.
 #
 # A basic run to illustrate capabilities:
-#   python3 steady.py -refine 5
+#   python3 steady.py -refine 4
 # Then use paraview 3D visualization, with warp by scalar on the surface elevation,
 # on the output file result.pvd.
 #
@@ -36,9 +36,9 @@ from synthetic import (
     n,
     Gamma,
     L,
-    dome_exact,
-    accumulation,
-    bumps,
+    dome_exact_ufl,
+    accumulation_ufl,
+    bumps_ufl,
     domeL,
     domeH0,
     normerrorsdome,
@@ -200,7 +200,7 @@ for i in range(args.refine + 1):
     glaciermeshreport(amr, mesh)
 
     # space for most functions
-    V = FunctionSpace(mesh, "CG", 1)
+    V, DG0 = amr.spaces(mesh)  # V = CG1
     x = SpatialCoordinate(mesh)
 
     # bedrock on current mesh
@@ -210,7 +210,7 @@ for i in range(args.refine + 1):
         if args.prob == "dome":
             b = Function(V).interpolate(Constant(0.0))
         else:
-            b = Function(V).interpolate(bumps(x, problem=args.prob))
+            b = Function(V).interpolate(bumps_ufl(x, problem=args.prob))
     b.rename("b = bedrock topography")
 
     # surface mass balance function on current mesh; depends on b in one case
@@ -226,7 +226,7 @@ for i in range(args.refine + 1):
         # initialize from s = b assumption
         a = Function(V).interpolate(amodel(b, sELA=args.sELA))
     else:
-        a = Function(V).interpolate(accumulation(x, problem=args.prob))
+        a = Function(V).interpolate(accumulation_ufl(x, problem=args.prob))
     a.rename("a = accumulation")
 
     # initialize transformed thickness variable; depends on b and a
