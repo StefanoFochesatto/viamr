@@ -104,13 +104,6 @@ parser.add_argument(
     help="choose problem from {cap, range, dome}",
 )
 parser.add_argument(
-    "-qdegree",
-    type=int,
-    default=5,
-    metavar="Q",
-    help="quadrature degree in non-linear part of weak form [default=5]",
-)
-parser.add_argument(
     "-refine",
     type=int,
     default=2,
