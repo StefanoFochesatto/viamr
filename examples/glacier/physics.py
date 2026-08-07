@@ -1,6 +1,7 @@
 # Physical formulas for glaciers, and associated constants.
 
 import firedrake as fd
+from pyop2.mpi import MPI
 
 debug = False  # debugging solver failures
 
@@ -28,6 +29,15 @@ def scalarrange(w):
     gmin = w.function_space().mesh().comm.allreduce(locmin, op=MPI.MIN)
     gmax = w.function_space().mesh().comm.allreduce(locmax, op=MPI.MAX)
     return gmin, gmax
+
+
+def admissible(w, psi):
+    """Admissibility predicate for w>=psi.  Correct in parallel.
+    Check nonnegativity by admissible(w, Constant(0.0))."""
+    delta = fd.Function(w.function_space()).interpolate(w - psi)
+    locmin = delta.dat.data.min()
+    gmin = delta.function_space().mesh().comm.allreduce(locmin, op=MPI.MIN)
+    return gmin >= 0.0
 
 
 def u2H(u):
