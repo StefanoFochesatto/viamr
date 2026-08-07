@@ -226,7 +226,7 @@ class VIAMR(OptionsManager):
             conditional(
                 nodalactive >= 0.0 + bordertol,
                 conditional(nodalactive <= 1.0 - bordertol, 1.0, 0.0),
-                0.0
+                0.0,
             )
         )
         return z
@@ -384,7 +384,9 @@ class VIAMR(OptionsManager):
                 # parallel communication *here*:
                 border.dat.data_wo_with_halos[dm2fd[k]] = 1
 
-        return Function(DG0, name="mark (udomark)").interpolate(border, allow_missing_dofs=True)
+        return Function(DG0, name="mark (udomark)").interpolate(
+            border, allow_missing_dofs=True
+        )
 
     def vcdmark(
         self,
@@ -487,7 +489,9 @@ class VIAMR(OptionsManager):
             total_error_est = sqrt(eta_.dot(eta_))  # l^2 norm of eta as Vec
 
         DG0 = eta.function_space()
-        mark = Function(DG0, name="mark (_fixedrate)").interpolate(conditional(gt(eta, ethresh), 1.0, 0.0))
+        mark = Function(DG0, name="mark (_fixedrate)").interpolate(
+            conditional(gt(eta, ethresh), 1.0, 0.0)
+        )
         return mark, ethresh, total_error_est
 
     def gradrecinactivemark(self, uh, lb, theta=0.5, method="max"):
@@ -530,7 +534,7 @@ class VIAMR(OptionsManager):
         VIAMR._fixedrate() to mark using eta and a threshold theta.
         Returns the marking mark, estimator eta, and a scalar estimate for
         the total error in energy norm.
-        
+
         For the basic unweighted method see
           I. Babuvska & W. C. Rheinboldt (1978). Error estimates for adaptive
           finite element computations, SIAM Journal on Numerical Analysis 15 (4),
@@ -575,14 +579,18 @@ class VIAMR(OptionsManager):
         G = inner(eta_sq / v, w) * dx
         if kappa is None:
             # original Babuska & Rheinboldt (1978) estimator; same as BV00 if kappa=1
-            G -= inner(h ** 2 * res ** 2, w) * dx \
-                 + inner(h("+") / 2 * jump(grad(uh), n) ** 2, w("+")) * dS \
-                 + inner(h("-") / 2 * jump(grad(uh), n) ** 2, w("-")) * dS
+            G -= (
+                inner(h ** 2 * res ** 2, w) * dx
+                + inner(h("+") / 2 * jump(grad(uh), n) ** 2, w("+")) * dS
+                + inner(h("-") / 2 * jump(grad(uh), n) ** 2, w("-")) * dS
+            )
         else:
             # Bernardi & Verfurth (2000) weighted estimator
-            G -= inner(h ** 2 / kappa * res ** 2, w) * dx \
-                 + inner(h("+") / 2 * kappa("+") * jump(grad(uh), n) ** 2, w("+")) * dS \
-                 + inner(h("-") / 2 * kappa("-") * jump(grad(uh), n) ** 2, w("-")) * dS
+            G -= (
+                inner(h ** 2 / kappa * res ** 2, w) * dx
+                + inner(h("+") / 2 * kappa("+") * jump(grad(uh), n) ** 2, w("+")) * dS
+                + inner(h("-") / 2 * kappa("-") * jump(grad(uh), n) ** 2, w("-")) * dS
+            )
 
         # each cell needs an independent 1x1 solve, so Jacobi is an exact preconditioner
         sp = {"mat_type": "matfree", "ksp_type": "richardson", "pc_type": "jacobi"}
@@ -595,7 +603,18 @@ class VIAMR(OptionsManager):
         return (mark, ieta, total_error_est)
 
     def nsvmark(
-        self, uh, lb, g, f_ufl, g_ufl, method="max", theta=0.5, dualtol=1.0e-10, C0=0.1, Cfb=1.0, fdegree=3
+        self,
+        uh,
+        lb,
+        g,
+        f_ufl,
+        g_ufl,
+        method="max",
+        theta=0.5,
+        dualtol=1.0e-10,
+        C0=0.1,
+        Cfb=1.0,
+        fdegree=3,
     ):
         """Compute marking on entire domain according to the local 'practical estimator' from NSV03:
             Nochetto, R. H., Siebert, K. G., & Veeser, A. (2003). Pointwise a posteriori error control for elliptic obstacle problems. Numerische Mathematik, 95(1), 163-195.
@@ -651,7 +670,9 @@ class VIAMR(OptionsManager):
         #    [[z]] is the jump in z along an edge
         v0 = TestFunction(DG0)
         # jumpu is in DG0
-        with PETSc.Log.Event("nsvmark()_calls_assemble3"):  # FIXME riesz_rep..() expensive because solve()
+        with PETSc.Log.Event(
+            "nsvmark()_calls_assemble3"
+        ):  # FIXME riesz_rep..() expensive because solve()
             jumpu = assemble(jump(grad(uh), n) * v0("-") * dS).riesz_representation()
         tactive = self.thinelemactive(uh, lb)
         X_ufl = abs(f_ufl + tactive * sigmah)
@@ -680,14 +701,16 @@ class VIAMR(OptionsManager):
         adg = self._elemmaxabs(Function(CG4).interpolate(g_ufl - g))
         # bdryerr is a DG0 function, but only nonzero along boundary
         # note restriction is implicit when using ds (versus dS)
-        with PETSc.Log.Event("nsvmark()_calls_assemble4"):  # FIXME riesz_rep..() expensive because solve()
+        with PETSc.Log.Event(
+            "nsvmark()_calls_assemble4"
+        ):  # FIXME riesz_rep..() expensive because solve()
             bdryerr = assemble(adg * v0 * ds).riesz_representation()
         etainf_ufl = C0 * hT ** 2 * Rinf + Cfb * blockgap + bdryerr
         etainf = Function(DG0, name="eta_inf").interpolate(etainf_ufl)
 
         # DIAGNOSTIC. note DG3.dim()=10*DG0.dim() exactly, while DG7 is
         # about 40 times, and CG4.dim() ~ 9*DG0.dim()
-        #PETSc.Sys.Print(f"VIAMR INFO for nsvmark():  DG0.dim()={DG0.dim()}, DG{fdegree}.dim()={DGf.dim()}, CG4.dim()={CG4.dim()}")
+        # PETSc.Sys.Print(f"VIAMR INFO for nsvmark():  DG0.dim()={DG0.dim()}, DG{fdegree}.dim()={DGf.dim()}, CG4.dim()={CG4.dim()}")
 
         # compute mark in whole domain
         mark, _, total_error_est = self._fixedrate(etainf, theta, method)
