@@ -97,6 +97,14 @@ parser.add_argument(
     help="number of Picard frozen-tilt (and a(s) if -elevdepend) iterations [default=10]",
 )
 parser.add_argument(
+    "-primal",
+    type=str,
+    default="u",
+    metavar="X",
+    choices=["u", "s"],
+    help="choose primal variable {u (transformed thickness), s (surface elevation)} [default=u]",
+)
+parser.add_argument(
     "-prob",
     type=str,
     default="cap",

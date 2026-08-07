@@ -31,6 +31,8 @@ Equation (1) is actually the interior condition in a variational inequality (VI)
 
 ### power transformation
 
+FIXME document both $u$ and $s$ primal solvers
+
 The following transformation, introduced in [R70], and discussed and extended to non-flat beds in [JB12], converts the SIA equation (1) to a modified $p$-Laplacian equation.
 
 For this transformation we define constant powers:

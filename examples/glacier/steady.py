@@ -19,6 +19,7 @@ assert args.udo_n >= 0, "cannot use UDO with negative levels"
 assert (
     not args.elevdepend or args.prob != "dome"
 ), "combination invalid: -elevdepend & -prob dome"
+assert args.primal == "u" or args.newton, "only Newton iteration for primal=s" # FIXME
 
 import numpy as np
 import petsc4py
@@ -41,6 +42,7 @@ from physics import (
     Phi_u,
     weakform_u,
     residual_u_ufl,
+    weakform_s,
     surfacevelocity,
     debug,
 )
@@ -131,7 +133,8 @@ def vinewtonsolve(G, w, bcs=None, lower=None, upper=None):
 
 
 # outer mesh refinement loop
-amr = VIAMR(debug=True)
+#amr = VIAMR(debug=True)  # FIXME put back
+amr = VIAMR()
 for i in range(args.refine + 1):
     # describe current mesh
     nv, ne, hmin, hmax = amr.meshsizes(mesh)
@@ -168,36 +171,56 @@ for i in range(args.refine + 1):
         a = Function(V).interpolate(dome_a_ufl(x, problem=args.prob))
     a.rename("a = accumulation")
 
-    # initialize transformed thickness variable; depends on b and a
+    # initialize geometry variable u or s; depends on b and a
     if i == 0:
         # build pile of ice from accumulation
         pileage = 400.0  # years
         Hinit = pileage * secpera * conditional(a > 0.0, a, 0.0)
-        uold = Function(V).interpolate(H2u(Hinit))
+    if args.primal == "u":
+        if i == 0:
+            uold = Function(V).interpolate(H2u(Hinit))
+        else:  # cross-mesh interpolation of previous solution
+            uold = Function(V).interpolate(u)
+            # remove sign (admissibility) flaws from cross-mesh interpolation
+            #   note: u = H^(8/3) < 1 represents *very* little ice
+            uold = Function(V).interpolate(conditional(uold < 1.0, 0.0, uold))
+        assert admissible(uold, Constant(0.0)), "uold must be non-negative"
+        assert assemble(u2H(uold) * dx) > 0, "uold must correspond to positive ice volume"
     else:
-        # cross-mesh interpolation of previous solution
-        uold = Function(V).interpolate(u)
-        # remove sign flaws from cross-mesh interpolation
-        #   note: u = H^(8/3) < 1 is *very* little ice in an initial iterate
-        uold = Function(V).interpolate(conditional(uold < 1.0, 0.0, uold))
-    assert (
-        assemble(uold * dx) > 0
-    ), "initialization failure; u must correspond to positive ice"
+        if i == 0:
+            sold = Function(V).interpolate(Hinit + b)
+        else:  # cross-mesh interpolation of previous solution
+            sold = Function(V).interpolate(s)
+            # remove admissibility flaws from cross-mesh interpolation
+            sold = Function(V).interpolate(conditional(sold < b, b, sold))
+        assert assemble((sold - b) * dx) > 0, "sold must correspond to positive ice volume"
 
     # set-up for solve on current mesh
-    u = Function(V, name="u = transformed thickness").interpolate(uold)
-    lb = Function(V).interpolate(Constant(0.0))  # lower bound *in solver*
+    if args.primal == "u":
+        u = Function(V, name="u = transformed thickness").interpolate(uold)
+        lb = Function(V).interpolate(Constant(0.0))
+        bcs = [
+            DirichletBC(V, Constant(0.0), "on_boundary"),
+        ]
+    else:
+        s = Function(V, name="s = surface elevation").interpolate(sold)
+        lb = b
+        bcs = [
+            DirichletBC(V, b, "on_boundary"),
+        ]
     ub = Function(V).interpolate(Constant(PETSc.INFINITY))
-    bcs = [
-        DirichletBC(V, Constant(0.0), "on_boundary"),
-    ]
 
-    # solve, or solve loop
+    # solve, or Picard solve loop
     if args.newton:
-        F = weakform_u(u, a, b)
-        vinewtonsolve(F, u, bcs=bcs, lower=lb, upper=ub)
+        if args.primal == "u":
+            F = weakform_u(u, a, b)
+            vinewtonsolve(F, u, bcs=bcs, lower=lb, upper=ub)
+        else:
+            F = weakform_s(s, a, b)
+            vinewtonsolve(F, s, bcs=bcs, lower=lb, upper=ub)
     else:
         # outer loop for Picard (freeze-tilt) iteration, with a=a(s) if -elevdepend
+        assert args.primal == "u"  # FIXME
         for k in range(args.pcount):
             if args.elevdepend:
                 sold = b + u2H(uold)
@@ -209,8 +232,13 @@ for i in range(args.refine + 1):
             uold = Function(V).interpolate(u)
 
     # update geometry variables
-    H = Function(V, name="H = thickness").interpolate(u2H(u))
-    s = Function(V, name="s = surface elevation").interpolate(b + H)
+    if args.primal == "u":
+        H = Function(V, name="H = thickness").interpolate(u2H(u))
+        s = Function(V, name="s = surface elevation").interpolate(b + H)
+    else:
+        H = Function(V, name="H = thickness").interpolate(s - b)
+        H = H.interpolate(conditional(H > 1.0, H, 0.0))  # force exact zero outside ice
+        u = Function(V, name="u (transformed thickness)").interpolate(H2u(H))
 
     # report glaciated area and Jaccard inactive set agreement
     vol = assemble(H * dx)
@@ -247,7 +275,7 @@ for i in range(args.refine + 1):
         pfb = 100.0 * amr.countmark(fbmark) / ne
         pin = 100.0 * amr.countmark(imark) / amr.countmark(ei)
         pprint(
-            f"  elements marked by UDO+BR weighted: {pfb:.2f}% free-bdry, {pin:.2f}% inactive"
+            f"  elements marked by UDO+BR weighted: {pfb:.2f}% free-bdry, {pin:.2f}% of inactive"
         )
 
     # report numerical errors if exact solution known
@@ -299,7 +327,11 @@ if args.opvd:
     Gs = Function(VectorFunctionSpace(mesh, "DG", degree=0))
     Gs.interpolate(grad(s))
     Gs.rename("Gs = grad(s)")
-    fields = [u, H, s, Us, q, a, b, Gb, Gs]
+    # FIXME write extra stuff for debugging
+    res = Function(V, name="res").interpolate(res)
+    Z = Function(V, name="Z").interpolate(Z)
+    fields = [H, s, u, Us, q, a, b, Gb, Gs, mark, fbmark, imark, res, Z]
+    #fields = [H, s, u, Us, q, a, b, Gb, Gs, mark]
     if not args.bdata and args.prob == "dome":
         uerr = Function(uexact.function_space()).interpolate(u - uexact)
         uerr.rename("uerr = u-u_exact")
