@@ -593,9 +593,9 @@ class VIAMR(OptionsManager):
         if alpha is None:
             # original Babuska & Rheinboldt (1978) estimator; same as BV00 if alpha=1
             G -= (
-                inner(h ** 2 * res ** 2, w) * dx
-                + 0.5 * inner(h("+") * jump(grad(uh), n) ** 2, w("+")) * dS
-                + 0.5 * inner(h("-") * jump(grad(uh), n) ** 2, w("-")) * dS
+                inner(h ** 2 * res ** 2, w) * dx(degree=3)
+                + 0.5 * inner(h("+") * jump(grad(uh), n) ** 2, w("+")) * dS(degree=3)
+                + 0.5 * inner(h("-") * jump(grad(uh), n) ** 2, w("-")) * dS(degree=3)
             )
         else:
             # Bernardi & Verfurth (2000) weighted estimator
@@ -606,9 +606,9 @@ class VIAMR(OptionsManager):
             mue_m = h("-") / alfe
             # following is equation (2.8)
             G -= (
-                inner(muK ** 2 * res ** 2, w) * dx
-                + 0.5 * inner(mue_p * jump(alpha * grad(uh), n) ** 2, w("+")) * dS
-                + 0.5 * inner(mue_m * jump(alpha * grad(uh), n) ** 2, w("-")) * dS
+                inner(muK ** 2 * res ** 2, w) * dx(degree=3)
+                + 0.5 * inner(mue_p * jump(alpha * grad(uh), n) ** 2, w("+")) * dS(degree=3)
+                + 0.5 * inner(mue_m * jump(alpha * grad(uh), n) ** 2, w("-")) * dS(degree=3)
             )
 
         # each cell needs an independent 1x1 solve, so Jacobi is an exact preconditioner
