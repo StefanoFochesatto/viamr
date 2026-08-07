@@ -42,6 +42,7 @@ from physics import (
     weakform_u,
     residual_u_ufl,
     weakform_s,
+    residual_s_ufl,
     surfacevelocity,
     debug,
 )
@@ -132,7 +133,7 @@ def vinewtonsolve(G, w, bcs=None, lower=None, upper=None):
 
 
 # outer mesh refinement loop
-amr = VIAMR(debug=True)
+amr = VIAMR(debug=True, activetol=1.0)
 for i in range(args.refine + 1):
     # describe current mesh
     nv, ne, hmin, hmax = amr.meshsizes(mesh)
@@ -262,10 +263,17 @@ for i in range(args.refine + 1):
         fbmark = amr.udomark(H, Constant(0.0), n=args.udo_n)
         # FIXME OLD METHOD: imark, _, total_eta = amr.gradrecinactivemark(u, Constant(0.0), theta=args.theta, method="max")
         # FIXME: "total" seems better than "max" in amr.brinactivemark()
-        res, Z = residual_u_ufl(u, a, b)
-        imark, _, total_eta = amr.brinactivemark(
-            u, Constant(0.0), res, theta=args.theta, method="total", kappa=Z
-        )
+        if args.primal == "u":
+            res, Z = residual_u_ufl(u, a, b)
+            imark, _, total_eta = amr.brinactivemark(
+                u, Constant(0.0), res, theta=args.theta, method="total", alpha=Z
+            )
+        else:
+            res, Z = residual_s_ufl(s, a, b)
+            # use u > 0 when calling brinactivemark(), even though eta calculated with s
+            imark, _, total_eta = amr.brinactivemark(
+                u, Constant(0.0), res, theta=args.theta, method="total", alpha=Z
+            )
         if args.hmin > 0.0:
             fbmark = amr.lowerboundcelldiameter(fbmark, args.hmin)
             imark = amr.lowerboundcelldiameter(imark, args.hmin)
@@ -327,9 +335,9 @@ if args.opvd:
     Gs.interpolate(grad(s))
     Gs.rename("Gs = grad(s)")
     # FIXME write extra stuff for debugging
-    res = Function(V, name="res").interpolate(res)
+    res2 = Function(V, name="res ** 2").interpolate(res ** 2)
     Z = Function(V, name="Z").interpolate(Z)
-    fields = [H, s, u, Us, q, a, b, Gb, Gs, mark, fbmark, imark, res, Z]
+    fields = [H, s, u, Us, q, a, b, Gb, Gs, mark, fbmark, imark, res2, Z]
     #fields = [H, s, u, Us, q, a, b, Gb, Gs, mark]
     if not args.bdata and args.prob == "dome":
         uerr = Function(uexact.function_space()).interpolate(u - uexact)
