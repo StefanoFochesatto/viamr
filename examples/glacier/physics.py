@@ -76,7 +76,7 @@ def residual_u_ufl(u, a, b, epsreg = 0.01):
     Dp = (fd.inner(du_tilt, du_tilt) + epsreg) ** ((p - 2) / 2)
     C = Gamma * _omega ** (p - 1)
     Z = C * Dp
-    res = -fd.div(Z * du_tilt) - a  # formally a Poisson equation here
+    res = - fd.div(Z * du_tilt) - a  # formally a Poisson equation here
     return res, Z
 
 
@@ -92,14 +92,14 @@ def weakform_s(s, a, b, qdegree=5, epsplap=1.0e-4, epsH=20.0):
     return Z * fd.inner(gs, fd.grad(v)) * fd.dx(degree=qdegree) - a * v * fd.dx
 
 
-def NOTUSED_residual_s_ufl(s, a, b, epsplap=1.0e-4, epsH=20.0):
+def residual_s_ufl(s, a, b, epsplap=1.0e-4, epsH=20.0):
     """Return a UFL expression for the strong form residual of the
     s (surface elevation) form of the shallow ice approximation.
     Also return the coefficient Z."""
     gs = fd.grad(s)
     dsp = (fd.inner(gs, gs) + epsplap ** 2) ** ((p - 2) / 2)
     Z = Gamma * (s - b + epsH) ** (p + 1) * dsp
-    res = fd.conditional(s > b + epsH, - fd.div(Z * gs) - a, fd.Constant(0.0))  # formally a Poisson equation here
+    res = - fd.div(Z * gs) - a  # formally a Poisson equation here
     return res, Z
 
 
