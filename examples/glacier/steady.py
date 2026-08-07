@@ -19,7 +19,6 @@ assert args.udo_n >= 0, "cannot use UDO with negative levels"
 assert (
     not args.elevdepend or args.prob != "dome"
 ), "combination invalid: -elevdepend & -prob dome"
-assert args.primal == "u" or args.newton, "only Newton iteration for primal=s" # FIXME
 
 import numpy as np
 import petsc4py
@@ -219,17 +218,27 @@ for i in range(args.refine + 1):
             F = weakform_s(s, a, b)
             vinewtonsolve(F, s, bcs=bcs, lower=lb, upper=ub)
     else:
-        # outer loop for Picard (freeze-tilt) iteration, with a=a(s) if -elevdepend
-        assert args.primal == "u"  # FIXME
-        for k in range(args.pcount):
-            if args.elevdepend:
-                sold = b + u2H(uold)
-                a = Function(V).interpolate(model_a_ufl(sold, sELA=args.sELA))
-                a.rename("a = accumulation")
-            Ztilt = Phi_u(uold, b)
-            F = weakform_u(u, a, b, Z=Ztilt)
-            vinewtonsolve(F, u, bcs=bcs, lower=lb, upper=ub)
-            uold = Function(V).interpolate(u)
+        # outer loop for Picard iteration
+        if args.primal == "u":
+            # both freeze-tilt iteration, and a=a(s) iteration if -elevdepend
+            for k in range(args.pcount):
+                if args.elevdepend:
+                    sold = b + u2H(uold)
+                    a = Function(V).interpolate(model_a_ufl(sold, sELA=args.sELA))
+                    a.rename("a = accumulation")
+                Ztilt = Phi_u(uold, b)
+                F = weakform_u(u, a, b, Z=Ztilt)
+                vinewtonsolve(F, u, bcs=bcs, lower=lb, upper=ub)
+                uold = Function(V).interpolate(u)
+        else:
+            # only a=a(s) iteration if -elevdepend
+            for k in range(args.pcount):
+                if args.elevdepend:
+                    a = Function(V).interpolate(model_a_ufl(sold, sELA=args.sELA))
+                    a.rename("a = accumulation")
+                F = weakform_s(s, a, b)
+                vinewtonsolve(F, s, bcs=bcs, lower=lb, upper=ub)
+                sold = Function(V).interpolate(s)
 
     # update geometry variables
     if args.primal == "u":
