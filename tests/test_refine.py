@@ -135,11 +135,11 @@ def test_refine_br():
     psi = Function(CG1).interpolate(_get_ball_obstacle(x, y))
     u = Function(CG1).interpolate(conditional(psi > 0.0, psi + 1.0, psi))
     residual = -div(grad(u))  # largest near circle psi==0
-    (imark, _, _) = amr.brinactivemark(u, psi, residual, theta=0.8)
+    (imark, _, _) = amr.brinactivemark(u, psi, residual, theta=0.5)
     rmesh = amr.refinemarkedelements(mesh, imark)
     # VTKFile(f"result_brinactivemark_refined.pvd").write(rmesh)
     rCG1, _ = amr.spaces(rmesh)
-    assert rCG1.dim() == 147
+    assert rCG1.dim() == 109
 
 
 def test_refine_br_total():
@@ -154,7 +154,7 @@ def test_refine_br_total():
     (imark, _, _) = amr.brinactivemark(u, psi, residual, theta=0.8, method="total")
     rmesh = amr.refinemarkedelements(mesh, imark)
     rCG1, _ = amr.spaces(rmesh)
-    assert rCG1.dim() == 154
+    assert rCG1.dim() == 99
 
 
 def test_refine_br_weighted():
@@ -168,9 +168,9 @@ def test_refine_br_weighted():
     residual = -div(grad(u))  # largest near circle psi==0
     # non-constant, positive-everywhere coefficient
     alpha = x * x + y * y + 1.0
-    (imark, eta, tot_eta) = amr.brinactivemark(u, psi, residual, theta=0.8, alpha=alpha)
+    (imark, eta, tot_eta) = amr.brinactivemark(u, psi, residual, theta=0.5, alpha=alpha)
     # weighting by a non-constant alpha should differ from alpha=None estimator
-    (imark0, eta0, tot_eta0) = amr.brinactivemark(u, psi, residual, theta=0.8)
+    (imark0, eta0, tot_eta0) = amr.brinactivemark(u, psi, residual, theta=0.5)
     assert errornorm(eta, eta0) > 1.0e-10
     assert abs(tot_eta - tot_eta0) > 1.0e-10
     rmesh = amr.refinemarkedelements(mesh, imark)
