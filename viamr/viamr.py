@@ -80,18 +80,24 @@ class VIAMR(OptionsManager):
             assert k >= 1
         return FunctionSpace(mesh, "CG", k), FunctionSpace(mesh, "DG", k - 1)
 
+    def scalarrange(self, w):
+        """Utility function to return the range of a generic scalar field.  Correct in parallel."""
+        mesh = w.function_space().mesh()
+        locmin, locmax = PETSc.INFINITY, PETSc.NINFINITY
+        if len(mesh.cell_sizes.dat.data_ro) > 0:
+            locmin = w.dat.data.min()
+            locmax = w.dat.data.max()
+        gmin = mesh.comm.allreduce(locmin, op=MPI.MIN)
+        gmax = mesh.comm.allreduce(locmax, op=MPI.MAX)
+        return gmin, gmax
+
     def meshsizes(self, mesh):
         """Compute number of vertices, number of elements, and range of
         mesh diameters."""
         CG1, DG0 = self.spaces(mesh, k=1)
         nvertices = CG1.dim()
         nelements = DG0.dim()
-        mymin, mymax = PETSc.INFINITY, PETSc.NINFINITY
-        if len(mesh.cell_sizes.dat.data_ro) > 0:
-            mymin = min(mesh.cell_sizes.dat.data_ro)
-            mymax = max(mesh.cell_sizes.dat.data_ro)
-        hmin = float(mesh.comm.allreduce(mymin, op=MPI.MIN))
-        hmax = float(mesh.comm.allreduce(mymax, op=MPI.MAX))
+        hmin, hmax = self.scalarrange(mesh.cell_sizes)
         return nvertices, nelements, hmin, hmax
 
     def meshreport(self, mesh, indent=2):
@@ -102,14 +108,6 @@ class VIAMR(OptionsManager):
             f"{indentstr}current mesh: {nv} vertices, {ne} elements, h in [{hmin:.5f},{hmax:.5f}]"
         )
         return None
-
-    def scalarrange(self, w):
-        """Utility function to return the range of a generic scalar field.  Correct in parallel."""
-        locmin = w.dat.data.min()
-        locmax = w.dat.data.max()
-        gmin = w.function_space().mesh().comm.allreduce(locmin, op=MPI.MIN)
-        gmax = w.function_space().mesh().comm.allreduce(locmax, op=MPI.MAX)
-        return gmin, gmax
 
     def checkadmissible(self, uh, bound, strict=False, upper=False):
         """Utility function to check admissibility or strict admissibility of uh.  Returns True if uh >= bound (upper=False) or uh <= bound (upper=True)."""
