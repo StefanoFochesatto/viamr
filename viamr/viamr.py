@@ -103,13 +103,28 @@ class VIAMR(OptionsManager):
         )
         return None
 
-    def checkadmissible(self, uh, bound, upper=False):
-        """Check strict admissibility of uh, namely if uh >= bound (upper=False) or uh <= bound (upper=True)."""
-        if upper:
-            bad = assemble(conditional(uh > bound, 1.0, 0.0) * dx)
+    def scalarrange(self, w):
+        """Utility function to return the range of a generic scalar field.  Correct in parallel."""
+        locmin = w.dat.data.min()
+        locmax = w.dat.data.max()
+        gmin = w.function_space().mesh().comm.allreduce(locmin, op=MPI.MIN)
+        gmax = w.function_space().mesh().comm.allreduce(locmax, op=MPI.MAX)
+        return gmin, gmax
+
+    def checkadmissible(self, uh, bound, strict=False, upper=False):
+        """Utility function to check admissibility or strict admissibility of uh.  Returns True if uh >= bound (upper=False) or uh <= bound (upper=True)."""
+        if strict:
+            if upper:
+                bad = assemble(conditional(uh > bound, 1.0, 0.0) * dx)
+            else:
+                bad = assemble(conditional(uh < bound, 1.0, 0.0) * dx)
+            return bad == 0.0
         else:
-            bad = assemble(conditional(uh < bound, 1.0, 0.0) * dx)
-        return bad == 0.0
+            V = uh.function_space()
+            delta = Function(V).interpolate(bound - uh if upper else uh - bound)
+            locmin = delta.dat.data.min()
+            gmin = V.mesh().comm.allreduce(locmin, op=MPI.MIN)
+            return gmin >= 0.0
 
     def _nodalactive(self, uh, lb):
         """Compute nodal active set indicator in same function space as uh.  Only implemented for unilateral (lower bound) obstacle problems.  The nodal active set is

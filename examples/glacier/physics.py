@@ -22,24 +22,6 @@ _mu = (p + 1) / (2 * p)  #  \mu = 5/8
 _r = p / (p - 1)  #  r = 4/3
 
 
-def scalarrange(w):
-    """Utility function to return the range of a generic scalar field.  Correct in parallel."""
-    locmin = w.dat.data.min()
-    locmax = w.dat.data.max()
-    gmin = w.function_space().mesh().comm.allreduce(locmin, op=MPI.MIN)
-    gmax = w.function_space().mesh().comm.allreduce(locmax, op=MPI.MAX)
-    return gmin, gmax
-
-
-def admissible(w, psi):
-    """Admissibility predicate for w>=psi.  Correct in parallel.
-    Check nonnegativity by admissible(w, Constant(0.0))."""
-    delta = fd.Function(w.function_space()).interpolate(w - psi)
-    locmin = delta.dat.data.min()
-    gmin = delta.function_space().mesh().comm.allreduce(locmin, op=MPI.MIN)
-    return gmin >= 0.0
-
-
 def u2H(u):
     return u ** _omega
 
