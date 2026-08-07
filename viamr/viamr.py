@@ -521,16 +521,17 @@ class VIAMR(OptionsManager):
         mark, _, total_error_est = self._fixedrate(ieta, theta, method)
         return (mark, ieta, total_error_est)
 
-    def brinactivemark(self, uh, lb, res, theta=0.5, method="max", kappa=None):
+    def brinactivemark(self, uh, lb, res, theta=0.5, method="max", alpha=None):
         """Return marking within the computed inactive set by using the
-        a posteriori Babuška-Rheinboldt (1978) residual error indicator.
+        a posteriori Babuška-Rheinboldt (1978) residual error indicator,
+        or a weighted version of it.
 
-        The inputs are the current solution uh, the obstacle lb (to restrict
+        The primary inputs are the current solution uh, the obstacle lb (to restrict
         to the inactive set), and the residual res as a UFL expression.
 
         The output BR indicator eta is computed as a function in DG0.  We call
         VIAMR._fixedrate() to mark using eta and a threshold theta.
-        Returns the marking mark, estimator eta, and a scalar estimate for
+        Then we return the marking mark, estimator eta, and a scalar estimate for
         the total error in energy norm.
 
         For the basic unweighted method see
@@ -541,23 +542,27 @@ class VIAMR(OptionsManager):
           M. Ainsworth & J. T. Oden (2000).  A Posteriori Error Estimation in
           Finite Element Analysis, John Wiley & Sons, Inc., New York.
 
-        The optional input kappa is a scalar UFL expression for the local
-        diffusion coefficient kappa(uh) in a variable-coefficient operator
-          -div(kappa(uh) grad(uh)) = f,
-        e.g. kappa(uh) = uh^{gamma-1} for the porous medium equation.  When
-        given, eta is reweighted following the classical variable-coefficient
-        residual estimator by
+        The optional input alpha is a scalar UFL expression for the local
+        diffusion coefficient in a variable-coefficient operator
+          - div(alpha grad(uh)) = f.
+        In practice, alpha may depend on the solution, e.g.
+          alpha = uh^{gamma-1}
+        for the porous media equation.  When alpha is not None, eta is reweighted
+        following the classical variable-coefficient residual estimator by
           C. Bernardi & R. Verfürth (2000). Adaptive finite element methods
           for elliptic equations with non-smooth coefficients. Numerische
           Mathematik, 85(4), 579-608.
-        Here the volume residual term is divided by kappa and the facet jump term
-        is multiplied by kappa.  Thus eta approximates the error in the kappa-weighted
-        energy norm.  (Setting kappa to constant 1 recovers the original
-        BR estimator exactly.)  In the linear, uniformly-elliptic setting,
-        Bernardi & Verfurth (2000) justifies this weighting, but otherwise it is
-        a heuristic, frozen-coefficient generalization to nonlinear, possibly-
-        degenerate kappa(uh), not a proven reliable or efficient estimator.
-        WARNING when passing kappa: We divide by this coefficient everywhere,
+        We use equations (2.8), (2.12), and (2.13) from this reference.
+
+        The returned residual estimator eta is intended to approximate the error
+        in the appropriate energy norm.  This is the H1 seminorm in the unweighted
+        BR78 case, and setting alpha=1 recovers this case.  In the linear,
+        uniformly-elliptic setting, with positive bounds on alpha, BV00 justifies
+        the weighted formulation.  Otherwise, in general nonlinear cases, this
+        method is a heuristic, frozen-coefficient extension, not a proven
+        reliable or efficient estimator.
+
+        WARNING when passing alpha: We divide by this coefficient everywhere,
         so it should be positive everywhere.
 
         The diagonal solve implementation of this function came from slide 109 of
@@ -575,19 +580,25 @@ class VIAMR(OptionsManager):
         eta_sq = Function(DG0)
         w = TestFunction(DG0)
         G = inner(eta_sq / v, w) * dx
-        if kappa is None:
-            # original Babuska & Rheinboldt (1978) estimator; same as BV00 if kappa=1
+        if alpha is None:
+            # original Babuska & Rheinboldt (1978) estimator; same as BV00 if alpha=1
             G -= (
                 inner(h ** 2 * res ** 2, w) * dx
-                + inner(h("+") / 2 * jump(grad(uh), n) ** 2, w("+")) * dS
-                + inner(h("-") / 2 * jump(grad(uh), n) ** 2, w("-")) * dS
+                + 0.5 * inner(h("+") * jump(grad(uh), n) ** 2, w("+")) * dS
+                + 0.5 * inner(h("-") * jump(grad(uh), n) ** 2, w("-")) * dS
             )
         else:
             # Bernardi & Verfurth (2000) weighted estimator
+            muK = h / alpha ** 0.5  # equation (2.12)
+            # following is equation (2.13)
+            alfe = conditional(alpha("+") >= alpha("-"), alpha("+"), alpha("-"))
+            mue_p = h("+") / alfe
+            mue_m = h("-") / alfe
+            # following is equation (2.8)
             G -= (
-                inner(h ** 2 / kappa * res ** 2, w) * dx
-                + inner(h("+") / 2 * kappa("+") * jump(grad(uh), n) ** 2, w("+")) * dS
-                + inner(h("-") / 2 * kappa("-") * jump(grad(uh), n) ** 2, w("-")) * dS
+                inner(muK ** 2 * res ** 2, w) * dx
+                + 0.5 * inner(mue_p * jump(alpha * grad(uh), n) ** 2, w("+")) * dS
+                + 0.5 * inner(mue_m * jump(alpha * grad(uh), n) ** 2, w("-")) * dS
             )
 
         # each cell needs an independent 1x1 solve, so Jacobi is an exact preconditioner

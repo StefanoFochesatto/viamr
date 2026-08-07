@@ -30,7 +30,7 @@ m0 = 6  # initial mesh is m0 x m0
 levels = 7  # number of AMR levels; converges to 9, at least, for gamma=2
 gamma = 2.0  # solves porous-media as VI:  - div(u^{gamma-1} grad(u)) = f
 a, b = 1.2, 1.0  # parameters in building exact solution
-useweightedBR = True  # when computing eta from brinactivemark(), use weighting
+useweightedBR = True  # apply brinactivemark() using BV00 weighting
 
 # schedule of eps_i for mesh i; must have length >= levels + 1
 eps = [0.02, 0.01, 0.005, 0.002, 0.001, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005]
@@ -127,7 +127,7 @@ for i in range(levels + 1):
     res = -div(Zunreg * grad(uh)) - fsource
     if not useweightedBR:
         Zqn = None
-    imark, eta, tot_eta = amr.brinactivemark(uh, Constant(0.0), res, kappa=Zqn)
+    imark, eta, tot_eta = amr.brinactivemark(uh, Constant(0.0), res, alpha=Zqn)
     eff = tot_eta / (errqn if useweightedBR else errH1)
     fbmark = amr.udomark(uh, lb, n=1)
     mark = amr.unionmarks(fbmark, imark)
