@@ -102,7 +102,7 @@ parser.add_argument(
     default="cap",
     metavar="X",
     choices=["cap", "range", "dome"],
-    help="choose problem from {cap, range, dome}",
+    help="choose problem {cap, range, dome} [default=cap]",
 )
 parser.add_argument(
     "-refine",

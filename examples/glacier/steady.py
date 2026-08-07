@@ -35,6 +35,7 @@ from physics import (
     secpera,
     n,
     Gamma,
+    admissible,
     H2u,
     u2H,
     Phi_u,
@@ -95,14 +96,13 @@ sp = {
     "snes_rtol": 1.0e-6,
     "snes_atol": 1.0e-10,
     "snes_stol": 0.0,
-    # "snes_monitor": None,
-    # "snes_vi_monitor": None,
-    "snes_converged_reason": None,
-    # "snes_linesearch_type": "basic",
     "snes_linesearch_type": "bt",
     "snes_linesearch_order": "1",
     "snes_max_it": 1000,
     # "snes_max_funcs": 10000,
+    "snes_converged_reason": None,
+    # "snes_monitor": None,
+    # "snes_vi_monitor": None,
     "ksp_type": "preonly",
     "pc_type": "lu",
     "pc_factor_mat_solver_type": "mumps",
@@ -214,7 +214,7 @@ for i in range(args.refine + 1):
 
     # report glaciated area and Jaccard inactive set agreement
     vol = assemble(H * dx)
-    ei = amr.eleminactive(H, lb)
+    ei = amr.eleminactive(H, Constant(0.0))
     area = assemble(ei * dx)
     pprint(
         f"  ice area {area / 1000.0**4:.3f} million km^2;  ice vol = {vol / 1000.0**5:.3f} million km^3",
@@ -227,17 +227,17 @@ for i in range(args.refine + 1):
         pprint("")
     oldei = ei
 
-    # mark and refine based on constraint H >= 0
+    # mark and refine based on constraint H >= 0 (or u >= 0 or s >= b)
     uni = i < args.uniform
     if uni:
         mark = Function(DG0).interpolate(Constant(1.0))
     else:
-        fbmark = amr.udomark(H, lb, n=args.udo_n)
-        # FIXME OLD METHOD: imark, _, total_eta = amr.gradrecinactivemark(u, lb, theta=args.theta, method="max")
+        fbmark = amr.udomark(H, Constant(0.0), n=args.udo_n)
+        # FIXME OLD METHOD: imark, _, total_eta = amr.gradrecinactivemark(u, Constant(0.0), theta=args.theta, method="max")
+        # FIXME: "total" seems better than "max" in amr.brinactivemark()
         res, Z = residual_u_ufl(u, a, b)
-        # FIXME: "total" seems better than "max"
         imark, _, total_eta = amr.brinactivemark(
-            u, lb, res, theta=args.theta, method="total", kappa=Z
+            u, Constant(0.0), res, theta=args.theta, method="total", kappa=Z
         )
         if args.hmin > 0.0:
             fbmark = amr.lowerboundcelldiameter(fbmark, args.hmin)
