@@ -131,8 +131,9 @@ class VIAMR(OptionsManager):
           {x in N(V): |u(x) - lb(x)| < activetol}
         where N(V) is the nodal set for V = uh.function_space().  Active nodes get value 1.0."""
         if self.debug:
-            if len(uh.dat.data_ro) > 0 and len(lb.dat.data_ro) > 0:  # FIXME allow e.g. lb = Constant(0.0)
-                assert min(uh.dat.data_ro - lb.dat.data_ro) >= 0.0
+            assert isinstance(uh, Function), "input uh must be of class Function"
+            islb = isinstance(lb, Function) or isinstance(lb, Constant)
+            assert islb, "input lb must be of class Function or Constant"
             assert self.checkadmissible(uh, lb)
         z = Function(uh.function_space(), name="Nodal Active")
         z.interpolate(conditional(abs(uh - lb) < self.activetol, 1.0, 0.0))
@@ -141,8 +142,9 @@ class VIAMR(OptionsManager):
     def elemactive(self, uh, lb):
         """Compute an element active set indicator in DG0.  Only implemented for unilateral (lower bound) obstacle problems.  Elements are marked active if the DG0 degree of freedom for that element is active, within activetol, so use with caution if z is not in CG1.  Active elements get value 1.0."""
         if self.debug:
-            if len(uh.dat.data_ro) > 0 and len(lb.dat.data_ro) > 0:  # FIXME allow e.g. lb = Constant(0.0)
-                assert min(uh.dat.data_ro - lb.dat.data_ro) >= 0.0
+            assert isinstance(uh, Function), "input uh must be of class Function"
+            islb = isinstance(lb, Function) or isinstance(lb, Constant)
+            assert islb, "input lb must be of class Function or Constant"
             assert self.checkadmissible(uh, lb)
         _, DG0 = self.spaces(uh.function_space().mesh())
         z = Function(DG0, name="Element Active")
@@ -152,8 +154,9 @@ class VIAMR(OptionsManager):
     def eleminactive(self, uh, lb):
         """Compute an element inactive set indicator in DG0.  Only implemented for unilateral (lower bound) obstacle problems.  Elements are marked inactive if the DG0 degree of freedom for that element is inactive, within activetol, so use with caution if z is not in CG1.  Inactive elements get value 1.0."""
         if self.debug:
-            if len(uh.dat.data_ro) > 0 and len(lb.dat.data_ro) > 0:  # FIXME allow e.g. lb = Constant(0.0)
-                assert min(uh.dat.data_ro - lb.dat.data_ro) >= 0.0
+            assert isinstance(uh, Function), "input uh must be of class Function"
+            islb = isinstance(lb, Function) or isinstance(lb, Constant)
+            assert islb, "input lb must be of class Function or Constant"
             assert self.checkadmissible(uh, lb)
         _, DG0 = self.spaces(uh.function_space().mesh())
         z = Function(DG0, name="Element Inactive")
