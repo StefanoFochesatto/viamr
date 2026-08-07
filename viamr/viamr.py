@@ -138,7 +138,7 @@ class VIAMR(OptionsManager):
         return z
 
     def elemactive(self, uh, lb):
-        """Compute an element active set indicator in DG0.  Only implemented for unilateral (lower bound) obstacle problems.  Elements are marked active if the DG0 degree of freedom for that element is active, within activetol, so use with caution if z is not in CG1.  Active elements get value 1.0."""
+        """Compute an element active set indicator in DG0.  Active elements get value 1.0.  Only implemented for unilateral (lower bound) obstacle problems.  Elements are marked active if the DG0 degree of freedom for that element is active, within activetol, so use with caution if z is not in CG1."""
         if self.debug:
             assert isinstance(uh, Function), "input uh must be of class Function"
             islb = isinstance(lb, Function) or isinstance(lb, Constant)
@@ -149,16 +149,26 @@ class VIAMR(OptionsManager):
         z.interpolate(conditional(abs(uh - lb) < self.activetol, 1.0, 0.0))
         return z
 
-    def eleminactive(self, uh, lb):
-        """Compute an element inactive set indicator in DG0.  Only implemented for unilateral (lower bound) obstacle problems.  Elements are marked inactive if the DG0 degree of freedom for that element is inactive, within activetol, so use with caution if z is not in CG1.  Inactive elements get value 1.0."""
+    def eleminactive(self, uh, lb, strong=False):
+        """Compute an element inactive set indicator in DG0.  Inactive elements get value 1.0.  Only implemented for unilateral (lower bound) obstacle problems.  By default, elements are marked inactive if their DG0 degree of freedom is inactive (by activetol).
+
+        If strong=True then an element is only marked as inactive if all degrees of freedom of the function uh-lb exceed activetol.  That is, a cell is "strongly" inactive if all of its original dofs are inactive."""
         if self.debug:
             assert isinstance(uh, Function), "input uh must be of class Function"
             islb = isinstance(lb, Function) or isinstance(lb, Constant)
             assert islb, "input lb must be of class Function or Constant"
             assert self.checkadmissible(uh, lb)
-        _, DG0 = self.spaces(uh.function_space().mesh())
-        z = Function(DG0, name="Element Inactive")
-        z.interpolate(conditional(abs(uh - lb) < self.activetol, 0.0, 1.0))
+        if strong:
+            # note uh > lb is equivalent to v > 0 ... actually we use activetol
+            v = Function(uh.function_space()).interpolate(uh - lb)
+            # z is in DG0 and contains min of v over each cell's dofs
+            z = self._elemextreme(v, minimum=True, defaultval=PETSc.INFINITY)
+            z.interpolate(conditional(z > self.activetol, 1.0, 0.0))
+            z.rename("Element Inactive")
+        else:
+            _, DG0 = self.spaces(uh.function_space().mesh())
+            z = Function(DG0, name="Element Inactive")
+            z.interpolate(conditional(abs(uh - lb) < self.activetol, 0.0, 1.0))
         return z
 
     def thinelemactive(self, uh, lb):
@@ -605,8 +615,8 @@ class VIAMR(OptionsManager):
         sp = {"mat_type": "matfree", "ksp_type": "richardson", "pc_type": "jacobi"}
         solve(G == 0, eta_sq, solver_parameters=sp)
         eta = Function(DG0).interpolate(sqrt(eta_sq))  # eta from eta^2
-        # restrict BR eta to inactive set
-        imark = self.eleminactive(uh, lb)
+        # restrict BR eta to inactive set; strong=True means all dofs must be inactive to get imark=1
+        imark = self.eleminactive(uh, lb, strong=True)
         ieta = Function(DG0, name="eta on inactive set").interpolate(eta * imark)
         mark, _, total_error_est = self._fixedrate(ieta, theta, method)
         return (mark, ieta, total_error_est)
