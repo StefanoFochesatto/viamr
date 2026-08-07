@@ -5,7 +5,7 @@
 # This example generates result_blisters.pvd.
 
 levels = 5
-m_initial = 30
+m_initial = 20
 m_data = 500
 useVCD = False
 outfile = "result_blisters.pvd"
@@ -70,7 +70,7 @@ datafile = "result_data.pvd"
 print(f"writing source f(x,y) to {datafile} ...")
 VTKFile(datafile).write(fdata)
 
-initial_mesh = UnitSquareMesh(m_initial, m_initial)
+initial_mesh = UnitSquareMesh(m_initial, m_initial, diagonal="crossed")
 
 amr = VIAMR()
 meshhierarchy = [
