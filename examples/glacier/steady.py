@@ -19,6 +19,7 @@ assert args.udo_n >= 0, "cannot use UDO with negative levels"
 assert (
     not args.elevdepend or args.prob != "dome"
 ), "combination invalid: -elevdepend & -prob dome"
+assert not args.newton or not args.elevdepend, "-newton invalid (unstable) for -elevdepend"
 
 import numpy as np
 import petsc4py
@@ -270,8 +271,6 @@ for i in range(args.refine + 1):
         mark = Function(DG0).interpolate(Constant(1.0))
     else:
         fbmark = amr.udomark(H, Constant(0.0), n=args.udo_n)
-        # FIXME OLD METHOD: imark, _, total_eta = amr.gradrecinactivemark(u, Constant(0.0), theta=args.theta, method="max")
-        # FIXME: "total" seems better than "max" in amr.brinactivemark()
         if args.primal == "u":
             res, Z = residual_u_ufl(u, a, b)
             imark, _, total_eta = amr.brinactivemark(
@@ -279,7 +278,7 @@ for i in range(args.refine + 1):
             )
         else:
             res, Z = residual_s_ufl(s, a, b)
-            # use u > 0 when calling brinactivemark(), even though eta calculated with s
+            # use u > 0 when calling brinactivemark(), so "jump(grad(u))" is for u, even though eta calculated with s
             imark, _, total_eta = amr.brinactivemark(
                 u, Constant(0.0), res, theta=args.theta, method="total", alpha=Z
             )
@@ -303,12 +302,7 @@ for i in range(args.refine + 1):
             f"  |u-uexact|_H1rel = {uerr_H1_rel:.3e};  |H-Hexact|_Linf = {Herr_Linf:.3f} m;  |dr|_Linf = {drmax/1000.0:.3f} km",
             end="",
         )
-        if uni:
-            pprint("")
-        else:
-            pprint(
-                f";  eff_H1 = {total_eta / uerr_H1_semi:.3f}"
-            )  # FIXME what do I expect?
+        pprint("" if uni else f";  eff_H1 = {total_eta / uerr_H1_semi:.3f}")
         if args.ocsv:
             print(
                 f"{i:d},{ne:d},{hmin:.2f},{uerr_H1_rel:.3e},{Herr_inf:.3f},{drmax:.3f}",
@@ -337,17 +331,10 @@ if args.opvd:
     Us.rename("Us = surface velocity (m/a)")
     q = Function(FunctionSpace(mesh, "BDM", 1)).interpolate(Us * H)
     q.rename("q = UH (ice flux)")
-    Gb = Function(VectorFunctionSpace(mesh, "DG", degree=0))
-    Gb.interpolate(grad(b))
-    Gb.rename("Gb = grad(b)")
-    Gs = Function(VectorFunctionSpace(mesh, "DG", degree=0))
-    Gs.interpolate(grad(s))
-    Gs.rename("Gs = grad(s)")
-    # FIXME write extra stuff for debugging
-    res2 = Function(V, name="res ** 2").interpolate(res ** 2)
-    Z = Function(V, name="Z").interpolate(Z)
-    fields = [H, s, u, Us, q, a, b, Gb, Gs, mark, fbmark, imark, res2, Z]
-    #fields = [H, s, u, Us, q, a, b, Gb, Gs, mark]
+    grads = Function(VectorFunctionSpace(mesh, "DG", degree=0))
+    grads.interpolate(grad(s))
+    grads.rename("Gs = grad(s)")
+    fields = [H, s, u, Us, q, a, b, grads, mark]
     if not args.bdata and args.prob == "dome":
         uerr = Function(uexact.function_space()).interpolate(u - uexact)
         uerr.rename("uerr = u-u_exact")
