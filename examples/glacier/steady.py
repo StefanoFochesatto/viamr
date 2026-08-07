@@ -36,7 +36,6 @@ from physics import (
     secpera,
     n,
     Gamma,
-    admissible,
     H2u,
     u2H,
     Phi_u,
@@ -133,8 +132,7 @@ def vinewtonsolve(G, w, bcs=None, lower=None, upper=None):
 
 
 # outer mesh refinement loop
-#amr = VIAMR(debug=True)  # FIXME put back
-amr = VIAMR()
+amr = VIAMR(debug=True)
 for i in range(args.refine + 1):
     # describe current mesh
     nv, ne, hmin, hmax = amr.meshsizes(mesh)
@@ -184,7 +182,7 @@ for i in range(args.refine + 1):
             # remove sign (admissibility) flaws from cross-mesh interpolation
             #   note: u = H^(8/3) < 1 represents *very* little ice
             uold = Function(V).interpolate(conditional(uold < 1.0, 0.0, uold))
-        assert admissible(uold, Constant(0.0)), "uold must be non-negative"
+        assert amr.checkadmissible(uold, Constant(0.0)), "uold must be non-negative"
         assert assemble(u2H(uold) * dx) > 0, "uold must correspond to positive ice volume"
     else:
         if i == 0:
@@ -193,6 +191,7 @@ for i in range(args.refine + 1):
             sold = Function(V).interpolate(s)
             # remove admissibility flaws from cross-mesh interpolation
             sold = Function(V).interpolate(conditional(sold < b, b, sold))
+        assert amr.checkadmissible(sold, b), "sold must be >= b"
         assert assemble((sold - b) * dx) > 0, "sold must correspond to positive ice volume"
 
     # set-up for solve on current mesh
