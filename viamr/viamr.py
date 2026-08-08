@@ -1,4 +1,5 @@
 import time
+import warnings
 import numpy as np
 from pyop2.mpi import MPI
 from firedrake import *
@@ -907,7 +908,6 @@ class VIAMR(OptionsManager):
         where |.| is area (measure) of the set.  Thus J(S,T) the ratio of the area (measure) of the intersection divided by that of the union.  The inputs are the indicator functions of the sets as DG0 functions.  In serial they can be on different meshes.  (In that case project()
         method is used to put them on active1's mesh.)  If submesh==True then active2 is assumed to live on a submesh of active1, so interpolate onto the active1 mesh will work correctly.  *Note that with submesh==True this function works in parallel.*"""
         # FIXME how to check that, when submesh==True, active2 is actually on a submesh of active1?
-        # FIXME warn if AreaUnion <= 0.0? halting is *not* appropriate; it is o.k. if the users problem has no active set at all
         a1DG0 = active1.function_space()
         a2DG0 = active2.function_space()
         mesh1 = a1DG0.mesh()
@@ -930,7 +930,13 @@ class VIAMR(OptionsManager):
             new2 = Function(a1DG0).project(active2)
         AreaIntersection = assemble(new2 * active1 * dx(mesh1))
         AreaUnion = assemble((new2 + active1 - (new2 * active1)) * dx(mesh1))
-        return AreaIntersection / AreaUnion if AreaUnion > 0.0 else -1.0
+        if AreaUnion <= 0.0:
+            warnings.warn(
+                "VIAMR.jaccard() called with two empty sets (AreaUnion <= 0.0); "
+                "returning -1.0"
+            )
+            return -1.0
+        return AreaIntersection / AreaUnion
 
     def jaccardUFL(self, active1, active2, qdegree=6):
         """Version of jaccard() for when active1 is a UFL expression.
@@ -948,9 +954,21 @@ class VIAMR(OptionsManager):
         AreaUnion = assemble(
             (active2 + active1 - (active2 * active1)) * dx(mesh2, degree=qdegree)
         )
-        return AreaIntersection / AreaUnion if AreaUnion > 0.0 else -1.0
+        if AreaUnion <= 0.0:
+            warnings.warn(
+                "VIAMR.jaccardUFL() called with two empty sets (AreaUnion <= 0.0); "
+                "returning -1.0"
+            )
+            return -1.0
+        return AreaIntersection / AreaUnion
 
     def hausdorff(self, E1, E2):
+        if len(E1) == 0 or len(E2) == 0:
+            warnings.warn(
+                "VIAMR.hausdorff() called with an empty free-boundary edge set; "
+                "returning None"
+            )
+            return None
         try:
             import shapely
         except ImportError:
