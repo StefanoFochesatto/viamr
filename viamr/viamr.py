@@ -331,6 +331,10 @@ class VIAMR(OptionsManager):
             elif restrict == "inactive":
                 # restrict to inactive set, which contains border already
                 indicator = self.eleminactive(uh, lb)
+            else:
+                raise ValueError(
+                    f"unknown restrict='{restrict}'; must be 'active', 'inactive', or None"
+                )
             mesh = self._filtermesh(meshInit, indicator)
             _, DG0 = self.spaces(mesh)
             # Use nodal active set indicator to make an initial DG0 element border
@@ -906,7 +910,7 @@ class VIAMR(OptionsManager):
             assert a1DG0.ufl_element() == DG01.ufl_element()
             _, DG02 = self.spaces(mesh2)
             assert a2DG0.ufl_element() == DG02.ufl_element()
-        if submesh == False and (mesh1.comm.size > 1 or mesh1.comm.size > 1):
+        if submesh == False and (mesh1.comm.size > 1 or mesh2.comm.size > 1):
             raise ValueError("jaccard(.., submesh=False) is not valid in parallel")
         if self.debug:
             for a in [active1, active2]:
