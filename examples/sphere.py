@@ -196,8 +196,8 @@ for amrtype in refinetypes:
         if dohausdorff:
             if mesh.comm.size == 1:
                 uexact = Function(V, name="u_exact").interpolate(uexactUFL(r))
-                _, fbexact = amr.freeboundarygraph(uexact, lb)
-                _, fb = amr.freeboundarygraph(uh, lb)
+                _, fbexact = amr.freeboundarygraph2D(uexact, lb)
+                _, fb = amr.freeboundarygraph2D(uh, lb)
                 haus = amr.hausdorff(fbexact, fb)
                 print(f"  hausdorff(Gamma_u, Gamma_uh) = {haus:.5f}")
             else:

@@ -64,9 +64,11 @@ class VIAMR(OptionsManager):
 
     There are also some public utility methods: spaces(), meshsizes(), meshreport(), checkadmissible(), and countmark().  Other methods starting with an underscore are (roughly) intended to be private to the VIAMR class.
 
-    Certain functions do not work in parallel: 1. jaccard() with submesh=False, 2. hausdorff(), and 3. freeboundarygraph() (and therefore hausdorff() as normally used with its output).
+    Certain functions do not work in parallel: 1. jaccard() with submesh=False, 2. hausdorff(), and 3. freeboundarygraph2D() (and therefore hausdorff() as normally used with its output).
 
     Certain functions run both in serial and parallel, but can give different results depending on the number of processes: 1. vcdmark() and 2. adaptaveragedmetric().  See the paper for more details.
+
+    freeboundarygraph2D() only supports 2D meshes (triangular or quadrilateral cells); it raises ValueError otherwise.
     """
 
     def __init__(self, **kwargs):
@@ -979,80 +981,101 @@ class VIAMR(OptionsManager):
             shapely.MultiLineString(E1), shapely.MultiLineString(E2), 0.99
         )
 
-    # FIXME: checks for when free boundary is emptyset
-    def freeboundarygraph(self, uh, lb, type="coords"):
-        """pulls the graph for the free boundary, return as dm, fd, or coords"""
+    def freeboundarygraph2D(self, uh, lb, type="coords"):
+        """Compute the graph (vertices and edges) of the computed free boundary
+        of a 2D obstacle problem.  Works for meshes with triangular or
+        quadrilateral cells.  The free boundary vertices are those incident to
+        both a bordering (partially-active) element and a fully-active element;
+        see _elemborder() and elemactive().  The free boundary edges are the
+        edges of bordering elements which connect two such vertices.
+
+        The type argument selects the output format:
+          type="dm":     (FreeBoundaryVertices, EdgeSet), as sets of DMPlex
+                          point numbers for vertices, and (v1,v2) tuples of the
+                          same for edges
+          type="fd":     (fdV, fdE), the same information using Firedrake's
+                          global vertex numbering
+          type="coords": (coordsV, coordsE) (the default), the same
+                          information as physical (x,y) coordinate pairs; this
+                          is the format hausdorff() expects
+
+        Only implemented for 2D meshes (raises ValueError otherwise), and only
+        valid in serial (raises ValueError if called in parallel).  If the
+        free boundary is empty (e.g. uh == lb identically, or uh is strictly
+        above lb everywhere) a warning is issued and empty structures, of the
+        type requested, are returned."""
         if type not in ("dm", "fd", "coords"):
             raise ValueError(
                 f"unknown type='{type}'; must be 'dm', 'fd', or 'coords'"
             )
         mesh = uh.function_space().mesh()
         if mesh.comm.size > 1:
-            raise ValueError("freeboundarygraph() is not valid in parallel")
+            raise ValueError("freeboundarygraph2D() is not valid in parallel")
+        if mesh.topological_dimension != 2:
+            raise ValueError("freeboundarygraph2D() only supports 2D meshes")
+
+        nv = mesh.ufl_cell().num_vertices
         CellVertexMap = mesh.topology.cell_closure
+        plexelementlist = CellVertexMap[:, -1]  # DMPlex point number of each cell
+        dm = mesh.topology_dm
 
         # Get active indicators
         elemactive = self.elemactive(uh, lb)  # cell
         elemborder = self._elemborder(self._nodalactive(uh, lb))  # bordering cell
 
-        # Pull Indices
         ActiveSetElementsIndices = [
-            i for i, value in enumerate(elemactive.dat.data) if value != 0
+            i for i, value in enumerate(elemactive.dat.data_ro) if value != 0
         ]
         BorderElementsIndices = [
-            i for i, value in enumerate(elemborder.dat.data) if value != 0
+            i for i, value in enumerate(elemborder.dat.data_ro) if value != 0
         ]
 
-        # Create sets for vertices related to BorderElements and ActiveSet
+        # Vertices incident to a bordering / active-set cell.  The first nv
+        # columns of cell_closure are always a cell's nv vertices, for any 2D
+        # cell type (nv=3 for triangle, nv=4 for quadrilateral).
         BorderVertices = set()
-        ActiveVertices = set()
-
-        # Populate BorderVertices set
         for cellIdx in BorderElementsIndices:
-            # Add vertices of this border element cell to the set
-            # Assuming cells are triangles, adjust if needed
-            vertices = CellVertexMap[cellIdx][:3]
-            BorderVertices.update(vertices)
-
-        # Populate ActiveVertices set
+            BorderVertices.update(CellVertexMap[cellIdx][:nv])
+        ActiveVertices = set()
         for cellIdx in ActiveSetElementsIndices:
-            # Add vertices of this active set element cell to the set
-            # Assuming cells are triangles, adjust if needed
-            vertices = CellVertexMap[cellIdx][:3]
-            ActiveVertices.update(vertices)
+            ActiveVertices.update(CellVertexMap[cellIdx][:nv])
 
         # Find intersection of border and active vertices
         FreeBoundaryVertices = BorderVertices.intersection(ActiveVertices)
 
-        # Create an edge set for the FreeBoundaryVertices
-        EdgeSet = set()
+        if not FreeBoundaryVertices:
+            warnings.warn(
+                "VIAMR.freeboundarygraph2D() found an empty free boundary; "
+                "returning an empty graph"
+            )
+            return (set(), set()) if type == "dm" else ([], [])
 
-        # Loop through BorderElements and form edges
+        # Create an edge set for the FreeBoundaryVertices.  Use each bordering
+        # cell's actual boundary edges (its DMPlex cone), not all pairs of its
+        # vertices: for a quadrilateral cell the two diagonal vertex pairs are
+        # *not* edges of the cell, unlike for a triangle, where every vertex
+        # pair happens to be an edge.
+        EdgeSet = set()
         for cellIdx in BorderElementsIndices:
-            vertices = CellVertexMap[cellIdx][:3]
-            # Check all pairs of vertices in the element
-            for i in range(len(vertices)):
-                for j in range(i + 1, len(vertices)):
-                    v1 = vertices[i]
-                    v2 = vertices[j]
-                    # Add edge if both vertices are part of the free boundary
-                    if v1 in FreeBoundaryVertices and v2 in FreeBoundaryVertices:
-                        # Ensure consistent ordering
-                        EdgeSet.add((min(v1, v2), max(v1, v2)))
+            cellPoint = plexelementlist[cellIdx]
+            for edgePoint in dm.getCone(cellPoint):
+                v1, v2 = dm.getCone(edgePoint)
+                if v1 in FreeBoundaryVertices and v2 in FreeBoundaryVertices:
+                    EdgeSet.add((min(v1, v2), max(v1, v2)))
 
         if type == "dm":
             return FreeBoundaryVertices, EdgeSet
         else:
             fdV = [
                 mesh.topology._vertex_numbering.getOffset(vertex)
-                for vertex in list(FreeBoundaryVertices)
+                for vertex in FreeBoundaryVertices
             ]
             fdE = [
                 [
                     mesh.topology._vertex_numbering.getOffset(edge[0]),
                     mesh.topology._vertex_numbering.getOffset(edge[1]),
                 ]
-                for edge in list(EdgeSet)
+                for edge in EdgeSet
             ]
             if type == "fd":
                 return fdV, fdE

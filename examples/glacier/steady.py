@@ -266,7 +266,7 @@ for i in range(args.refine + 1):
     # report numerical errors if exact solution known
     if not args.bdata and args.prob == "dome":
         uerr_H1_semi, uerr_H1_rel, Herr_Linf, uexact = dome_normerrors(u, H)
-        vfb, _ = amr.freeboundarygraph(u, Function(V).interpolate(0.0))
+        vfb, _ = amr.freeboundarygraph2D(u, Function(V).interpolate(0.0))
         drmax = dome_radiuserror(mesh, vfb)
         pprint(
             f"  |u-uexact|_H1rel = {uerr_H1_rel:.3e};  |H-Hexact|_Linf = {Herr_Linf:.3f} m;  |dr|_Linf = {drmax/1000.0:.3f} km"

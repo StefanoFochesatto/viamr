@@ -165,7 +165,7 @@ def test_third_jaccard_ufl():
     assert abs(amr.jaccardUFL(active1, active2) - 1.0 / 3.0) < 1.0e-10
 
 
-def test_overlapping_and_nonoverlapping_hausdorff():
+def test_hausdorff():
     # to have free boundaries line up with conditional statements
     mesh = RectangleMesh(10, 10, 1, 1)
     amr = VIAMR(debug=True)
@@ -173,10 +173,26 @@ def test_overlapping_and_nonoverlapping_hausdorff():
     x, y = SpatialCoordinate(mesh)
     sol1 = Function(CG1).interpolate(Constant(1.0))
     lb = Function(CG1).interpolate(conditional(x <= 0.2, 1, 0))
-    _, E1 = amr.freeboundarygraph(sol1, lb)
+    _, E1 = amr.freeboundarygraph2D(sol1, lb)
     assert amr.hausdorff(E1, E1) == 0
     lb2 = Function(CG1).interpolate(conditional(x <= 0.4, 1, 0))
-    _, E2 = amr.freeboundarygraph(sol1, lb2)
+    _, E2 = amr.freeboundarygraph2D(sol1, lb2)
+    assert amr.hausdorff(E1, E2) == 0.2
+
+
+def test_quad_mesh_hausdorff():
+    # same as test_hausdorff() but on a
+    # quadrilateral mesh, to exercise freeboundarygraph2D()'s quad support
+    mesh = RectangleMesh(10, 10, 1, 1, quadrilateral=True)
+    amr = VIAMR(debug=True)
+    CG1, _ = amr.spaces(mesh)
+    x, y = SpatialCoordinate(mesh)
+    sol1 = Function(CG1).interpolate(Constant(1.0))
+    lb = Function(CG1).interpolate(conditional(x <= 0.2, 1, 0))
+    _, E1 = amr.freeboundarygraph2D(sol1, lb)
+    assert amr.hausdorff(E1, E1) == 0
+    lb2 = Function(CG1).interpolate(conditional(x <= 0.4, 1, 0))
+    _, E2 = amr.freeboundarygraph2D(sol1, lb2)
     assert amr.hausdorff(E1, E2) == 0.2
 
 
@@ -235,7 +251,8 @@ if __name__ == "__main__":
     test_symmetry_jaccard()
     test_jaccard_submesh_uniform()
     test_third_jaccard_ufl()
-    test_overlapping_and_nonoverlapping_hausdorff()
+    test_hausdorff()
+    test_quad_mesh_hausdorff()
     test_globalextreme_uses()
     test_elemmaxabs()
     test_elemmin()

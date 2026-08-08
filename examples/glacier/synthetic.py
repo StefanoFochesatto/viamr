@@ -96,7 +96,7 @@ def dome_normerrors(uh, Hh):
 
 def dome_radiuserror(mesh, vfb):
     """For -prob "dome", compute the maximum of free-boundary radius errors
-    from the output of VIAMR.freeboundarygraph().  The exact free boundary
+    from the output of VIAMR.freeboundarygraph2D().  The exact free boundary
     is a circle of radius domeL with center (L/2,L/2).  Returns the maximum
     radius error."""
     vfb = np.array(vfb)
