@@ -114,7 +114,6 @@ Future bug fixes and feature improvements in Netgen, ngsPETSc, and PETSc DMPlex 
       UnitSquareMesh(m0, m0, distribution_parameters={"partition": True, "overlap_type": (DistributedMeshOverlapType.VERTEX, 1)})
       ```
   1. `VIAMR.adaptaveragedmetric()` and `VIAMR.vcdmark()` are known to generate different results in serial and parallel.  See [issue #37](https://github.com/StefanoFochesatto/VI-AMR/issues/37) and [issue #38](https://github.com/StefanoFochesatto/VI-AMR/issues/38), respectively.
-  1. For the reason given on [this issue](https://github.com/firedrakeproject/mpi-pytest/issues/13), use of [pytest](https://docs.pytest.org/en/stable/) cannot easily be extended to parallel using the [mpi-pytest](https://github.com/firedrakeproject/mpi-pytest) plugin.  Thus parallel regression testing is manual; see the bottom of this page.  Future bug fixes by the mpi-pytest developers could fix this.
   1. `VIAMR.jaccard()` only works in parallel if one mesh is a submesh of the other,.  See the doc string.  Note that `VIAMR.jaccardUFL()` is always valid in parallel.
   1. `VIAMR.hausdorff()` does not work in parallel.  It is the only part of VIAMR which depends on the [shapely](https://pypi.org/project/shapely/) library.
 
@@ -128,21 +127,18 @@ Another way to address this general issue is seen in `errornorm_deg20()` in `exa
 
 ## Testing
 
-Serial software tests use [pytest](https://docs.pytest.org/en/stable/index.html). In the main directory `VI-AMR/` do
+Software tests use [pytest](https://docs.pytest.org/en/stable/index.html).  In the main directory `VI-AMR/` do
 ```
 pytest .
 ```
 
-For an HTML coverage report from these serial tests do:
+The tests themselves are in `tests/`.
+
+Tests marked `@pytest.mark.parallel(nprocs=N)` are found and run automatically under `mpiexec -n N` as part of this one command.  Note that VIAMR uses its own small, dependency-free harness instead, in `tests/conftest.py`, so you can just run `pytest .`  (Parallel testing with previously used a plugin with a [known bug](https://github.com/firedrakeproject/mpi-pytest/issues/13).)
+
+For an HTML coverage report from these tests do:
 ```
 pip install pytest-cov
 pytest --cov-report html --cov=viamr tests/
 firefox htmlcov/index.html
 ```
-
-For parallel tests do the following or similar:
-```
-cd tests/
-mpiexec -n 3 python3 test_parallel.py
-```
-Success is completion without any error messages.

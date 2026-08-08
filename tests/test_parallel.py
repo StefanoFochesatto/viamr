@@ -2,15 +2,10 @@ import numpy as np
 import pytest
 from firedrake import *
 from viamr import VIAMR
-import subprocess
-import os
-import pathlib
 
 from test_basic import _get_netgen_mesh, _get_ball_obstacle
 
 from mpi4py import MPI
-from pytest_mpi.parallel_assert import parallel_assert
-from pytest_mpi import parallel_assert
 
 
 class VIAMRRegression(VIAMR):
@@ -61,7 +56,6 @@ class VIAMRRegression(VIAMR):
         return self._bfsneighbors(mesh, elemborder, n)
 
 
-@pytest.mark.skip
 def test_refine_udo_parallelUDO():
     mesh1 = _get_netgen_mesh(TriHeight=0.1)
     amr = VIAMR(debug=True)
@@ -88,7 +82,6 @@ def test_refine_udo_parallelUDO():
     assert r1CG1.dim() == r2CG1.dim()
 
 
-@pytest.mark.skip
 @pytest.mark.parallel(nprocs=3)
 def test_parallel_udo():
     comm = MPI.COMM_WORLD
@@ -141,7 +134,6 @@ def test_parallel_udo():
         assert globalActive[0] == 506
 
 
-@pytest.mark.skip
 def test_udo_regression():
     # This test utilizes the the old implementation of UDO which builds the neighborhood of the free boundary using breadth first search,
     # as a regression test for the dmplex based implementation.
