@@ -178,6 +178,42 @@ def test_refine_br_weighted():
     assert rCG1.dim() == 109
 
 
+def test_nsvmark_allinactive():
+    # classic obstacle-touching-zero problem:  -Delta u = 8,  u >= 0,  u = 0 on boundary
+    mesh = UnitSquareMesh(8, 8)
+    amr = VIAMR(debug=True)
+    CG1, DG0 = amr.spaces(mesh)
+    lb = Function(CG1).interpolate(Constant(0.0))
+    f = Constant(-8.0)
+    g = Constant(0.0)
+
+    u = Function(CG1)
+    v = TestFunction(CG1)
+    F = (inner(grad(u), grad(v)) - f * v) * dx
+    bcs = DirichletBC(CG1, g, "on_boundary")
+    problem = NonlinearVariationalProblem(F, u, bcs=bcs)
+    sp = {
+        "snes_type": "vinewtonrsls",
+        "snes_vi_zero_tolerance": 1.0e-10,
+        "ksp_type": "preonly",
+        "pc_type": "lu",
+    }
+    solver = NonlinearVariationalSolver(problem, solver_parameters=sp, options_prefix="s")
+    ub = Function(CG1).interpolate(Constant(1.0e10))
+    solver.solve(bounds=(lb, ub))
+    assert amr.checkadmissible(u, lb)
+
+    mark, etainf, sigmah, total_err = amr.nsvmark(u, lb, g, f, g)
+    assert mark.function_space().ufl_element() == DG0.ufl_element()
+    assert 0 <= amr.countmark(mark) <= DG0.dim()
+    assert total_err > 0.0
+
+    # also exercises _fixedrate()'s "total" branch
+    tmark, ieta, tot2 = amr.gradrecinactivemark(u, lb, theta=0.5, method="total")
+    assert tmark.function_space().ufl_element() == DG0.ufl_element()
+    assert tot2 >= 0.0
+
+
 if __name__ == "__main__":
     test_overrefine_udo()
     test_finer_udo()
@@ -187,3 +223,4 @@ if __name__ == "__main__":
     test_refine_gr()
     test_refine_br()
     test_refine_br_total()
+    test_nsvmark_allinactive()
