@@ -14,7 +14,7 @@ except ImportError:
 haveanimate = True
 try:
     import animate
-except:
+except ImportError:
     haveanimate = False
 
 
@@ -72,6 +72,7 @@ class VIAMR(OptionsManager):
         self.activetol = kwargs.pop("activetol", 1.0e-10)
         self.debug = kwargs.pop("debug", False)  # extra checks with debug=True
         self.metricparameters = None
+        super().__init__({})
 
     def spaces(self, mesh, k=1):
         """Return CG_k and DG_k-1 spaces."""
