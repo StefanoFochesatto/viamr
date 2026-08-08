@@ -843,6 +843,11 @@ class VIAMR(OptionsManager):
         return refinedmesh
 
     def setmetricparameters(self, **kwargs):
+        """Set self.metricparameters, used by adaptaveragedmetric(), from keyword
+        arguments target_complexity (target number of mesh nodes; default 3000.0),
+        h_min (minimum allowed edge length; default 0.0), and h_max (maximum
+        allowed edge length; default no limit).  Must be called before
+        adaptaveragedmetric()."""
         tc = kwargs.pop("target_complexity", 3000.0)
         hmin = kwargs.pop("h_min", 0.0)
         hmax = kwargs.pop("h_max", PETSc.INFINITY)
@@ -992,7 +997,14 @@ class VIAMR(OptionsManager):
             return -1.0
         return AreaIntersection / AreaUnion
 
-    def hausdorff(self, E1, E2):
+    def hausdorff(self, E1, E2, densify=0.99):
+        """Compute the (densified, approximate) Hausdorff distance between two
+        edge sets E1, E2, e.g. as returned by freeboundarygraph2D(type="coords").
+        densify is the shapely densify fraction in (0,1]: each segment is
+        subdivided into 1/densify pieces before comparison, which turns the
+        (fast but only locally-accurate) vertex-based Hausdorff distance into a
+        global approximation.  Smaller values are more accurate but slower;
+        see shapely.hausdorff_distance()."""
         if len(E1) == 0 or len(E2) == 0:
             warnings.warn(
                 "VIAMR.hausdorff() called with an empty free-boundary edge set; "
@@ -1006,7 +1018,7 @@ class VIAMR(OptionsManager):
                 "VIAMR.hausdorff() requires shapely; install it with 'pip install shapely'"
             )
         return shapely.hausdorff_distance(
-            shapely.MultiLineString(E1), shapely.MultiLineString(E2), 0.99
+            shapely.MultiLineString(E1), shapely.MultiLineString(E2), densify
         )
 
     def freeboundarygraph2D(self, uh, lb, type="coords"):
@@ -1094,6 +1106,9 @@ class VIAMR(OptionsManager):
         if type == "dm":
             return FreeBoundaryVertices, EdgeSet
         else:
+            # NOTE: _vertex_numbering is a private Firedrake attribute (no
+            # public equivalent as of this writing); a future Firedrake
+            # release could rename or remove it without warning.
             fdV = [
                 mesh.topology._vertex_numbering.getOffset(vertex)
                 for vertex in FreeBoundaryVertices
