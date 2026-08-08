@@ -81,16 +81,22 @@ class VIAMR(OptionsManager):
             assert k >= 1
         return FunctionSpace(mesh, "CG", k), FunctionSpace(mesh, "DG", k - 1)
 
+    def _globalextreme(self, w, minimum=True):
+        """Compute the collective (allreduce) extreme value of a generic scalar
+        field's local dof values.  Either computes the minimum or (by default) the
+        maximum.  Correct in parallel, including when a process owns no local dofs."""
+        data = w.dat.data_ro
+        if minimum:
+            local = data.min() if len(data) > 0 else PETSc.INFINITY
+            op = MPI.MIN
+        else:
+            local = data.max() if len(data) > 0 else PETSc.NINFINITY
+            op = MPI.MAX
+        return w.function_space().mesh().comm.allreduce(local, op=op)
+
     def scalarrange(self, w):
         """Utility function to return the range of a generic scalar field.  Correct in parallel."""
-        mesh = w.function_space().mesh()
-        locmin, locmax = PETSc.INFINITY, PETSc.NINFINITY
-        if len(mesh.cell_sizes.dat.data_ro) > 0:
-            locmin = w.dat.data.min()
-            locmax = w.dat.data.max()
-        gmin = mesh.comm.allreduce(locmin, op=MPI.MIN)
-        gmax = mesh.comm.allreduce(locmax, op=MPI.MAX)
-        return gmin, gmax
+        return self._globalextreme(w, minimum=True), self._globalextreme(w, minimum=False)
 
     def meshsizes(self, mesh):
         """Compute number of vertices, number of elements, and range of
@@ -121,9 +127,7 @@ class VIAMR(OptionsManager):
         else:
             V = uh.function_space()
             delta = Function(V).interpolate(bound - uh if upper else uh - bound)
-            locmin = delta.dat.data.min()
-            gmin = V.mesh().comm.allreduce(locmin, op=MPI.MIN)
-            return gmin >= 0.0
+            return self._globalextreme(delta, minimum=True) >= 0.0
 
     def _nodalactive(self, uh, lb):
         """Compute nodal active set indicator in same function space as uh.  Only implemented for unilateral (lower bound) obstacle problems.  The nodal active set is
@@ -492,11 +496,14 @@ class VIAMR(OptionsManager):
                 ethresh = theta * eta_.max()[1]  # process independent
             elif method == "total":
                 values = eta_.array_r
-                sorted_values = np.sort(values)[::-1]  # sort in descending order
-                cumsum = np.cumsum(sorted_values)
-                target = np.sum(values) * theta  # proportion of total error
-                idx = np.argmax(cumsum >= target)
-                ethresh = sorted_values[idx]
+                if values.size == 0:  # this process owns no elements
+                    ethresh = PETSc.INFINITY
+                else:
+                    sorted_values = np.sort(values)[::-1]  # sort in descending order
+                    cumsum = np.cumsum(sorted_values)
+                    target = np.sum(values) * theta  # proportion of total error
+                    idx = np.argmax(cumsum >= target)
+                    ethresh = sorted_values[idx]
             else:
                 raise ValueError("unknown method for VIAMR._fixedrate()")
             total_error_est = sqrt(eta_.dot(eta_))  # l^2 norm of eta as Vec
@@ -680,7 +687,7 @@ class VIAMR(OptionsManager):
         DirichletBC(CG1, Constant(0.0), "on_boundary").apply(sigmah)
 
         # check dual admissiblity (up to tolerance)
-        assert min(sigmah.dat.data_ro) >= -dualtol
+        assert self._globalextreme(sigmah, minimum=True) >= -dualtol
 
         # compute the R_\infty part of "practical estimator" in (7.1) in NSV03, from (3.7)
         # using p=\infty and p'=1:
@@ -714,7 +721,7 @@ class VIAMR(OptionsManager):
         # admissibility check; FIXME removes term 2 "(\chi - u_h)_+" from
         #   the estimator *only when* \chi=lb is representable in u_h's space
         gaph = Function(CG1).interpolate(uh - lb)
-        assert min(gaph.dat.data_ro) >= 0.0
+        assert self._globalextreme(gaph, minimum=True) >= 0.0
 
         # finally compute eta_inf; see doc string above for formula
         # note that blockgap is nonzero in same cells as UDO n=0 fmark

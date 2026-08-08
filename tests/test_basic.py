@@ -193,6 +193,25 @@ def test_elemmaxabs():
     assert np.linalg.norm(diff) == 0.0
 
 
+def test_globalextreme_uses():
+    # exercises VIAMR._globalextreme(), shared by scalarrange() and checkadmissible()
+    mesh = UnitSquareMesh(4, 4)
+    amr = VIAMR(debug=True)
+    hmin, hmax = amr.scalarrange(mesh.cell_sizes)
+    assert 0.0 < hmin <= hmax
+
+    CG1, _ = amr.spaces(mesh)
+    x, y = SpatialCoordinate(mesh)
+    lb = Function(CG1).interpolate(Constant(0.0))
+    uh = Function(CG1).interpolate(x)  # uh >= lb everywhere on [0,1]x[0,1]
+    assert amr.checkadmissible(uh, lb)
+    assert amr.checkadmissible(uh, lb, strict=True)
+
+    bad = Function(CG1).interpolate(x - 0.5)  # negative near x=0
+    assert not amr.checkadmissible(bad, lb)
+    assert not amr.checkadmissible(bad, lb, strict=True)
+
+
 def test_elemmin():
     mesh = UnitCubeMesh(1, 1, 2)
     x, y, z = SpatialCoordinate(mesh)
@@ -217,5 +236,6 @@ if __name__ == "__main__":
     test_jaccard_submesh_uniform()
     test_third_jaccard_ufl()
     test_overlapping_and_nonoverlapping_hausdorff()
+    test_globalextreme_uses()
     test_elemmaxabs()
     test_elemmin()
