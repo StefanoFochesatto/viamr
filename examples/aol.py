@@ -1,7 +1,7 @@
 from firedrake import *
 from viamr import VIAMR
 
-mesh = RectangleMesh(6, 12, 0.5, 1.0)
+mesh = RectangleMesh(6, 12, 0.5, 1.0, distribution_parameters=VIAMR.PARALLEL_OVERLAP)
 x, y = SpatialCoordinate(mesh)
 r = (x + 1.0) ** 2 + y ** 2
 uexact = conditional(r < 2.0, 0.25 * r - 0.5 - 0.5 * ln(0.5 * r), 0.0)

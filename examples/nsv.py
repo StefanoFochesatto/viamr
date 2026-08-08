@@ -27,7 +27,14 @@ assert d in [2, 3]
 if d == 2:
     m = 3  # initial mesh resolution
     mesh0 = RectangleMesh(
-        m, m, 1.0, 1.0, originX=-1.0, originY=-1.0, diagonal="crossed"
+        m,
+        m,
+        1.0,
+        1.0,
+        originX=-1.0,
+        originY=-1.0,
+        diagonal="crossed",
+        distribution_parameters=VIAMR.PARALLEL_OVERLAP,
     )
 else:
     # 3D SBR refinement needs Netgen mesh and Netgen refinement (and produces bad meshes)
@@ -36,13 +43,7 @@ else:
     box = Box((-1.0, -1.0, -1.0), (1.0, 1.0, 1.0))
     h0 = 0.5  # initial mesh resolution
     ngmesh = OCCGeometry(box, dim=3).GenerateMesh(maxh=h0)
-    mesh0 = Mesh(
-        ngmesh,
-        distribution_parameters={
-            "partition": True,
-            "overlap_type": (DistributedMeshOverlapType.VERTEX, 1),
-        },
-    )
+    mesh0 = Mesh(ngmesh, distribution_parameters=VIAMR.PARALLEL_OVERLAP)
 
 # all methods use same VI solver
 sp = {

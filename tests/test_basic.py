@@ -13,13 +13,7 @@ def _get_netgen_mesh(TriHeight=0.4, width=2):
     )
     ngmsh = None
     ngmsh = geo.GenerateMesh(maxh=TriHeight)
-    return Mesh(
-        ngmsh,
-        distribution_parameters={
-            "partition": True,
-            "overlap_type": (DistributedMeshOverlapType.VERTEX, 1),
-        },
-    )
+    return Mesh(ngmsh, distribution_parameters=VIAMR.PARALLEL_OVERLAP)
 
 
 def _get_ball_obstacle(x, y):

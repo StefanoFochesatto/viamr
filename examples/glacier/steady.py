@@ -87,7 +87,14 @@ else:
     pprint(
         f"generating {args.m} x {args.m} initial mesh, with synthetic data for problem {args.prob} ..."
     )
-    mesh = RectangleMesh(args.m, args.m, L, L, diagonal="crossed")
+    mesh = RectangleMesh(
+        args.m,
+        args.m,
+        L,
+        L,
+        diagonal="crossed",
+        distribution_parameters=VIAMR.PARALLEL_OVERLAP,
+    )
 
 # solver parameters
 sp = {

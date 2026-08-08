@@ -81,6 +81,16 @@ class VIAMR(OptionsManager):
       * Functions which only work for 2D meshs: 1. freeboundarygraph2D().
     """
 
+    PARALLEL_OVERLAP = {
+        "partition": True,
+        "overlap_type": (DistributedMeshOverlapType.VERTEX, 1),
+    }
+    """distribution_parameters value needed for udomark()/thinelemactive() (and
+    therefore nsvmark()) to give correct results in parallel; see
+    _checkparalleloverlap().  Usage:
+      mesh = RectangleMesh(m, m, Lx, Ly, distribution_parameters=VIAMR.PARALLEL_OVERLAP)
+    """
+
     def __init__(self, **kwargs):
         self.activetol = kwargs.pop("activetol", 1.0e-10)
         self.debug = kwargs.pop("debug", False)  # extra checks with debug=True
@@ -158,15 +168,16 @@ class VIAMR(OptionsManager):
         without sufficient vertex overlap.  udomark() and thinelemactive() walk
         DMPlex vertex stars across partition boundaries (via getTransitiveClosure()),
         which requires overlap_type=(DistributedMeshOverlapType.VERTEX, n) with
-        n >= 1 for correct results; see tests/test_parallel.py::test_parallel_udo."""
+        n >= 1 for correct results.  Build the mesh with
+        distribution_parameters=VIAMR.PARALLEL_OVERLAP to satisfy this; see
+        tests/test_parallel.py::test_parallel_udo."""
         if mesh.comm.size > 1:
             dp = mesh._distribution_parameters
             if dp["overlap_type"][0].name != "VERTEX" or dp["overlap_type"][1] < 1:
                 raise ValueError(
-                    "udomark()/thinelemactive() in parallel require "
-                    'distribution_parameters={"partition": True, '
-                    '"overlap_type": (DistributedMeshOverlapType.VERTEX, 1)} '
-                    "(or greater) on mesh initialization"
+                    "udomark()/thinelemactive() in parallel require mesh "
+                    "distribution_parameters=VIAMR.PARALLEL_OVERLAP "
+                    "on mesh initialization (or overlap_type=(VERTEX, n>=1))"
                 )
 
     def _nodalactive(self, uh, lb):

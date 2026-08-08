@@ -68,7 +68,16 @@ def maxeta(mesh, eta):  # maximum of BR estimator, even in parallel
 
 
 print(f"solving porous-medium obstacle problem using UDO+BR ...")
-mesh = RectangleMesh(m0, m0, 2.0, 2.0, originX=-2.0, originY=-2.0, diagonal="crossed")
+mesh = RectangleMesh(
+    m0,
+    m0,
+    2.0,
+    2.0,
+    originX=-2.0,
+    originY=-2.0,
+    diagonal="crossed",
+    distribution_parameters=VIAMR.PARALLEL_OVERLAP,
+)
 amr = VIAMR()
 for i in range(levels + 1):
     # initialize on this mesh

@@ -18,13 +18,15 @@ from firedrake.petsc import PETSc
 print = PETSc.Sys.Print  # enables correct printing in parallel
 from viamr import VIAMR
 
-# setting distribution parameters should not be necessary ... but bug in netgen
-dp = {
-    "partition": True,
-    "overlap_type": (DistributedMeshOverlapType.VERTEX, 1),
-}
+# udomark() needs this overlap to give correct results in parallel
 mesh0 = RectangleMesh(
-    m0, m0, Lx=1.0, Ly=1.0, originX=-1.0, originY=-1.0, distribution_parameters=dp
+    m0,
+    m0,
+    Lx=1.0,
+    Ly=1.0,
+    originX=-1.0,
+    originY=-1.0,
+    distribution_parameters=VIAMR.PARALLEL_OVERLAP,
 )
 
 

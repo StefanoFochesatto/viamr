@@ -17,13 +17,7 @@ refinements = 2
 # initial mesh
 box = Box((-1, -1, -1), (1, 1, 1))
 ngmesh = OCCGeometry(box, dim=3).GenerateMesh(maxh=0.4)
-mesh = Mesh(
-    ngmesh,
-    distribution_parameters={
-        "partition": True,
-        "overlap_type": (DistributedMeshOverlapType.VERTEX, 1),
-    },
-)
+mesh = Mesh(ngmesh, distribution_parameters=VIAMR.PARALLEL_OVERLAP)
 
 # parameters for constructing the wind and source term
 alpha = 30.0  # strength of positive source

@@ -1,5 +1,6 @@
 import numpy as np
 import firedrake as fd
+from viamr import VIAMR
 
 
 class DataNetCDF:
@@ -54,6 +55,7 @@ class DataNetCDF:
             originX=self.ll[0],
             originY=self.ll[1],
             diagonal="crossed",
+            distribution_parameters=VIAMR.PARALLEL_OVERLAP,
         )
         return mesh
 
@@ -62,10 +64,6 @@ class DataNetCDF:
         Firedrake data mesh matching the vertices read from NetCDF file;
         also returns a Firedrake CG1 function which is 1 near the boundary
         and zero otherwise; recover the mesh itself by VAR.function_space().mesh()"""
-        dp = {
-            "partition": True,
-            "overlap_type": (fd.DistributedMeshOverlapType.VERTEX, 1),
-        }
         dmesh = fd.RectangleMesh(
             self.mx - 1,
             self.my - 1,
@@ -73,7 +71,7 @@ class DataNetCDF:
             self.ur[1],
             originX=self.ll[0],
             originY=self.ll[1],
-            distribution_parameters=dp,
+            distribution_parameters=VIAMR.PARALLEL_OVERLAP,
         )
         dCG1 = fd.FunctionSpace(dmesh, "CG", 1)
         fCG1 = fd.Function(dCG1)

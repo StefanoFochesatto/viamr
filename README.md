@@ -109,10 +109,11 @@ Meshes can be created using the [Firedrake utility mesh generators](https://www.
 Future bug fixes and feature improvements in Netgen, ngsPETSc, and PETSc DMPlex might change this situation, but for now see the known limitations below.
 
   1. [PETSc's DMPlex mesh transformations](https://petsc.org/release/overview/plex_transform_table/) include skeleton based refinement (SBR) in 2D, but [currently SBR is not available in 3D](https://petsc.org/release/src/dm/impls/plex/transform/impls/refine/sbr/plexrefsbr.c.html).  This limits `VIAMR.refinemarkedelements()` to applications in 2D.
-  1. Parallel application of `VIAMR.udomark()` requires that mesh distribution parameters be explicitly set.  For example, when using a utility mesh:
+  1. Parallel application of `VIAMR.udomark()` (and `VIAMR.thinelemactive()`, and therefore `VIAMR.nsvmark()`) requires that the mesh be built with sufficient vertex overlap.  Use the `VIAMR.PARALLEL_OVERLAP` class attribute for this, e.g. when using a utility mesh:
       ```
-      UnitSquareMesh(m0, m0, distribution_parameters={"partition": True, "overlap_type": (DistributedMeshOverlapType.VERTEX, 1)})
+      UnitSquareMesh(m0, m0, distribution_parameters=VIAMR.PARALLEL_OVERLAP)
       ```
+      Calling `udomark()`/`thinelemactive()` in parallel on a mesh without this raises a `ValueError` rather than silently giving an incomplete result near partition boundaries.
   1. `VIAMR.adaptaveragedmetric()` and `VIAMR.vcdmark()` are known to generate different results in serial and parallel.  See [issue #37](https://github.com/StefanoFochesatto/VI-AMR/issues/37) and [issue #38](https://github.com/StefanoFochesatto/VI-AMR/issues/38), respectively.
   1. `VIAMR.jaccard()` only works in parallel if one mesh is a submesh of the other,.  See the doc string.  Note that `VIAMR.jaccardUFL()` is always valid in parallel.
   1. `VIAMR.hausdorff()` does not work in parallel.  It is the only part of VIAMR which depends on the [shapely](https://pypi.org/project/shapely/) library.

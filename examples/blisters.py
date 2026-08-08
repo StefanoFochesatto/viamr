@@ -70,7 +70,12 @@ datafile = "result_data.pvd"
 print(f"writing source f(x,y) to {datafile} ...")
 VTKFile(datafile).write(fdata)
 
-initial_mesh = UnitSquareMesh(m_initial, m_initial, diagonal="crossed")
+initial_mesh = UnitSquareMesh(
+    m_initial,
+    m_initial,
+    diagonal="crossed",
+    distribution_parameters=VIAMR.PARALLEL_OVERLAP,
+)
 
 amr = VIAMR()
 meshhierarchy = [

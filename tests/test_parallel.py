@@ -88,16 +88,7 @@ def test_parallel_udo():
     rank = comm.Get_rank()
 
     amr = VIAMR()
-    mesh = RectangleMesh(
-        20,
-        20,
-        1,
-        1,
-        distribution_parameters={
-            "partition": True,
-            "overlap_type": (DistributedMeshOverlapType.VERTEX, 1),
-        },
-    )
+    mesh = RectangleMesh(20, 20, 1, 1, distribution_parameters=VIAMR.PARALLEL_OVERLAP)
     CG1, _ = amr.spaces(mesh)
     u = Function(CG1).interpolate(1.0)
     x, y = SpatialCoordinate(mesh)
@@ -139,16 +130,7 @@ def test_udo_regression():
     # as a regression test for the dmplex based implementation.
 
     amr = VIAMRRegression()
-    mesh = RectangleMesh(
-        20,
-        20,
-        1,
-        1,
-        distribution_parameters={
-            "partition": True,
-            "overlap_type": (DistributedMeshOverlapType.VERTEX, 1),
-        },
-    )
+    mesh = RectangleMesh(20, 20, 1, 1, distribution_parameters=VIAMR.PARALLEL_OVERLAP)
     CG1, _ = amr.spaces(mesh)
     u = Function(CG1).interpolate(1.0)
     x, y = SpatialCoordinate(mesh)

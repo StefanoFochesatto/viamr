@@ -125,11 +125,8 @@ for amrtype in refinetypes:
 
     amr = VIAMR()
 
-    # setting distribution parameters should not be necessary ... but bug in netgen
-    dp = {
-        "partition": True,
-        "overlap_type": (DistributedMeshOverlapType.VERTEX, 1),
-    }
+    # udomark() needs this overlap to give correct results in parallel
+    dp = VIAMR.PARALLEL_OVERLAP
     if amrtype == "avm":
         geo = SplineGeometry()
         geo.AddRectangle(p1=(-2, -2), p2=(2, 2), bc="rectangle")
