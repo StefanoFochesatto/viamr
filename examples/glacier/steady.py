@@ -66,6 +66,7 @@ if args.opvdsub:
     assert args.bdata or (0.0 <= bx[2] < bx[3] <= L), "y range not valid for [0,L]"
 
 # set up .csv if generating numerical error data
+assert args.ocsv == "" or mesh.comm.size == 1, "-ocsv output only valid in serial"  # FIXME it uses VIAMR.freeboundarygraph2D()
 if args.ocsv:
     assert args.prob == "dome", "option -ocsv only valid for -prob dome"
     csvfile = open(args.ocsv, "w")
@@ -273,15 +274,20 @@ for i in range(args.refine + 1):
     # report numerical errors if exact solution known
     if not args.bdata and args.prob == "dome":
         uerr_H1_semi, uerr_H1_rel, Herr_Linf, uexact = dome_normerrors(u, H)
-        vfb, _ = amr.freeboundarygraph2D(u, Function(V).interpolate(0.0))
-        drmax = dome_radiuserror(mesh, vfb)
-        pprint(
-            f"  |u-uexact|_H1rel = {uerr_H1_rel:.3e};  |H-Hexact|_Linf = {Herr_Linf:.3f} m;  |dr|_Linf = {drmax/1000.0:.3f} km"
-        )
-        if args.ocsv:
-            print(
-                f"{i:d},{ne:d},{hmin:.2f},{uerr_H1_rel:.3e},{Herr_Linf:.3f},{drmax:.3f}",
-                file=csvfile,
+        if mesh.comm.size == 1:
+            vfb, _ = amr.freeboundarygraph2D(u, Function(V).interpolate(0.0))
+            drmax = dome_radiuserror(mesh, vfb)
+            pprint(
+                f"  |u-uexact|_H1rel = {uerr_H1_rel:.3e};  |H-Hexact|_Linf = {Herr_Linf:.3f} m;  |dr|_Linf = {drmax/1000.0:.3f} km"
+            )
+            if args.ocsv:
+                print(
+                    f"{i:d},{ne:d},{hmin:.2f},{uerr_H1_rel:.3e},{Herr_Linf:.3f},{drmax:.3f}",
+                    file=csvfile,
+                )
+        else:
+            pprint(
+                f"  |u-uexact|_H1rel = {uerr_H1_rel:.3e};  |H-Hexact|_Linf = {Herr_Linf:.3f} m"
             )
 
     # mark and refine based on constraint H >= 0 (or u >= 0 or s >= b)

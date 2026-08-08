@@ -29,6 +29,9 @@ python3 steady.py -prob dome -ocsv dome.csv -opvd result_dome.pvd
 ### convergence and AMR efficiency
 
 In the paper there is an example showing norm and geometrical errors against mesh complexity (number of elements).  Uniform and UDO+BR mesh refinement methods are shown.  Here are these runs:
+
+FIXME these will not work until freeboundarygraph2D() is fixed to produce same result in serial and parallel
+
 ```
 mpiexec -n 12 python3 steady.py -prob dome -m 5 -refine 8 -uniform 8 -ocsv uniform.csv
 mpiexec -n 12 python3 steady.py -prob dome -m 5 -refine 13 -ocsv udo.csv
