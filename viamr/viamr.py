@@ -20,13 +20,23 @@ except ImportError:
 
 
 class VIAMR(OptionsManager):
-    r"""A VIAMR object manages adaptive mesh refinement (AMR) for a Firedrake variational inequality (VI) solver.  Central notions are that refinement near the free boundary will improve solution quality, and that refinement in the active set can be wasted effort.  Complementary refinement in the inactive set is also supported, since both refinement modes are necessary for convergence under AMR.
+    r"""A VIAMR object manages adaptive mesh refinement (AMR) for a Firedrake variational inequality (VI) solver.
+
+    Central notions behind this class:
+      * Like a PDE AMR method, refinement in the inactive set should be guided by
+        an a posteriori estimator.
+      * Refinement near the free boundary is compatible with the goals of free
+        boundary models, even if it does not directly reduce the norm error of the solution.
+        E.g. a purpose of solving glacier problems is to know which land is glaciated.
+      * For some problems, refinement in the active set is worthwhile, but for some
+        it is wasted effort.
 
     The prominent public API of the VIAMR class consists of:
 
       udomark(), vcdmark():  2 marking methods which target the computed free boundary
 
-      gradreinactivemark(), brinactivemark():  2 classical a posterior error indicator marking methods applied in the computed inactive set
+      gradreinactivemark(), brinactivemark():  2 classical a posterior error indicator marking methods applied in the computed inactive set.  the latter implements methods from
+      Babushka & Rheinboldt (1978) and the weighted extension from Bernardi & Verfurth (2000)
 
       nsvmark():  mark using the "practical estimator" from Nochetto, Siebert, & Veeser (2003) = NSV03
 
@@ -52,7 +62,8 @@ class VIAMR(OptionsManager):
       mark = amr.udomark(uh, lb)                     # free-boundary targeted marking method
       mark = amr.vcdmark(uh, lb)                     # same, but based on diffusion
       imark = amr.gradrecinactivemark(uh, lb)        # classical gradient recovery in inactive set
-      imark = amr.brinactivemark(uh, lb, res_ufl)    # classical Babuska & Rheinboldt in inactive set
+      imark = amr.brinactivemark(uh, lb, res_ufl)    # classical BR78 in inactive set
+      imark = amr.brinactivemark(uh, lb, res_ufl, Z=Z)   # weighted (BV00) in inactive set
       mark = amr.unionmarks(mark, imark)             # mark according to two methods above
       mark, _, _, _ = amr.nsvmark(uh, lb, g, f_ufl, g_ufl)  # method from NSV03
       rmesh = amr.refinemarkelements(mesh, mark)     # calls PETSc DMPlexTransform for SBR
@@ -62,13 +73,12 @@ class VIAMR(OptionsManager):
 
     Regarding the refinemarkedelements(), compare refine_marked_elements() from NetGen/ngspetsc.
 
-    There are also some public utility methods: spaces(), meshsizes(), meshreport(), checkadmissible(), and countmark().  Other methods starting with an underscore are (roughly) intended to be private to the VIAMR class.
+    There are also some utility methods: spaces(), meshsizes(), meshreport(), checkadmissible(), and countmark().  Other methods starting with an underscore are (roughly) intended to be private to the VIAMR class.
 
-    Certain functions do not work in parallel: 1. jaccard() with submesh=False, 2. hausdorff(), and 3. freeboundarygraph2D() (and therefore hausdorff() as normally used with its output).
-
-    Certain functions run both in serial and parallel, but can give different results depending on the number of processes: 1. vcdmark() and 2. adaptaveragedmetric().  See the paper for more details.
-
-    freeboundarygraph2D() only supports 2D meshes (triangular or quadrilateral cells); it raises ValueError otherwise.
+    Limitations:
+      * Functions which do not work in parallel: 1. jaccard() with submesh=False, 2. hausdorff(), and 3. freeboundarygraph2D().
+      * Functions which give different results depending on the number of processes: 1. vcdmark() and 2. adaptaveragedmetric().
+      * Functions which only work for 2D meshs: 1. freeboundarygraph2D().
     """
 
     def __init__(self, **kwargs):
