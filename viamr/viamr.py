@@ -450,7 +450,7 @@ class VIAMR(OptionsManager):
                 "ksp_convergence_test": "skip",
                 "pc_type": "icc",
             }
-            if mesh.comm.size > 0:
+            if mesh.comm.size > 1:
                 sp.update({"pc_type": "asm", "pc_asm_overlap": 1, "sub_pc_type": "icc"})
         if printsolvertime:
             start = time.perf_counter()
@@ -1037,7 +1037,7 @@ class VIAMR(OptionsManager):
     def _filtermesh(self, mesh, indicator):
 
         # Create Section for DG0 indicator
-        tdim = mesh.topological_dimension()
+        tdim = mesh.topological_dimension
         entity_dofs = np.zeros(tdim + 1, dtype=IntType)
         entity_dofs[:] = 0
         entity_dofs[-1] = 1
