@@ -1,12 +1,17 @@
 # run as
 #   bash caps.sh &> caps.txt
 
-MPG="mpiexec --bind-to hwthread --map-by core"
-P=12
+P=6
+#P=12
 
-HMIN="-hmin 500.0"
-REFINE="-uniform 3 -refine 12"
-OPTS="-prob cap -elevdepend -m 20 -pcount 20 $HMIN $REFINE"
+MPG="mpiexec --bind-to hwthread --map-by core"
+
+PROB="-prob cap -elevdepend"
+METHOD="-primal s -picard -pcount 20"
+REFINE="-m 20 -uniform 2 -refine 6 -hmin 500.0"
+#REFINE="-m 20 -uniform 2 -refine 12 -hmin 500.0"
+
+OPTS="$PROB $METHOD $REFINE"
 
 ELA=1000
 BOX="-box 1100.0e3 1300.0e3 900.0e3 1100.0e3"
