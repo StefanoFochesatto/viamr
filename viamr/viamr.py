@@ -64,7 +64,7 @@ class VIAMR(OptionsManager):
 
     There are also some public utility methods: spaces(), meshsizes(), meshreport(), checkadmissible(), and countmark().  Other methods starting with an underscore are (roughly) intended to be private to the VIAMR class.
 
-    Certain functions do not work in parallel: 1. jaccard() with submesh=False, and 2. hausdorff().
+    Certain functions do not work in parallel: 1. jaccard() with submesh=False, 2. hausdorff(), and 3. freeboundarygraph() (and therefore hausdorff() as normally used with its output).
 
     Certain functions run both in serial and parallel, but can give different results depending on the number of processes: 1. vcdmark() and 2. adaptaveragedmetric().  See the paper for more details.
     """
@@ -987,6 +987,8 @@ class VIAMR(OptionsManager):
                 f"unknown type='{type}'; must be 'dm', 'fd', or 'coords'"
             )
         mesh = uh.function_space().mesh()
+        if mesh.comm.size > 1:
+            raise ValueError("freeboundarygraph() is not valid in parallel")
         CellVertexMap = mesh.topology.cell_closure
 
         # Get active indicators
