@@ -954,10 +954,9 @@ class VIAMR(OptionsManager):
         try:
             import shapely
         except ImportError:
-            import sys
-
-            print("ImportError.  Unable to import shapely.  Exiting.")
-            sys.exit(0)
+            raise ImportError(
+                "VIAMR.hausdorff() requires shapely; install it with 'pip install shapely'"
+            )
         return shapely.hausdorff_distance(
             shapely.MultiLineString(E1), shapely.MultiLineString(E2), 0.99
         )
@@ -965,6 +964,10 @@ class VIAMR(OptionsManager):
     # FIXME: checks for when free boundary is emptyset
     def freeboundarygraph(self, uh, lb, type="coords"):
         """pulls the graph for the free boundary, return as dm, fd, or coords"""
+        if type not in ("dm", "fd", "coords"):
+            raise ValueError(
+                f"unknown type='{type}'; must be 'dm', 'fd', or 'coords'"
+            )
         mesh = uh.function_space().mesh()
         CellVertexMap = mesh.topology.cell_closure
 
