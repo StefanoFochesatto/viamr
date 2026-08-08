@@ -214,6 +214,24 @@ def test_nsvmark_allinactive():
     assert tot2 >= 0.0
 
 
+def test_fixedrate_total():
+    # Check of _fixedrate()'s "total" strategy.  eta is a function of x,y
+    # (via SpatialCoordinate) so that its value on a given physical cell is
+    # the same regardless of which process owns that cell; this is what lets
+    # tests/test_parallel.py::test_fixedrate_total_parallel reuse the same
+    # construction and assert it reproduces these same serial numbers.
+    mesh = UnitSquareMesh(4, 1)
+    amr = VIAMR(debug=True)
+    _, DG0 = amr.spaces(mesh)
+    assert DG0.dim() == 8
+    x, y = SpatialCoordinate(mesh)
+    eta = Function(DG0).interpolate(x + 2 * y)
+    mark, ethresh, total_error_est = amr._fixedrate(eta, theta=0.5, method="total")
+    assert abs(ethresh - 1.75) < 1.0e-10
+    assert amr.countmark(mark) == 2
+    assert abs(total_error_est - 4.444097208657794) < 1.0e-10
+
+
 if __name__ == "__main__":
     test_overrefine_udo()
     test_finer_udo()
@@ -224,3 +242,4 @@ if __name__ == "__main__":
     test_refine_br()
     test_refine_br_total()
     test_nsvmark_allinactive()
+    test_fixedrate_total()

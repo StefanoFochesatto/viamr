@@ -522,22 +522,22 @@ class VIAMR(OptionsManager):
         return mark
 
     def _fixedrate(self, eta, theta, method):
-        # FIXME think more about this and see if we can make "total" (essentially?) process-independent
         """Marks elements according to the values of estimator eta in DG0 and a threshold which depends on the scalar theta.  The number of elements marked is an increasing function of theta.  The default 'max' strategy marks all elements with eta greater than
           ethresh = theta * max eta
-        The 'total' strategy sorts the elements owned by the process by decreasing eta value.  Then the threshold
+        The 'total' strategy sorts all elements (globally, across processes) by decreasing eta value.  Then the threshold
           ethresh = eta(index)
         equals the eta value where theta times the total sum of eta is equal to the sum of the eta values above ethresh.  (I.e. theta gives the fraction of the total eta sum.)  The 'total' strategy is the refine-only version of the "fixed-rate" strategy, with X=theta and Y=0, described in section 4.2 of
           W. Bangerth & R. Rannacher (2003).  Adaptive Finite Element Methods for
           Differential Equations, Springer Basel.
-        WARNING: The 'total' strategy produces different results depending on the number of processes."""
+        Both strategies give identical results regardless of the number of processes.  Note the 'total' strategy allgathers eta onto every process, so it does not scale to very large meshes on very large process counts."""
 
         with eta.dat.vec_ro as eta_:
             if method == "max":
                 ethresh = theta * eta_.max()[1]  # process independent
             elif method == "total":
-                values = eta_.array_r
-                if values.size == 0:  # this process owns no elements
+                comm = eta.function_space().mesh().comm
+                values = np.concatenate(comm.allgather(eta_.array_r))
+                if values.size == 0:  # global mesh has no elements
                     ethresh = PETSc.INFINITY
                 else:
                     sorted_values = np.sort(values)[::-1]  # sort in descending order

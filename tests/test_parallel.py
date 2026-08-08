@@ -159,7 +159,24 @@ def test_udo_regression():
     assert amr.jaccard(markold, marknew) == 1.0
 
 
+@pytest.mark.parallel(nprocs=3)
+def test_fixedrate_total_parallel():
+    # Same construction as tests/test_refine.py::test_fixedrate_total(), but
+    # here split across 3 processes (8 cells split unevenly, e.g. 2/3/3), to
+    # confirm _fixedrate(method="total") reproduces the exact serial numbers.
+    mesh = UnitSquareMesh(4, 1)
+    amr = VIAMR(debug=True)
+    _, DG0 = amr.spaces(mesh)
+    x, y = SpatialCoordinate(mesh)
+    eta = Function(DG0).interpolate(x + 2 * y)
+    mark, ethresh, total_error_est = amr._fixedrate(eta, theta=0.5, method="total")
+    assert abs(ethresh - 1.75) < 1.0e-10
+    assert amr.countmark(mark) == 2
+    assert abs(total_error_est - 4.444097208657794) < 1.0e-10
+
+
 if __name__ == "__main__":
     test_refine_udo_parallelUDO()
     test_udo_regression()
     test_parallel_udo()
+    test_fixedrate_total_parallel()
