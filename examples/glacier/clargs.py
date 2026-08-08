@@ -13,15 +13,14 @@ surface mass balance, where the exact solution is known and the numerical error
 is reported.  Option -bdata reads the bed elevation from a NetCDF (.nc) file.
 
 An elevation-dependent surface mass balance model is turned on with -elevdepend.
-Set -sELA for equilibrium line altitude.  This case does not allow -newton.
+Set -sELA for equilibrium line altitude.  This case requires -picard, though
+the solver is mostly Newton in that case also.
 
 We apply the UDO method for free-boundary refinement.  The default mode
-does n=1 UDO at the free boundary, plus gradient-recovery estimation in the
-inactive set.
+does n=1 UDO at the free boundary.  To this we add the weighted form of the BR78
+residual estimator in the inactive set, that is, the method from BV00.
 
-The default VI solver is Picard iteration on the tilt; see (Jouvet & Bueler, 2012).
-We apply vinewtonrsls (+ mumps) for each tilt.  A full Newton iteration, simply
-vinewtonrsls, is turned on with -newton, but it may not converge in harder cases.
+We apply vinewtonrsls + mumps as the PETSc solver.
 """
 
 from argparse import ArgumentParser, RawTextHelpFormatter
@@ -63,12 +62,6 @@ parser.add_argument(
     help="number of cells in each direction on initial mesh [default=20]",
 )
 parser.add_argument(
-    "-newton",
-    action="store_true",
-    default=False,
-    help="use straight Newton instead of Picard+Newton",
-)
-parser.add_argument(
     "-ocsv",
     metavar="FILE",
     type=str,
@@ -90,6 +83,12 @@ parser.add_argument(
     help="output file (.pvd) into which we extract a submesh defined by -box",
 )
 parser.add_argument(
+    "-picard",
+    action="store_true",
+    default=False,
+    help="use Picard iteration, a wrapper around the Newton solver; required for -elevdepend",
+)
+parser.add_argument(
     "-pcount",
     type=int,
     default=10,
@@ -99,10 +98,10 @@ parser.add_argument(
 parser.add_argument(
     "-primal",
     type=str,
-    default="u",
+    default="s",
     metavar="X",
-    choices=["u", "s"],
-    help="choose primal variable {u (transformed thickness), s (surface elevation)} [default=u]",
+    choices=["s", "u"],
+    help="choose primal variable: s (surface elevation) or u (transformed thickness) [default=s]",
 )
 parser.add_argument(
     "-prob",

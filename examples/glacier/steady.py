@@ -14,12 +14,12 @@ from clargs import parser
 args, passthroughoptions = parser.parse_known_args()
 assert args.m >= 1, "at least one cell in mesh"
 assert args.refine >= 0, "cannot refine a negative number of times"
-assert args.newton or args.pcount >= 1, "at least one Picard iteration required"
+assert args.pcount >= 1, "at least one Picard iteration required"
 assert args.udo_n >= 0, "cannot use UDO with negative levels"
 assert (
     not args.elevdepend or args.prob != "dome"
 ), "combination invalid: -elevdepend & -prob dome"
-assert not args.newton or not args.elevdepend, "-newton invalid (unstable) for -elevdepend"
+assert args.picard or not args.elevdepend, "Picard iteration required for -elevdepend"
 
 import numpy as np
 import petsc4py
@@ -58,6 +58,7 @@ from synthetic import (
     model_a_ufl,
 )
 
+# validate -opvdsub and -box options
 if args.opvdsub:
     bx = args.box  # [x_left, x_right, y_lower, y_upper]
     assert bx[0] < bx[1] and bx[2] < bx[3], "-box not valid"
@@ -70,7 +71,7 @@ if args.ocsv:
     csvfile = open(args.ocsv, "w")
     print("REFINE,NE,HMIN,UERRH1,HERRINF,DRMAX", file=csvfile)
 
-# read data for bed topography
+# generate mesh, possibly by reading data for bed topography
 if args.bdata:
     pprint(f"reading topg from {args.bdata} and ignoring -prob choice ...")
     args.prob = None
@@ -79,16 +80,13 @@ if args.bdata:
     topg_nc.describe_grid(print=PETSc.Sys.Print, indent=4)
     pprint(f"putting topg onto matching Firedrake structured data mesh ...")
     topg, nearb = topg_nc.function(delnear=100.0e3)
-else:
-    pprint(
-        f"generating synthetic {args.m} x {args.m} initial mesh for problem {args.prob} ..."
-    )
-
-if args.bdata:
     # generate mesh compatible with data mesh, but at user (-m) resolution, typically lower
     mesh = topg_nc.rectmesh(args.m)
 else:
     # generate [0,L]^2 mesh via Firedrake
+    pprint(
+        f"generating {args.m} x {args.m} initial mesh, with synthetic data for problem {args.prob} ..."
+    )
     mesh = RectangleMesh(args.m, args.m, L, L, diagonal="crossed")
 
 # solver parameters
@@ -119,14 +117,14 @@ def glaciermeshreport(amr, mesh, indent=2):
     PETSc.Sys.Print(
         f"{indentstr}current mesh: {nv} vertices, {ne} elements, h in [{hmin:.3f},{hmax:.3f}] km"
     )
-    return None
+    return ne, hmin
 
 
 # encapsulate solve to avoid code duplication
 def vinewtonsolve(G, w, bcs=None, lower=None, upper=None):
     problem = NonlinearVariationalProblem(G, w, bcs=bcs)
     solver = NonlinearVariationalSolver(
-        problem, solver_parameters=sp, options_prefix="s"
+        problem, solver_parameters=sp, options_prefix="steady"
     )
     solver.solve(bounds=(lower, upper))
     return None
@@ -135,10 +133,10 @@ def vinewtonsolve(G, w, bcs=None, lower=None, upper=None):
 # outer mesh refinement loop
 amr = VIAMR(debug=True, activetol=1.0)
 for i in range(args.refine + 1):
+    pprint(f"solving using variable {args.primal} on mesh level {i}:")
+
     # describe current mesh
-    nv, ne, hmin, hmax = amr.meshsizes(mesh)
-    pprint(f"solving problem {args.prob} on mesh level {i}:")
-    glaciermeshreport(amr, mesh)
+    ne, hmin = glaciermeshreport(amr, mesh)
 
     # space for most functions
     V, DG0 = amr.spaces(mesh)  # V = CG1
@@ -210,16 +208,8 @@ for i in range(args.refine + 1):
         ]
     ub = Function(V).interpolate(Constant(PETSc.INFINITY))
 
-    # solve, or Picard solve loop
-    if args.newton:
-        if args.primal == "u":
-            F = weakform_u(u, a, b)
-            vinewtonsolve(F, u, bcs=bcs, lower=lb, upper=ub)
-        else:
-            F = weakform_s(s, a, b)
-            vinewtonsolve(F, s, bcs=bcs, lower=lb, upper=ub)
-    else:
-        # outer loop for Picard iteration
+    # solve, by Picard solve loop or directly by Newton
+    if args.picard:
         if args.primal == "u":
             # both freeze-tilt iteration, and a=a(s) iteration if -elevdepend
             for k in range(args.pcount):
@@ -240,6 +230,14 @@ for i in range(args.refine + 1):
                 F = weakform_s(s, a, b)
                 vinewtonsolve(F, s, bcs=bcs, lower=lb, upper=ub)
                 sold = Function(V).interpolate(s)
+    else:
+        # solve directly by Newton; not attempted if -elevdepend
+        if args.primal == "u":
+            F = weakform_u(u, a, b)
+            vinewtonsolve(F, u, bcs=bcs, lower=lb, upper=ub)
+        else:
+            F = weakform_s(s, a, b)
+            vinewtonsolve(F, s, bcs=bcs, lower=lb, upper=ub)
 
     # update geometry variables
     if args.primal == "u":
@@ -265,6 +263,20 @@ for i in range(args.refine + 1):
         pprint("")
     oldei = ei
 
+    # report numerical errors if exact solution known
+    if not args.bdata and args.prob == "dome":
+        uerr_H1_semi, uerr_H1_rel, Herr_Linf, uexact = dome_normerrors(u, H)
+        vfb, _ = amr.freeboundarygraph(u, Function(V).interpolate(0.0))
+        drmax = dome_radiuserror(mesh, vfb)
+        pprint(
+            f"  |u-uexact|_H1rel = {uerr_H1_rel:.3e};  |H-Hexact|_Linf = {Herr_Linf:.3f} m;  |dr|_Linf = {drmax/1000.0:.3f} km"
+        )
+        if args.ocsv:
+            print(
+                f"{i:d},{ne:d},{hmin:.2f},{uerr_H1_rel:.3e},{Herr_Linf:.3f},{drmax:.3f}",
+                file=csvfile,
+            )
+
     # mark and refine based on constraint H >= 0 (or u >= 0 or s >= b)
     uni = i < args.uniform
     if uni:
@@ -289,25 +301,16 @@ for i in range(args.refine + 1):
         # report percentages of elements marked
         pfb = 100.0 * amr.countmark(fbmark) / ne
         pin = 100.0 * amr.countmark(imark) / amr.countmark(ei)
-        pprint(
-            f"  elements marked by UDO+BR weighted: {pfb:.2f}% free-bdry, {pin:.2f}% of inactive"
-        )
 
-    # report numerical errors if exact solution known
-    if not args.bdata and args.prob == "dome":
-        uerr_H1_semi, uerr_H1_rel, Herr_Linf, uexact = dome_normerrors(u, H)
-        vfb, _ = amr.freeboundarygraph(u, Function(V).interpolate(0.0))
-        drmax = dome_radiuserror(mesh, vfb)
+        # report on AMR
         pprint(
-            f"  |u-uexact|_H1rel = {uerr_H1_rel:.3e};  |H-Hexact|_Linf = {Herr_Linf:.3f} m;  |dr|_Linf = {drmax/1000.0:.3f} km",
-            end="",
+            f"  elements marked by UDO+BR weighted: {pfb:.2f}% free-bdry, {pin:.2f}% of inactive",
+            end=""
         )
-        pprint("" if uni else f";  eff_H1 = {total_eta / uerr_H1_semi:.3f}")
-        if args.ocsv:
-            print(
-                f"{i:d},{ne:d},{hmin:.2f},{uerr_H1_rel:.3e},{Herr_inf:.3f},{drmax:.3f}",
-                file=csvfile,
-            )
+        if not args.bdata and args.prob == "dome":
+            pprint(f";  eff_H1 = {total_eta / uerr_H1_semi:.3f}")
+        else:
+            pprint("")
 
     # refine (when proceeding to next mesh)
     if i < args.refine:
