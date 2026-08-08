@@ -1,11 +1,13 @@
-import numpy as np
 import pytest
 from firedrake import *
 from viamr import VIAMR
 
 from test_basic import _get_netgen_mesh, _get_ball_obstacle
-
-from mpi4py import MPI
+from test_refine import (
+    _fixedrate_total_case,
+    _udomark_interesting_case,
+    _udomark_interesting_mesh_lb,
+)
 
 
 class VIAMRRegression(VIAMR):
@@ -83,77 +85,15 @@ def test_refine_udo_parallelUDO():
 
 
 @pytest.mark.parallel(nprocs=3)
-def test_parallel_udo():
-    comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()
-
-    amr = VIAMR()
-    mesh = RectangleMesh(20, 20, 1, 1, distribution_parameters=VIAMR.PARALLEL_OVERLAP)
-    CG1, _ = amr.spaces(mesh)
-    u = Function(CG1).interpolate(1.0)
-    x, y = SpatialCoordinate(mesh)
-
-    # Somewhat interesting obstacle configuration.
-    lb = Function(CG1).interpolate(
-        conditional(
-            And(And(x > 0.15, x < 0.35), And(y > 0.15, y < 0.35)),
-            1.0,
-            conditional(
-                And(And(x > 0.65, x < 0.85), And(y > 0.15, y < 0.35)),
-                1.0,
-                conditional(
-                    And(And(x > 0.15, x < 0.35), And(y > 0.65, y < 0.85)),
-                    1.0,
-                    conditional(
-                        And(And(x > 0.65, x < 0.85), And(y > 0.65, y < 0.85)), 1.0, 0.0
-                    ),
-                ),
-            ),
-        )
-    )
-
-    # Mark in parallel
-    mark = amr.udomark(u, lb, n=2)
-
-    # Compute number of local active elements
-    localActive = np.sum(mark.dat.data_ro[:])
-    globalActive = np.zeros(1, dtype=np.float64)
-    comm.Allreduce(localActive, globalActive, op=MPI.SUM)
-
-    if rank == 0:
-        # Check agreement with serial implementation
-        assert globalActive[0] == 506
+def test_udomark_interesting_case_parallel():
+    _udomark_interesting_case(VIAMR())
 
 
 def test_udo_regression():
     # This test utilizes the the old implementation of UDO which builds the neighborhood of the free boundary using breadth first search,
     # as a regression test for the dmplex based implementation.
-
     amr = VIAMRRegression()
-    mesh = RectangleMesh(20, 20, 1, 1, distribution_parameters=VIAMR.PARALLEL_OVERLAP)
-    CG1, _ = amr.spaces(mesh)
-    u = Function(CG1).interpolate(1.0)
-    x, y = SpatialCoordinate(mesh)
-
-    # Somewhat interesting obstacle configuration.
-    lb = Function(CG1).interpolate(
-        conditional(
-            And(And(x > 0.15, x < 0.35), And(y > 0.15, y < 0.35)),
-            1.0,
-            conditional(
-                And(And(x > 0.65, x < 0.85), And(y > 0.15, y < 0.35)),
-                1.0,
-                conditional(
-                    And(And(x > 0.15, x < 0.35), And(y > 0.65, y < 0.85)),
-                    1.0,
-                    conditional(
-                        And(And(x > 0.65, x < 0.85), And(y > 0.65, y < 0.85)), 1.0, 0.0
-                    ),
-                ),
-            ),
-        )
-    )
-
+    u, lb = _udomark_interesting_mesh_lb(amr)
     markold = amr.udomarkOLD(u, lb, n=2)
     marknew = amr.udomark(u, lb, n=2)
     assert amr.jaccard(markold, marknew) == 1.0
@@ -161,22 +101,14 @@ def test_udo_regression():
 
 @pytest.mark.parallel(nprocs=3)
 def test_fixedrate_total_parallel():
-    # Same construction as tests/test_refine.py::test_fixedrate_total(), but
-    # here split across 3 processes (8 cells split unevenly, e.g. 2/3/3), to
-    # confirm _fixedrate(method="total") reproduces the exact serial numbers.
-    mesh = UnitSquareMesh(4, 1)
-    amr = VIAMR(debug=True)
-    _, DG0 = amr.spaces(mesh)
-    x, y = SpatialCoordinate(mesh)
-    eta = Function(DG0).interpolate(x + 2 * y)
-    mark, ethresh, total_error_est = amr._fixedrate(eta, theta=0.5, method="total")
-    assert abs(ethresh - 1.75) < 1.0e-10
-    assert amr.countmark(mark) == 2
-    assert abs(total_error_est - 4.444097208657794) < 1.0e-10
+    # 8 cells split unevenly (e.g. 2/3/3) across processes; confirms
+    # tests/test_refine.py::_fixedrate_total_case() gives the same result
+    # regardless of process count.
+    _fixedrate_total_case(VIAMR(debug=True))
 
 
 if __name__ == "__main__":
     test_refine_udo_parallelUDO()
     test_udo_regression()
-    test_parallel_udo()
+    test_udomark_interesting_case_parallel()
     test_fixedrate_total_parallel()

@@ -214,14 +214,13 @@ def test_nsvmark_allinactive():
     assert tot2 >= 0.0
 
 
-def test_fixedrate_total():
-    # Check of _fixedrate()'s "total" strategy.  eta is a function of x,y
-    # (via SpatialCoordinate) so that its value on a given physical cell is
-    # the same regardless of which process owns that cell; this is what lets
-    # tests/test_parallel.py::test_fixedrate_total_parallel reuse the same
-    # construction and assert it reproduces these same serial numbers.
+def _fixedrate_total_case(amr):
+    # Shared by test_fixedrate_total() here and
+    # tests/test_parallel.py::test_fixedrate_total_parallel(), so the two
+    # assert the identical numbers from one definition.  eta is a function of
+    # x,y (via SpatialCoordinate) so that its value on a given physical cell
+    # is the same regardless of which process owns that cell.
     mesh = UnitSquareMesh(4, 1)
-    amr = VIAMR(debug=True)
     _, DG0 = amr.spaces(mesh)
     assert DG0.dim() == 8
     x, y = SpatialCoordinate(mesh)
@@ -230,6 +229,52 @@ def test_fixedrate_total():
     assert abs(ethresh - 1.75) < 1.0e-10
     assert amr.countmark(mark) == 2
     assert abs(total_error_est - 4.444097208657794) < 1.0e-10
+
+
+def test_fixedrate_total():
+    _fixedrate_total_case(VIAMR(debug=True))
+
+
+def _udomark_interesting_mesh_lb(amr):
+    # Shared "somewhat interesting obstacle configuration" used by
+    # test_udomark_interesting_case() here, and by
+    # tests/test_parallel.py::test_udomark_interesting_case_parallel() and
+    # test_udo_regression().
+    mesh = RectangleMesh(20, 20, 1, 1, distribution_parameters=VIAMR.PARALLEL_OVERLAP)
+    CG1, _ = amr.spaces(mesh)
+    u = Function(CG1).interpolate(1.0)
+    x, y = SpatialCoordinate(mesh)
+    lb = Function(CG1).interpolate(
+        conditional(
+            And(And(x > 0.15, x < 0.35), And(y > 0.15, y < 0.35)),
+            1.0,
+            conditional(
+                And(And(x > 0.65, x < 0.85), And(y > 0.15, y < 0.35)),
+                1.0,
+                conditional(
+                    And(And(x > 0.15, x < 0.35), And(y > 0.65, y < 0.85)),
+                    1.0,
+                    conditional(
+                        And(And(x > 0.65, x < 0.85), And(y > 0.65, y < 0.85)), 1.0, 0.0
+                    ),
+                ),
+            ),
+        )
+    )
+    return u, lb
+
+
+def _udomark_interesting_case(amr):
+    # Shared by test_udomark_interesting_case() here and
+    # tests/test_parallel.py::test_udomark_interesting_case_parallel(), so the
+    # two assert the identical count from one definition.
+    u, lb = _udomark_interesting_mesh_lb(amr)
+    mark = amr.udomark(u, lb, n=2)
+    assert amr.countmark(mark) == 506
+
+
+def test_udomark_interesting_case():
+    _udomark_interesting_case(VIAMR())
 
 
 if __name__ == "__main__":
@@ -243,3 +288,4 @@ if __name__ == "__main__":
     test_refine_br_total()
     test_nsvmark_allinactive()
     test_fixedrate_total()
+    test_udomark_interesting_case()
