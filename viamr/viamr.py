@@ -153,6 +153,22 @@ class VIAMR(OptionsManager):
             assert islb, "input lb must be of class Function or Constant"
             assert self.checkadmissible(uh, lb)
 
+    def _checkparalleloverlap(self, mesh):
+        """Raise ValueError if mesh is distributed across multiple processes
+        without sufficient vertex overlap.  udomark() and thinelemactive() walk
+        DMPlex vertex stars across partition boundaries (via getTransitiveClosure()),
+        which requires overlap_type=(DistributedMeshOverlapType.VERTEX, n) with
+        n >= 1 for correct results; see tests/test_parallel.py::test_parallel_udo."""
+        if mesh.comm.size > 1:
+            dp = mesh._distribution_parameters
+            if dp["overlap_type"][0].name != "VERTEX" or dp["overlap_type"][1] < 1:
+                raise ValueError(
+                    "udomark()/thinelemactive() in parallel require "
+                    'distribution_parameters={"partition": True, '
+                    '"overlap_type": (DistributedMeshOverlapType.VERTEX, 1)} '
+                    "(or greater) on mesh initialization"
+                )
+
     def _nodalactive(self, uh, lb):
         """Compute nodal active set indicator in same function space as uh.  Only implemented for unilateral (lower bound) obstacle problems.  The nodal active set is
           {x in N(V): |u(x) - lb(x)| < activetol}
@@ -195,6 +211,7 @@ class VIAMR(OptionsManager):
         """
         inactive = self.eleminactive(uh, lb)
         mesh = uh.function_space().mesh()
+        self._checkparalleloverlap(mesh)
         _, DG0 = self.spaces(mesh)
         dm = mesh.topology_dm
         # map from firedrake mesh indices to DMPlex element indices (-1 = 2 = elements):
@@ -367,6 +384,7 @@ class VIAMR(OptionsManager):
             border = self._elemborder(self._nodalactive(uh, lb))
 
         # get DMPlex
+        self._checkparalleloverlap(mesh)
         d = mesh.cell_dimension()
         dm = mesh.topology_dm
         # FIXME Experiment implementation in cython, DMLabel to mark accumulation, dmplex with only vertex and cell connectivity to save memory
