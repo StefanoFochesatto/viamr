@@ -66,7 +66,7 @@ class VIAMR(OptionsManager):
       imark = amr.brinactivemark(uh, lb, res_ufl, Z=Z)   # weighted (BV00) in inactive set
       mark = amr.unionmarks(mark, imark)             # mark according to two methods above
       mark, _, _, _ = amr.nsvmark(uh, lb, g, f_ufl, g_ufl)  # method from NSV03
-      rmesh = amr.refinemarkelements(mesh, mark)     # calls PETSc DMPlexTransform for SBR
+      rmesh = amr.refinemarkedelements(mesh, mark)   # calls PETSc DMPlexTransform for skeleton-based refinement
       rmesh = amr.adaptaveragedmetric(mesh, uh, lb)  # use animate for metric-based adaptation
 
     Regarding the arguments: uh is a computed VI solution, lb=psi is the lower bound (obstacle), res_ufl is a UFL expression for the residual (applicable in the inactive set), mark is an element marking in DG0 (Definition 4.2 in paper), and rmesh is a refined or adapted mesh.
@@ -75,10 +75,11 @@ class VIAMR(OptionsManager):
 
     There are also some utility methods: spaces(), meshsizes(), meshreport(), checkadmissible(), and countmark().  Other methods starting with an underscore are (roughly) intended to be private to the VIAMR class.
 
-    Limitations:
+    Known limitations:
       * Functions which do not work in parallel: 1. jaccard() with submesh=False, 2. hausdorff(), and 3. freeboundarygraph2D().
       * Functions which give different results depending on the number of processes: 1. vcdmark() and 2. adaptaveragedmetric().
-      * Functions which only work for 2D meshs: 1. freeboundarygraph2D().
+      * Functions which only work for 2D meshs: 1. freeboundarygraph2D(), 2. refinemarkedelements()
+      * Functions which only work for triangular meshes: 1. refinemarkedelements()
     """
 
     PARALLEL_OVERLAP = {
