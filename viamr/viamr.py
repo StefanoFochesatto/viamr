@@ -1057,7 +1057,7 @@ class VIAMR(OptionsManager):
         type requested, are returned."""
         if type not in ("dm", "fd", "coords"):
             raise ValueError(
-                f"unknown type='{type}'; must be 'dm', 'fd', or 'coords'"
+                f"unknown type '{type}'; must be 'dm', 'fd', or 'coords'"
             )
         mesh = uh.function_space().mesh()
         if mesh.comm.size > 1:
@@ -1065,25 +1065,19 @@ class VIAMR(OptionsManager):
         if mesh.topological_dimension != 2:
             raise ValueError("freeboundarygraph2D() only supports 2D meshes")
 
-        nv = mesh.ufl_cell().num_vertices
-        CellVertexMap = mesh.topology.cell_closure
-        plexelementlist = CellVertexMap[:, -1]  # DMPlex point number of each cell
+        nv = mesh.ufl_cell().num_vertices  # =3 for triangles, =4 for quadrilaterals
+        CellVertexMap = mesh.topology.cell_closure  # DG0.dim() x (2*nv + 1) array; each row is cell closure
+        plexelementlist = CellVertexMap[:, -1]  # DMPlex point number (index) of each cell
         dm = mesh.topology_dm
 
-        # Get active indicators
-        elemactive = self.elemactive(uh, lb)  # cell
-        elemborder = self._elemborder(self._nodalactive(uh, lb))  # bordering cell
-
-        ActiveSetElementsIndices = [
-            i for i, value in enumerate(elemactive.dat.data_ro) if value != 0
-        ]
-        BorderElementsIndices = [
-            i for i, value in enumerate(elemborder.dat.data_ro) if value != 0
-        ]
+        # Get lists of indices for active and border elements
+        elemactive = self.elemactive(uh, lb)
+        elemborder = self._elemborder(self._nodalactive(uh, lb))
+        ActiveSetElementsIndices = np.where(elemactive.dat.data_ro)[0]
+        BorderElementsIndices = np.where(elemborder.dat.data_ro)[0]
 
         # Vertices incident to a bordering / active-set cell.  The first nv
-        # columns of cell_closure are always a cell's nv vertices, for any 2D
-        # cell type (nv=3 for triangle, nv=4 for quadrilateral).
+        # columns of CellVertexMap are always a cell's nv vertices, for any 2D cell type
         BorderVertices = set()
         for cellIdx in BorderElementsIndices:
             BorderVertices.update(CellVertexMap[cellIdx][:nv])
@@ -1091,9 +1085,8 @@ class VIAMR(OptionsManager):
         for cellIdx in ActiveSetElementsIndices:
             ActiveVertices.update(CellVertexMap[cellIdx][:nv])
 
-        # Find intersection of border and active vertices
+        # free boundary = (active) \cap (border)
         FreeBoundaryVertices = BorderVertices.intersection(ActiveVertices)
-
         if not FreeBoundaryVertices:
             warnings.warn(
                 "VIAMR.freeboundarygraph2D() found an empty free boundary; "
@@ -1102,15 +1095,13 @@ class VIAMR(OptionsManager):
             return (set(), set()) if type == "dm" else ([], [])
 
         # Create an edge set for the FreeBoundaryVertices.  Use each bordering
-        # cell's actual boundary edges (its DMPlex cone), not all pairs of its
-        # vertices: for a quadrilateral cell the two diagonal vertex pairs are
-        # *not* edges of the cell, unlike for a triangle, where every vertex
-        # pair happens to be an edge.
+        # cell's actual boundary edges, its DMPlex cone.  (For a triangle this equals
+        # all pairs of vertices, but not for a quadrilateral.)
         EdgeSet = set()
-        for cellIdx in BorderElementsIndices:
-            cellPoint = plexelementlist[cellIdx]
-            for edgePoint in dm.getCone(cellPoint):
-                v1, v2 = dm.getCone(edgePoint)
+        for j in BorderElementsIndices:
+            k = plexelementlist[j]
+            for edge in dm.getCone(k):
+                v1, v2 = dm.getCone(edge)
                 if v1 in FreeBoundaryVertices and v2 in FreeBoundaryVertices:
                     EdgeSet.add((min(v1, v2), max(v1, v2)))
 
@@ -1133,7 +1124,7 @@ class VIAMR(OptionsManager):
             ]
             if type == "fd":
                 return fdV, fdE
-            elif type == "coords":
+            else:  # returning coordinates of vertices and edges for the free boundary
                 coords = mesh.coordinates.dat.data_ro_with_halos
                 coordsV = [coords[vertex] for vertex in fdV]
                 coordsE = [
