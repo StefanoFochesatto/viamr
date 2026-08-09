@@ -25,13 +25,15 @@ class VIAMR(OptionsManager):
     Central notions behind this class:
       * Like a PDE AMR method, refinement in the inactive set should be guided by
         an a posteriori estimator.
-      * Refinement near the free boundary is compatible with the goals of free
-        boundary models, even if it does not directly reduce the norm error of the solution.
-        E.g. a purpose of solving glacier problems is to know which land is glaciated.
       * For some problems, refinement in the active set is worthwhile, but for some
         it is wasted effort.
+      * Additional refinement near the free boundary is compatible with the goals of free
+        boundary models.  For example, a purpose of solving glacier problems is to know which land
+        is glaciated.  Refining near the free boundary matches user goals even if it does not
+        reduce the norm error of the solution.  It does reduce the geometrical measures of set
+        errors; see hausdorf() and jaccard() in this class.
 
-    The prominent public API of the VIAMR class consists of:
+    The public API of the VIAMR class consists of:
 
       udomark(), vcdmark():  2 marking methods which target the computed free boundary
 
@@ -53,6 +55,10 @@ class VIAMR(OptionsManager):
       lowerboundcelldiameter():  unmark elements with cell diameters below a minimum cell diameter
 
       jaccard(), jaccardUFL():  computation of the Jaccard similarity index for two active sets
+
+      hausdorff():  compute the Hausdorff distance between two edge sets E1, E2
+
+      freeboundarygraph2D():  for 2D obstacle problems, return the computed free boundary
 
     Some default calls to the major marking methods and refinement methods are:
 
