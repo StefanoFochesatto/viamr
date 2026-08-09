@@ -82,8 +82,8 @@ class VIAMR(OptionsManager):
     There are also some utility methods: spaces(), meshsizes(), meshreport(), checkadmissible(), and countmark().  Other methods starting with an underscore are (roughly) intended to be private to the VIAMR class.
 
     Known limitations:
-      * Functions which do not work in parallel: 1. jaccard() with submesh=False, 2. hausdorff(), and 3. freeboundarygraph2D().
-      * Functions which give different results depending on the number of processes: 1. vcdmark() and 2. adaptaveragedmetric().
+      * Functions which do not work in parallel: 1. jaccard(..., submesh=False).
+      * Functions whose results depend on number of processes: 1. vcdmark(), 2. adaptaveragedmetric().
       * Functions which only work for 2D meshs: 1. freeboundarygraph2D(), 2. refinemarkedelements()
       * Functions which only work for triangular meshes: 1. refinemarkedelements()
     """
@@ -1017,7 +1017,7 @@ class VIAMR(OptionsManager):
 
     def hausdorff(self, E1, E2, densify=0.99):
         """Compute the (densified, approximate) Hausdorff distance between two
-        edge sets E1, E2, e.g. as returned by freeboundarygraph2D(type="coords").
+        edge-coordinate sets E1, E2, e.g. as returned by freeboundarygraph2D().
         densify is the shapely densify fraction in (0,1]: each segment is
         subdivided into 1/densify pieces before comparison, which turns the
         (fast but only locally-accurate) vertex-based Hausdorff distance into a
@@ -1039,52 +1039,50 @@ class VIAMR(OptionsManager):
             shapely.MultiLineString(E1), shapely.MultiLineString(E2), densify
         )
 
-    def freeboundarygraph2D(self, uh, lb, type="coords"):
+    def freeboundarygraph2D(self, uh, lb):
         """Compute the graph (vertices and edges) of the computed free boundary
-        of a 2D obstacle problem.  Works for meshes with triangular or
-        quadrilateral cells.  The free boundary vertices are those incident to
-        both a bordering (partially-active) element and a fully-active element;
-        see _elemborder() and elemactive().  The free boundary edges are the
-        edges of bordering elements which connect two such vertices.
+        of a 2D obstacle problem, as (x,y) coordinates.  Works for
+        meshes with triangular or quadrilateral cells.  The free boundary
+        vertices are those incident to both a bordering (partially-active)
+        element and a fully-active element; see _elemborder() and
+        elemactive().  The free boundary edges are the edges of bordering
+        elements which connect two such vertices.
 
-        The type argument selects the output format:
-          type="dm":     (FreeBoundaryVertices, EdgeSet), as sets of DMPlex
-                          point numbers for vertices, and (v1,v2) tuples of the
-                          same for edges
-          type="fd":     (fdV, fdE), the same information using Firedrake's
-                          global vertex numbering
-          type="coords": (coordsV, coordsE) (the default), the same
-                          information as physical (x,y) coordinate pairs; this
-                          is the format hausdorff() expects
+        Returns (coordsV, coordsE): coordsV is a list of [x,y] vertex
+        coordinates, and coordsE is a list of [[x1,y1],[x2,y2]] edge
+        coordinate pairs.  The latter is the format hausdorff() expects
+        for its "edge sets".
 
-        Only implemented for 2D meshes (raises ValueError otherwise), and only
-        valid in serial (raises ValueError if called in parallel).  If the
-        free boundary is empty (e.g. uh == lb identically, or uh is strictly
-        above lb everywhere) a warning is issued and empty structures, of the
-        type requested, are returned."""
-        if type not in ("dm", "fd", "coords"):
-            raise ValueError(
-                f"unknown type '{type}'; must be 'dm', 'fd', or 'coords'"
-            )
+        Only implemented for 2D meshes (raises ValueError otherwise).
+
+        Correct in parallel provided the mesh was built with
+        distribution_parameters=VIAMR.PARALLEL_OVERLAP (or overlap_type=
+        (DistributedMeshOverlapType.VERTEX, n>=1)); see
+        _checkparalleloverlap().
+
+        If the free boundary is empty (e.g. uh==lb identically, or uh>lb
+        everywhere) a warning is issued and empty lists are returned."""
+
         mesh = uh.function_space().mesh()
-        if mesh.comm.size > 1:
-            raise ValueError("freeboundarygraph2D() is not valid in parallel")
         if mesh.topological_dimension != 2:
             raise ValueError("freeboundarygraph2D() only supports 2D meshes")
+        self._checkparalleloverlap(mesh)
 
+        # basic mesh topology information
         nv = mesh.ufl_cell().num_vertices  # =3 for triangles, =4 for quadrilaterals
         CellVertexMap = mesh.topology.cell_closure  # DG0.dim() x (2*nv + 1) array; each row is cell closure
         plexelementlist = CellVertexMap[:, -1]  # DMPlex point number (index) of each cell
-        dm = mesh.topology_dm
 
-        # Get lists of indices for active and border elements
+        # Get lists of indices for active and border elements.  Include halo
+        # (ghost) cells so free-boundary vertices/edges lying on a process boundaries
+        # are visible to every rank; same pattern as thinelemactive().
         elemactive = self.elemactive(uh, lb)
         elemborder = self._elemborder(self._nodalactive(uh, lb))
-        ActiveSetElementsIndices = np.where(elemactive.dat.data_ro)[0]
-        BorderElementsIndices = np.where(elemborder.dat.data_ro)[0]
+        ActiveSetElementsIndices = np.where(elemactive.dat.data_ro_with_halos)[0]
+        BorderElementsIndices = np.where(elemborder.dat.data_ro_with_halos)[0]
 
-        # Vertices incident to a bordering / active-set cell.  The first nv
-        # columns of CellVertexMap are always a cell's nv vertices, for any 2D cell type
+        # Vertices incident to a bordering / active-set cell.  The first nv columns
+        # of CellVertexMap are always a cell's nv vertices, for any 2D cell type.
         BorderVertices = set()
         for cellIdx in BorderElementsIndices:
             BorderVertices.update(CellVertexMap[cellIdx][:nv])
@@ -1092,18 +1090,16 @@ class VIAMR(OptionsManager):
         for cellIdx in ActiveSetElementsIndices:
             ActiveVertices.update(CellVertexMap[cellIdx][:nv])
 
-        # free boundary = (active) \cap (border)
+        # free boundary = (active) \cap (border), as local DMPlex point
+        # numbers.  In parallel a vertex/edge on a process boundary is
+        # found independently by every rank that borders it; this is
+        # resolved below by an allgather-and-deduplicate step below.
         FreeBoundaryVertices = BorderVertices.intersection(ActiveVertices)
-        if not FreeBoundaryVertices:
-            warnings.warn(
-                "VIAMR.freeboundarygraph2D() found an empty free boundary; "
-                "returning an empty graph"
-            )
-            return (set(), set()) if type == "dm" else ([], [])
 
-        # Create an edge set for the FreeBoundaryVertices.  Use each bordering
+        # Create an edge *set* for the FreeBoundaryVertices.  Use each bordering
         # cell's actual boundary edges, its DMPlex cone.  (For a triangle this equals
         # all pairs of vertices, but not for a quadrilateral.)
+        dm = mesh.topology_dm
         EdgeSet = set()
         for j in BorderElementsIndices:
             k = plexelementlist[j]
@@ -1112,36 +1108,45 @@ class VIAMR(OptionsManager):
                 if v1 in FreeBoundaryVertices and v2 in FreeBoundaryVertices:
                     EdgeSet.add((min(v1, v2), max(v1, v2)))
 
-        if type == "dm":
-            return FreeBoundaryVertices, EdgeSet
+        # Convert local DMPlex point numbers to physical coordinates.
+        # NOTE: _vertex_numbering is a private Firedrake attribute (no
+        # public equivalent as of this writing); a future Firedrake release
+        # could rename or remove it without warning.
+        coords = mesh.coordinates.dat.data_ro_with_halos
+        vnum = mesh.topology._vertex_numbering
+        coordsV = [tuple(coords[vnum.getOffset(v)]) for v in FreeBoundaryVertices]
+        coordsE = [
+            tuple(
+                sorted(
+                    (
+                        tuple(coords[vnum.getOffset(v1)]),
+                        tuple(coords[vnum.getOffset(v2)]),
+                    )
+                )
+            )
+            for v1, v2 in EdgeSet
+        ]
+
+        # Deduplicate across ranks using allgather().  Halo coordinate values are
+        # exact copies of the owning rank's data (no arithmetic), so a shared
+        # vertex/edge is bit-identical.  A plain set correctly merges
+        # the per-rank (possibly-overlapping) contributions into a single global
+        # graph, identical on every rank.
+        if mesh.comm.size > 1:
+            coordsV = set().union(*mesh.comm.allgather(coordsV))
+            coordsE = set().union(*mesh.comm.allgather(coordsE))
         else:
-            # NOTE: _vertex_numbering is a private Firedrake attribute (no
-            # public equivalent as of this writing); a future Firedrake
-            # release could rename or remove it without warning.
-            fdV = [
-                mesh.topology._vertex_numbering.getOffset(vertex)
-                for vertex in FreeBoundaryVertices
-            ]
-            fdE = [
-                [
-                    mesh.topology._vertex_numbering.getOffset(edge[0]),
-                    mesh.topology._vertex_numbering.getOffset(edge[1]),
-                ]
-                for edge in EdgeSet
-            ]
-            if type == "fd":
-                return fdV, fdE
-            else:  # returning coordinates of vertices and edges for the free boundary
-                coords = mesh.coordinates.dat.data_ro_with_halos
-                coordsV = [coords[vertex] for vertex in fdV]
-                coordsE = [
-                    [
-                        [coords[edge[0]][0], coords[edge[0]][1]],
-                        [coords[edge[1]][0], coords[edge[1]][1]],
-                    ]
-                    for edge in fdE
-                ]
-                return coordsV, coordsE
+            coordsV = set(coordsV)
+            coordsE = set(coordsE)
+
+        if not coordsV:
+            warnings.warn(
+                "VIAMR.freeboundarygraph2D() found an empty free boundary; "
+                "returning an empty graph"
+            )
+
+        # return plain lists-of-lists
+        return [list(v) for v in coordsV], [[list(e[0]), list(e[1])] for e in coordsE]
 
     def _filtermesh(self, mesh, indicator):
 

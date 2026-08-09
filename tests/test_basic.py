@@ -190,6 +190,44 @@ def test_quad_mesh_hausdorff():
     assert amr.hausdorff(E1, E2) == 0.2
 
 
+def _freeboundarygraph2D_circle_case(amr, quadrilateral=False):
+    # Shared by test_freeboundarygraph2D_circle{,_quad}() here and
+    # tests/test_parallel.py::test_freeboundarygraph2D_circle_parallel(), so
+    # the two assert the identical vertex/edge counts from one definition.
+    # A circular obstacle on a RectangleMesh is used because its free
+    # boundary crosses partition boundaries under any process count,
+    # exercising the parallel dedup in freeboundarygraph2D().
+    mesh = RectangleMesh(
+        20,
+        20,
+        1,
+        1,
+        quadrilateral=quadrilateral,
+        distribution_parameters=VIAMR.PARALLEL_OVERLAP,
+    )
+    CG1, _ = amr.spaces(mesh)
+    x, y = SpatialCoordinate(mesh)
+    lb = Function(CG1).interpolate(
+        conditional((x - 0.5) ** 2 + (y - 0.5) ** 2 < 0.3**2, 1.0, 0.0)
+    )
+    uh = Function(CG1).interpolate(Constant(1.0))
+    return amr.freeboundarygraph2D(uh, lb)
+
+
+def test_freeboundarygraph2D_circle():
+    coordsV, coordsE = _freeboundarygraph2D_circle_case(VIAMR(debug=True))
+    assert len(coordsV) == 36
+    assert len(coordsE) == 36
+
+
+def test_freeboundarygraph2D_circle_quad():
+    coordsV, coordsE = _freeboundarygraph2D_circle_case(
+        VIAMR(debug=True), quadrilateral=True
+    )
+    assert len(coordsV) == 40
+    assert len(coordsE) == 40
+
+
 def test_elemmaxabs():
     mesh = UnitSquareMesh(2, 1)
     x, y = SpatialCoordinate(mesh)
@@ -247,6 +285,8 @@ if __name__ == "__main__":
     test_third_jaccard_ufl()
     test_hausdorff()
     test_quad_mesh_hausdorff()
+    test_freeboundarygraph2D_circle()
+    test_freeboundarygraph2D_circle_quad()
     test_globalextreme_uses()
     test_elemmaxabs()
     test_elemmin()

@@ -2,7 +2,11 @@ import pytest
 from firedrake import *
 from viamr import VIAMR
 
-from test_basic import _get_netgen_mesh, _get_ball_obstacle
+from test_basic import (
+    _get_netgen_mesh,
+    _get_ball_obstacle,
+    _freeboundarygraph2D_circle_case,
+)
 from test_refine import (
     _fixedrate_total_case,
     _udomark_interesting_case,
@@ -107,8 +111,21 @@ def test_fixedrate_total_parallel():
     _fixedrate_total_case(VIAMR(debug=True))
 
 
+@pytest.mark.parallel(nprocs=3)
+def test_freeboundarygraph2D_circle_parallel():
+    # Confirms tests/test_basic.py::_freeboundarygraph2D_circle_case() gives
+    # the same free boundary graph (vertex/edge count) regardless of process
+    # count, i.e. that the allgather-and-deduplicate step in
+    # freeboundarygraph2D() correctly merges the per-rank contributions
+    # along partition boundaries.
+    coordsV, coordsE = _freeboundarygraph2D_circle_case(VIAMR(debug=True))
+    assert len(coordsV) == 36
+    assert len(coordsE) == 36
+
+
 if __name__ == "__main__":
     test_refine_udo_parallelUDO()
     test_udo_regression()
     test_udomark_interesting_case_parallel()
     test_fixedrate_total_parallel()
+    test_freeboundarygraph2D_circle_parallel()
