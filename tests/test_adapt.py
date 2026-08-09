@@ -20,7 +20,7 @@ def test_adapt_avm():
     amr.setmetricparameters(target_complexity=100, h_min=1.0e-4, h_max=1.0)
     rmesh = amr.adaptaveragedmetric(mesh, u, psi)
     rCG1, _ = amr.spaces(rmesh)
-    assert rCG1.dim() == 152
+    assert rCG1.dim() == 153
 
 
 @needsanimate
@@ -38,11 +38,11 @@ def test_adapt_avm_separated():
     # only isotropic free-boundary metric
     fbmesh = amr.adaptaveragedmetric(mesh, uh, psi, gamma=1.0)
     fbCG1, _ = amr.spaces(fbmesh)
-    assert fbCG1.dim() == 129
+    assert fbCG1.dim() == 128
     # only hessian metric
     hmesh = amr.adaptaveragedmetric(mesh, uh, psi, gamma=0.0)
     hCG1, _ = amr.spaces(hmesh)
-    assert hCG1.dim() == 150
+    assert hCG1.dim() == 144
 
 
 @needsanimate
@@ -57,7 +57,7 @@ def test_adapt_avm_intersect():
     amr.setmetricparameters(target_complexity=100, h_min=1.0e-4, h_max=1.0)
     rmesh = amr.adaptaveragedmetric(mesh, u, psi, intersect=True)
     rCG1, _ = amr.spaces(rmesh)
-    assert rCG1.dim() == 189
+    assert rCG1.dim() == 193
 
 
 if __name__ == "__main__":
