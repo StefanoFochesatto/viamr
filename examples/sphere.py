@@ -18,7 +18,6 @@ targetelements = 1.0e5  # all methods stop refining once this is met
 maxlevels = 11  # backstop target element complexity; set to 15 for more data?
 uniformlevels = 5  # generally uniform can't reach high levels ... which is the point
 writecsvs = False
-dohausdorff = True
 
 
 import time
@@ -190,21 +189,13 @@ for amrtype in refinetypes:
         print(f"  ||u_exact - tilde u_h||_2 = {en_pre:.3e}")
         jaccard = amr.jaccardUFL(activeexactUFL(r), activeh)
         print(f"  jaccard(A_u, A_uh) = {jaccard:.5f}")
-        haus = PETSc.INFINITY
-        if dohausdorff:
-            if mesh.comm.size == 1:
-                uexact = Function(V, name="u_exact").interpolate(uexactUFL(r))
-                _, fbexact = amr.freeboundarygraph2D(uexact, lb)
-                _, fb = amr.freeboundarygraph2D(uh, lb)
-                haus = amr.hausdorff(fbexact, fb)
-                print(f"  hausdorff(Gamma_u, Gamma_uh) = {haus:.5f}")
-            else:
-                print(
-                    "WARNING: measuring Hausdorff distance between exact and approximate free boundary not possible in parallel ... turning it off"
-                )
-                dohausdorff = False
+        uexact = Function(V, name="u_exact").interpolate(uexactUFL(r))
+        _, fbexact = amr.freeboundarygraph2D(uexact, lb)
+        _, fb = amr.freeboundarygraph2D(uh, lb)
+        haus = amr.hausdorff(fbexact, fb)
+        print(f"  hausdorff(Gamma_u, Gamma_uh) = {haus:.5f}")
 
-        # report, and break if targer complexity met
+        # report, and break if target complexity met
         Nv, Ne, hmin, hmax = amr.meshsizes(mesh)
         if writecsvs:
             csvfile.write(
