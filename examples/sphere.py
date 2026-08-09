@@ -140,6 +140,7 @@ for amrtype in refinetypes:
             Ly=2.0,
             originX=-2.0,
             originY=-2.0,
+            diagonal="crossed",
             distribution_parameters=dp,
         )
     meshHist = [mesh0]
