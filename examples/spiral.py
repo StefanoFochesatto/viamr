@@ -109,7 +109,7 @@ for amrtype in typelist:
                 mark = amr.vcdmark(uh, lb, bracket=[0.1, 0.9])
             mark = amr.unionmarks(mark, imark)
         else:
-            (mark, _, _, _) = amr.nsvmark(
+            (mark, _, _, _, _) = amr.nsvmark(
                 uh,
                 lb,
                 Constant(0.0),

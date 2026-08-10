@@ -215,7 +215,7 @@ for amrtype in refinetypes:
             mesh = amr.adaptaveragedmetric(mesh, uh, lb)
         elif amrtype == "nsv":
             g = Function(V).interpolate(g_ufl)
-            (mark, _, _, _) = amr.nsvmark(uh, lb, g, Constant(0.0), g_ufl)
+            (mark, _, _, _, _) = amr.nsvmark(uh, lb, g, Constant(0.0), g_ufl)
             mesh = amr.refinemarkedelements(mesh, mark)
         else:
             mark = amr.udomark(uh, lb, n=1)
