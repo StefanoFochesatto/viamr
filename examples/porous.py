@@ -28,6 +28,7 @@
 # report the empirical rate from the data itself.  But we also show
 # the classical a priori rate DOFs^(-2/d) as a reference.
 
+import numpy as np
 from firedrake import *
 from firedrake.petsc import PETSc
 
@@ -95,7 +96,7 @@ mesh = RectangleMesh(
     distribution_parameters=VIAMR.PARALLEL_OVERLAP,
 )
 amr = VIAMR()
-dofs, errL2s, errH1s, errqns = [], [], [], []  # for convergence figure
+dofs, errL2s, errH1s, errqns, hausdorffs = [], [], [], [], []  # for convergence figure
 for i in range(levels + 1):
     # initialize on this mesh
     V = FunctionSpace(mesh, "CG", 1)
@@ -161,6 +162,15 @@ for i in range(levels + 1):
         jac = amr.jaccard(neweactive, eactive, submesh=True)
     eactive = neweactive
 
+    # free-boundary Hausdorff distance vs exact; hausdorff() returns None
+    # for an empty free-boundary edge set (e.g. a coarse initial mesh)
+    uexact = Function(V, name="u_exact").interpolate(uUFL)
+    _, fbexact = amr.freeboundarygraph2D(uexact, lb)
+    _, fb = amr.freeboundarygraph2D(uh, lb)
+    haus = amr.hausdorff(fbexact, fb)
+    hausstr = f"{haus:.5f}" if haus is not None else "n/a"
+    hausdorffs.append(haus if haus is not None else np.nan)  # nan plots as a gap
+
     # mark and refine by UDO+BR; tot_eta from this is used in reported effectivity index
     # note: regularize by eps_final, not bare abs(uh), because div()
     # differentiates symbolically, producing gamma-2 as power; for gamma<2 that is
@@ -177,6 +187,7 @@ for i in range(levels + 1):
     # report errors, effectivity index, Jaccard agreement
     print(f"  ||u-u_h||_L2={errL2:.3e};  |u-u_h|_H1={errH1:.3e};  |u-u_h|_qn={errqn:.3e}")
     print(f"  eff={eff:.2f}" + (f";  Jaccard({i-1},{i})={100*jac:.2f}%" if i > 0 else ""))
+    print(f"  hausdorff(Gamma_u, Gamma_uh) = {hausstr}")
 
     # actually refine if we will solve on next mesh
     if i < levels:
@@ -199,18 +210,18 @@ if mesh.comm.size > 1:
     fields.append(rank)
 VTKFile(outfile).write(*fields)
 
-# convergence figure; measured rates are empirically fit, since the
+# convergence figures; measured rates are empirically fit, since the
 # porous-media operator is degenerate (not uniformly elliptic) and so
-# the classical DOFs^(-2/d) L^2 rate is not rigorously justified here;
-# we plot it anyway, as a reference, alongside the measured rates
+# the classical rates are not rigorously justified here; we plot them
+# anyway, as references, alongside the measured rates
 if mesh.comm.rank == 0:
     import matplotlib.pyplot as plt
-    import numpy as np
+
+    d = 2  # spatial dimension
+    dofs_a = np.array(dofs)
 
     figfile = "porous_convergence.png"
     print(f"generating convergence figure {figfile} ...")
-    d = 2  # spatial dimension
-    dofs_a = np.array(dofs)
     series = [
         ("$L^2$", errL2s, "ko"),
         ("$H^1$", errH1s, "bs"),
@@ -230,3 +241,25 @@ if mesh.comm.rank == 0:
     plt.ylabel("error norm")
     plt.title(f"porous-media problem (gamma={gamma}): UDO+BV00 convergence")
     plt.savefig(figfile)
+
+    # Hausdorff distance is a geometric (not squared-error) quantity, so the
+    # natural reference is mesh-resolution scaling h ~ DOFs^(-1/d), not the
+    # L^2/H^1 rates above; as in sphere.py
+    hausfile = "porous_convergence_hausdorff.png"
+    print(f"generating convergence figure {hausfile} ...")
+    haus_a = np.array(hausdorffs)
+    valid = np.isfinite(haus_a) & (haus_a > 0)
+    plt.figure()
+    if np.any(valid):
+        rate = np.polyfit(np.log(dofs_a[valid]), np.log(haus_a[valid]), 1)[0]
+        plt.loglog(dofs_a, haus_a, "ko", label=f"Hausdorff (rate={rate:.2f})")
+        anchor = np.argmax(valid)  # index of first valid entry
+        y = dofs_a.astype(float) ** (-1.0 / d)
+        y = y * haus_a[anchor] / y[anchor]
+        plt.loglog(dofs_a, y, "k:", label="DOFs^(-1/d)")
+        plt.legend()
+    plt.grid(True)
+    plt.xlabel("DOFs")
+    plt.ylabel("hausdorff(Gamma_u, Gamma_uh)")
+    plt.title(f"porous-media problem (gamma={gamma}): free-boundary Hausdorff distance")
+    plt.savefig(hausfile)
