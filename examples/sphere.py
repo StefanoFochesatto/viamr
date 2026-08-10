@@ -5,15 +5,18 @@
 #   3. UNI = uniform refinement
 #   4. AVM = averaged-metric mesh adaptation  <-- only runs if avm import succeeds
 #
-# The exact solution is known and so we can compute norm convergence rates.
 # We generate .pvd files: result_sphere_{udobr,nsv,uni,avm}.pvd
-# We measure Hausdorff convergence rates in serial.
-# Optionally we generate .csv files for norm and Jaccard convergence rates.
-# We generate four .png convergence figures comparing all methods:
+#
+# The exact solution is known and so we can compute norm convergence rates.
+# We generate five .png convergence figures comparing all methods:
 #   sphere_convergence_unorm.png       ||u_exact - u_h||_2 vs DOFs
 #   sphere_convergence_preferred.png   ||u_exact - tilde u_h||_2 vs DOFs
 #   sphere_convergence_h1.png          |u_exact - u_h|_{H^1 seminorm} vs DOFs
 #   sphere_convergence_hausdorff.png   hausdorff(Gamma_u, Gamma_uh) vs DOFs
+#   sphere_effectivity.png             estimator/true-error effectivity index
+#                                       vs DOFs, for UDOBR and NSV only
+#
+# Optionally we generate .csv files for norm and Jaccard convergence rates.
 
 
 # note: use higher targetelements and/or maxlevels for serious convergence
@@ -119,6 +122,19 @@ def errornorm_H1semi_deg20(u, uh):
     return np.sqrt(normsq)
 
 
+def errornorm_Linf_deg4(amr, u, uh):
+    """Approximate sup-norm (L^infty) error, via interpolation of the
+    (generally non-polynomial) exact-minus-computed difference into a
+    higher-degree CG space, then VIAMR.scalarrange() for a parallel-safe
+    max; same technique nsvmark() itself uses internally for non-polynomial
+    data (e.g. its bdryerr term).  This is the norm NSV03's "pointwise a
+    posteriori error control" theory targets, in contrast to BR78/BV00's
+    energy (H^1 seminorm) norm."""
+    W = FunctionSpace(uh.function_space().mesh(), "CG", 4)
+    err = Function(W).interpolate(abs(u - uh))
+    return amr.scalarrange(err)[1]
+
+
 # solver parameters for VI
 sp = {
     "snes_type": "vinewtonrsls",
@@ -137,12 +153,15 @@ sp = {
 
 results = {}  # results[amrtype] = (dofs, errnorm, errnorm_pres, hausdorffs, errnorm_h1s),
 # for the four convergence figures generated at the end
+effs = {}  # effs[amrtype] = (eff_dofs, eff_vals), for udobr/nsv only; see
+# the effectivity-index figure generated at the end
 
 for amrtype in refinetypes:
     print(f"solving by VIAMR using {amrtype.upper()} method ...")
 
     amr = VIAMR()
     dofs, errnorms, errnorm_pres, hausdorffs, errnorm_h1s = [], [], [], [], []
+    eff_dofs, eff_vals = [], []  # effectivity index vs DOFs; udobr/nsv only
 
     # udomark() needs this overlap to give correct results in parallel
     dp = VIAMR.PARALLEL_OVERLAP
@@ -245,13 +264,33 @@ for amrtype in refinetypes:
             mesh = amr.adaptaveragedmetric(mesh, uh, lb)
         elif amrtype == "nsv":
             g = Function(V).interpolate(g_ufl)
-            (mark, _, _, _, _) = amr.nsvmark(uh, lb, g, Constant(0.0), g_ufl)
+            (mark, etainf, _, _, _) = amr.nsvmark(uh, lb, g, Constant(0.0), g_ufl)
+            # effectivity index vs NSV03's own target norm: max_T eta_inf(T)
+            # is the whole-domain (not inactive-set-restricted) quantity its
+            # pointwise theory bounds ||u-u_h||_infty by, in contrast to
+            # BR78/BV00's energy-norm estimator below
+            errLinf = errornorm_Linf_deg4(amr, uexactUFL(r), uh)
+            maxetainf = amr.scalarrange(etainf)[1]
+            eff_nsv = maxetainf / errLinf if errLinf > 0 else np.nan
+            print(f"  eff_NSV (sup norm) = {eff_nsv:.3f}")
+            eff_dofs.append(Nv)
+            eff_vals.append(eff_nsv)
             mesh = amr.refinemarkedelements(mesh, mark)
         else:
             mark = amr.udomark(uh, lb, n=1)
             residual = -div(grad(uh))
-            (imark, _, _) = amr.brinactivemark(uh, lb, residual, theta=thetaBR, method=methodBR)
+            (imark, _, tot_eta) = amr.brinactivemark(uh, lb, residual, theta=thetaBR, method=methodBR)
             mark = amr.unionmarks(mark, imark)
+            # effectivity index vs the SAME inactive set brinactivemark()
+            # restricts its estimator to; matches the H^1 seminorm BR78's
+            # unweighted estimator targets (see errornorm_H1semi_deg20)
+            iamark = amr.eleminactive(uh, lb, strong=True)
+            dus = inner(grad(uexactUFL(r) - uh), grad(uexactUFL(r) - uh))
+            errH1_inactive = np.sqrt(assemble(dus * iamark * dx(degree=20)))
+            eff_br = tot_eta / errH1_inactive if errH1_inactive > 0 else np.nan
+            print(f"  eff_BR (inactive-set, energy norm) = {eff_br:.3f}")
+            eff_dofs.append(Nv)
+            eff_vals.append(eff_br)
             mesh = amr.refinemarkedelements(mesh, mark)
         if amrtype != "uni":
             refinetime = time.time() - start_time
@@ -261,6 +300,7 @@ for amrtype in refinetypes:
         csvfile.close()
 
     results[amrtype] = (dofs, errnorms, errnorm_pres, hausdorffs, errnorm_h1s)
+    effs[amrtype] = (eff_dofs, eff_vals)
 
     outfile = "result_sphere_" + amrtype + ".pvd"
     print(f"done ... writing to {outfile} ...")
@@ -363,3 +403,26 @@ if mesh.comm.rank == 0:
         -1.0 / d,
         "DOFs^(-1/d)",
     )
+
+    # effectivity index = estimator / true error, in whichever norm the
+    # estimator targets (energy norm for BR78, sup norm for NSV03); unlike
+    # the norm-convergence figures above, there's no power-law rate to plot
+    # against, since a reliable+efficient estimator should stay O(1) (ideally
+    # near 1) as DOFs grow, so this uses a linear y-axis with a semilogx
+    # x-axis, and a horizontal reference line at the ideal value of 1
+    plt.figure()
+    effstylemap = {"udobr": ("ko", "BR78 (inactive-set, energy norm)"),
+                    "nsv": ("bs", "NSV03 (sup norm)")}
+    for amrtype in ("udobr", "nsv"):
+        if amrtype not in effs or len(effs[amrtype][0]) == 0:
+            continue
+        edofs, evals = np.array(effs[amrtype][0]), np.array(effs[amrtype][1])
+        style, label = effstylemap[amrtype]
+        plt.semilogx(edofs, evals, style, label=label)
+    plt.axhline(1.0, color="k", linestyle=":", label="ideal eff=1")
+    plt.legend()
+    plt.grid(True)
+    plt.xlabel("DOFs")
+    plt.ylabel("effectivity index")
+    plt.title("sphere problem: estimator/true-error effectivity index vs DOFs")
+    plt.savefig("sphere_effectivity.png")

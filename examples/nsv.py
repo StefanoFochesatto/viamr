@@ -57,13 +57,28 @@ sp = {
 }
 
 
+def errornorm_Linf_deg4(amr, u, uh):
+    """Approximate sup-norm (L^infty) error, via interpolation of the
+    (generally non-polynomial) exact-minus-computed difference into a
+    higher-degree CG space, then VIAMR.scalarrange() for a parallel-safe
+    max; same technique nsvmark() itself uses internally for non-polynomial
+    data (e.g. its bdryerr term).  This is the norm NSV03's "pointwise a
+    posteriori error control" theory targets, in contrast to BR78/BV00's
+    energy (H^1 seminorm) norm."""
+    W = FunctionSpace(uh.function_space().mesh(), "CG", 4)
+    err = Function(W).interpolate(abs(u - uh))
+    return amr.scalarrange(err)[1]
+
+
 print(f"solving {d}D example from Nochetto, Siebert, & Veeser (2003) ...")
 r = 0.7  # parameter in defining problem
 results = {}
+effs = {}  # effs[method] = (eff_dofs, eff_vals), for the effectivity-index figure
 methods = ["UDOBR", "NSV"]
 for method in methods:
     mesh = mesh0
     dofs, errs = [], []
+    eff_dofs, eff_vals = [], []
     for j in range(maxlevs):
         print(f"using AMR by {method} ...")
         x = SpatialCoordinate(mesh)
@@ -110,13 +125,33 @@ for method in methods:
             with PETSc.Log.Event("nsv.py_calls_udomark"):
                 fmark = amr.udomark(uh, psih, n=nUDO)
                 residual = -div(grad(uh)) - f_ufl
-                (imark, _, _) = amr.brinactivemark(uh, psih, residual, theta=0.5, method="total")
+                (imark, _, tot_eta) = amr.brinactivemark(uh, psih, residual, theta=0.5, method="total")
                 mark = amr.unionmarks(fmark, imark)
+            # effectivity index vs the SAME inactive set brinactivemark()
+            # restricts its estimator to; matches the H^1 seminorm BR78's
+            # unweighted estimator targets
+            iamark = amr.eleminactive(uh, psih, strong=True)
+            dus = inner(grad(u_ufl - uh), grad(u_ufl - uh))
+            errH1_inactive = assemble(dus * iamark * dx(degree=6)) ** 0.5
+            eff_br = tot_eta / errH1_inactive if errH1_inactive > 0 else float("nan")
+            print(f"  eff_BR (inactive-set, energy norm) = {eff_br:.3f}")
+            eff_dofs.append(dofs[-1])
+            eff_vals.append(eff_br)
         else:
             with PETSc.Log.Event("nsv.py_calls_nsvmark"):
                 (mark, etainf, sigmah, _, etad) = amr.nsvmark(
                     uh, psih, g, f_ufl, g_ufl, theta=0.5, dualtol=dualtol
                 )
+            # effectivity index vs NSV03's own target norm: max_T eta_inf(T)
+            # is the whole-domain (not inactive-set-restricted) quantity its
+            # pointwise theory bounds ||u-u_h||_infty by, in contrast to
+            # BR78/BV00's energy-norm estimator above
+            errLinf = errornorm_Linf_deg4(amr, u_ufl, uh)
+            maxetainf = amr.scalarrange(etainf)[1]
+            eff_nsv = maxetainf / errLinf if errLinf > 0 else float("nan")
+            print(f"  eff_NSV (sup norm) = {eff_nsv:.3f}")
+            eff_dofs.append(dofs[-1])
+            eff_vals.append(eff_nsv)
 
         # done with this method if we reach target complexity
         if dofs[-1] > targetnodes:
@@ -128,8 +163,9 @@ for method in methods:
         else:
             mesh = mesh.refine_marked_elements(mark)  # Netgen refinement
 
-    # for figure below
+    # for figures below
     results[method] = (dofs, errs)
+    effs[method] = (eff_dofs, eff_vals)
 
     # compute fields on final mesh (independent of method)
     uerr = Function(V, name="u_err = u_h - u_exact").interpolate(uh - u_ufl)
@@ -179,3 +215,26 @@ if mesh.comm.rank == 0:
     plt.ylabel("norm error |u-u_h|_2")
     plt.title("compare Figure 7.1 in Nochetto, Siebert, & Veeser (2003)")
     plt.savefig(figfile)
+
+    # effectivity index = estimator / true error, in whichever norm the
+    # estimator targets (energy norm for BR78, sup norm for NSV03); unlike
+    # the norm-convergence figure above, there's no power-law rate to plot
+    # against, since a reliable+efficient estimator should stay O(1) (ideally
+    # near 1) as DOFs grow, so this uses a linear y-axis with a semilogx
+    # x-axis, and a horizontal reference line at the ideal value of 1
+    efffile = "nsv_effectivity.png"
+    print(f"generating effectivity figure {efffile} ...")
+    effstylemap = {"UDOBR": ("ko", "BR78 (inactive-set, energy norm)"),
+                    "NSV": ("bs", "NSV03 (sup norm)")}
+    plt.figure()
+    for meth in methods:
+        edofs, evals = np.array(effs[meth][0]), np.array(effs[meth][1])
+        style, label = effstylemap[meth]
+        plt.semilogx(edofs, evals, style, label=label)
+    plt.axhline(1.0, color="k", linestyle=":", label="ideal eff=1")
+    plt.legend()
+    plt.grid(True)
+    plt.xlabel("DOFs")
+    plt.ylabel("effectivity index")
+    plt.title(f"{d}D NSV03 example: estimator/true-error effectivity index vs DOFs")
+    plt.savefig(efffile)
