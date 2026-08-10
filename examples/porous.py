@@ -16,6 +16,12 @@
 # BR78 estimator.  We report the weighted quasi-norm error.
 # Without the BV00 weighting, very large BR inactive set estimator
 # (=eta) values occur near the free boundary.
+#
+# We generate a .png convergence figure of the norms vs DOFs.  Because
+# the porous-media operator is degenerate, not uniformly elliptic like
+# the Laplacian in nsv.py and sphere.py, we fit and
+# report the empirical rate from the data itself.  But we also show
+# the classical a priori rate DOFs^(-2/d) as a reference.
 
 from firedrake import *
 from firedrake.petsc import PETSc
@@ -67,7 +73,7 @@ def maxeta(mesh, eta):  # maximum of BR estimator, even in parallel
     return float(eta.function_space().mesh().comm.allreduce(mine, op=MPI.MAX))
 
 
-print(f"solving porous-medium obstacle problem using UDO+BR ...")
+print(f"solving gamma={gamma} porous-media obstacle problem using UDO+BR ...")
 mesh = RectangleMesh(
     m0,
     m0,
@@ -79,6 +85,7 @@ mesh = RectangleMesh(
     distribution_parameters=VIAMR.PARALLEL_OVERLAP,
 )
 amr = VIAMR()
+dofs, errL2s, errH1s, errqns = [], [], [], []  # for convergence figure
 for i in range(levels + 1):
     # initialize on this mesh
     V = FunctionSpace(mesh, "CG", 1)
@@ -122,8 +129,12 @@ for i in range(levels + 1):
     errH1 = assemble(dus * dx(degree=6)) ** (1 / 2)
     hT = CellDiameter(mesh)
     CQN = 1.0
-    Zqn = (uh + CQN * hT) ** (gamma - 1.0)  # well-behaved mesh-native version of Z
+    Zqn = abs(uh + CQN * hT) ** (gamma - 1.0)  # well-behaved mesh-native version of Z
     errqn = assemble(Zqn * dus * dx(degree=6)) ** (1 / 2)
+    dofs.append(V.dim())
+    errL2s.append(float(errL2))
+    errH1s.append(float(errH1))
+    errqns.append(float(errqn))
 
     # active set agreement by jaccard
     neweactive = amr.elemactive(uh, lb)
@@ -165,3 +176,35 @@ if mesh.comm.size > 1:
     rank.dat.data[:] = mesh.comm.rank
     fields.append(rank)
 VTKFile(outfile).write(*fields)
+
+# convergence figure; measured rates are empirically fit, since the
+# porous-media operator is degenerate (not uniformly elliptic) and so
+# the classical DOFs^(-2/d) L^2 rate is not rigorously justified here;
+# we plot it anyway, as a reference, alongside the measured rates
+if mesh.comm.rank == 0:
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    figfile = "porous_convergence.png"
+    print(f"generating convergence figure {figfile} ...")
+    d = 2  # spatial dimension
+    dofs_a = np.array(dofs)
+    series = [
+        ("$L^2$", errL2s, "ko"),
+        ("$H^1$", errH1s, "bs"),
+        ("quasi-norm", errqns, "g^"),
+    ]
+    plt.figure()
+    for label, vals, style in series:
+        vals_a = np.array(vals)
+        rate = np.polyfit(np.log(dofs_a), np.log(vals_a), 1)[0]
+        plt.loglog(dofs_a, vals_a, style, label=f"{label} (rate={rate:.2f})")
+    y = dofs_a.astype(float) ** (-2.0 / d)
+    y *= errL2s[0] / y[0]  # anchor to first L^2 data point
+    plt.loglog(dofs_a, y, "k:", label="DOFs^(-2/d)")
+    plt.legend()
+    plt.grid(True)
+    plt.xlabel("DOFs")
+    plt.ylabel("error norm")
+    plt.title(f"porous-media problem (gamma={gamma}): UDO+BV00 convergence")
+    plt.savefig(figfile)

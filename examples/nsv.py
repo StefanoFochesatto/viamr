@@ -161,6 +161,8 @@ if mesh.comm.rank == 0:
     import matplotlib.pyplot as plt
     import numpy as np
 
+    figfile = "porous_nsv.png"
+    print(f"generating convergence figure {figfile} ...")
     markers = ["ko", "bs", "rs"]
     for j in range(len(methods)):
         meth = methods[j]
@@ -176,4 +178,4 @@ if mesh.comm.rank == 0:
     plt.xlabel("DOFs")
     plt.ylabel("norm error |u-u_h|_2")
     plt.title("compare Figure 7.1 in Nochetto, Siebert, & Veeser (2003)")
-    plt.show()
+    plt.savefig(figfile)
