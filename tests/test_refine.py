@@ -203,8 +203,9 @@ def test_nsvmark_allinactive():
     solver.solve(bounds=(lb, ub))
     assert amr.checkadmissible(u, lb)
 
-    mark, etainf, sigmah, total_err = amr.nsvmark(u, lb, g, f, g)
+    mark, etainf, sigmah, total_err, etad = amr.nsvmark(u, lb, g, f, g)
     assert mark.function_space().ufl_element() == DG0.ufl_element()
+    assert etad.function_space().ufl_element() == DG0.ufl_element()
     assert 0 <= amr.countmark(mark) <= DG0.dim()
     assert total_err > 0.0
 
@@ -212,6 +213,93 @@ def test_nsvmark_allinactive():
     tmark, ieta, tot2 = amr.gradrecinactivemark(u, lb, theta=0.5, method="total")
     assert tmark.function_space().ufl_element() == DG0.ufl_element()
     assert tot2 >= 0.0
+
+
+def _nsvmark_nontrivial_soln(amr):
+    """Solve NSV03's own "Example 7.2" (their sec. 7.2): a constant obstacle
+    chi=0 on (-1,1)^2 with radius r=0.7, whose exact solution is
+    u(x) = (max(|x|^2-r^2,0))^2.  Unlike test_nsvmark_allinactive() above, this
+    gives nsvmark() a genuine interior contact set, free boundary, and inactive
+    boundary to work with.  Shared by _nsvmark_nontrivial() here and
+    tests/test_parallel.py::test_nsvmark_nontrivial_parallel()."""
+    r = 0.7
+    mesh = RectangleMesh(
+        16,
+        16,
+        1.0,
+        1.0,
+        originX=-1.0,
+        originY=-1.0,
+        diagonal="crossed",
+        distribution_parameters=VIAMR.PARALLEL_OVERLAP,
+    )
+    CG1, _ = amr.spaces(mesh)
+    x, y = SpatialCoordinate(mesh)
+    x2 = x ** 2 + y ** 2
+    circle = x2 - r ** 2
+    f_ufl = conditional(
+        x2 <= r ** 2, -8.0 * r ** 2 * (1.0 - circle), -4.0 * (2.0 * x2 + 2.0 * circle)
+    )
+    g_ufl = circle ** 2
+
+    uh = Function(CG1, name="uh")
+    vh = TestFunction(CG1)
+    F = inner(grad(uh), grad(vh)) * dx - f_ufl * vh * dx
+    g = Function(CG1).interpolate(g_ufl)
+    bcs = DirichletBC(CG1, g, "on_boundary")
+    problem = NonlinearVariationalProblem(F, uh, bcs)
+    lb = Function(CG1).interpolate(Constant(0.0))
+    ub = Function(CG1).interpolate(Constant(1.0e10))
+    sp = {
+        "snes_type": "vinewtonrsls",
+        "ksp_type": "preonly",
+        "pc_type": "lu",
+        "pc_factor_mat_solver_type": "mumps",
+    }
+    solver = NonlinearVariationalSolver(problem, solver_parameters=sp, options_prefix="s")
+    solver.solve(bounds=(lb, ub))
+    return mesh, uh, lb, f_ufl, g, g_ufl
+
+
+def _nsvmark_nontrivial(amr):
+    # Shared by test_nsvmark_nontrivial() here and
+    # tests/test_parallel.py::test_nsvmark_nontrivial_parallel(), so the
+    # two assert identical counts from one definition.
+    mesh, uh, lb, f_ufl, g, g_ufl = _nsvmark_nontrivial_soln(amr)
+    CG1, DG0 = amr.spaces(mesh)
+    assert amr.checkadmissible(uh, lb)
+
+    mark, etainf, sigmah, total_err, etad = amr.nsvmark(
+        uh, lb, g, f_ufl, g_ufl, dualtol=1.0e-8
+    )
+    assert mark.function_space().ufl_element() == DG0.ufl_element()
+    assert sigmah.function_space().ufl_element() == CG1.ufl_element()
+    assert etad.function_space().ufl_element() == DG0.ufl_element()
+    assert 0 < amr.countmark(mark) < DG0.dim()  # marks something, not everything
+    assert total_err > 0.0
+    assert amr.scalarrange(etad)[0] >= 0.0  # eta_d is a norm, so non-negative
+
+    # regression for the eta_d dominance gate (see msg.txt): uh is exactly
+    # 0 = lb deep inside the contact set, so refinement driven by eta_d there
+    # would be wasted; with the default gate (etadratio=1.0) it must not mark
+    # any such elements
+    x, y = SpatialCoordinate(mesh)
+    deepinterior = Function(DG0).interpolate(
+        conditional(x ** 2 + y ** 2 < (0.4 * 0.7) ** 2, 1.0, 0.0)
+    )
+    markedinterior = Function(DG0).interpolate(mark * deepinterior)
+    assert amr.countmark(markedinterior) == 0
+
+    # forcing the second (eta_d) pass to always run (etadratio=0.0) must mark
+    # at least as many elements as the gated default does
+    mark2, _, _, _, _ = amr.nsvmark(
+        uh, lb, g, f_ufl, g_ufl, dualtol=1.0e-8, etadratio=0.0
+    )
+    assert amr.countmark(mark2) >= amr.countmark(mark)
+
+
+def test_nsvmark_nontrivial():
+    _nsvmark_nontrivial(VIAMR(debug=True))
 
 
 def _fixedrate_total_case(amr):
@@ -235,10 +323,10 @@ def test_fixedrate_total():
     _fixedrate_total_case(VIAMR(debug=True))
 
 
-def _udomark_interesting_mesh_lb(amr):
+def _udomark_nontrivial_lb(amr):
     # Shared "somewhat interesting obstacle configuration" used by
-    # test_udomark_interesting_case() here, and by
-    # tests/test_parallel.py::test_udomark_interesting_case_parallel() and
+    # test_udomark_nontrivial() here, and by
+    # tests/test_parallel.py::test_udomark_nontrivial_parallel() and
     # test_udo_regression().
     mesh = RectangleMesh(20, 20, 1, 1, distribution_parameters=VIAMR.PARALLEL_OVERLAP)
     CG1, _ = amr.spaces(mesh)
@@ -264,17 +352,17 @@ def _udomark_interesting_mesh_lb(amr):
     return u, lb
 
 
-def _udomark_interesting_case(amr):
-    # Shared by test_udomark_interesting_case() here and
-    # tests/test_parallel.py::test_udomark_interesting_case_parallel(), so the
+def _udomark_nontrivial(amr):
+    # Shared by test_udomark_nontrivial() here and
+    # tests/test_parallel.py::test_udomark_nontrivial_parallel(), so the
     # two assert the identical count from one definition.
-    u, lb = _udomark_interesting_mesh_lb(amr)
+    u, lb = _udomark_nontrivial_lb(amr)
     mark = amr.udomark(u, lb, n=2)
     assert amr.countmark(mark) == 506
 
 
-def test_udomark_interesting_case():
-    _udomark_interesting_case(VIAMR())
+def test_udomark_nontrivial():
+    _udomark_nontrivial(VIAMR())
 
 
 if __name__ == "__main__":
@@ -287,5 +375,6 @@ if __name__ == "__main__":
     test_refine_br()
     test_refine_br_total()
     test_nsvmark_allinactive()
+    test_nsvmark_nontrivial()
     test_fixedrate_total()
-    test_udomark_interesting_case()
+    test_udomark_nontrivial()

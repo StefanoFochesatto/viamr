@@ -9,8 +9,9 @@ from test_basic import (
 )
 from test_refine import (
     _fixedrate_total_case,
-    _udomark_interesting_case,
-    _udomark_interesting_mesh_lb,
+    _nsvmark_nontrivial,
+    _udomark_nontrivial,
+    _udomark_nontrivial_lb,
 )
 
 
@@ -89,15 +90,15 @@ def test_refine_udo_parallelUDO():
 
 
 @pytest.mark.parallel(nprocs=3)
-def test_udomark_interesting_case_parallel():
-    _udomark_interesting_case(VIAMR())
+def test_udomark_nontrivial_parallel():
+    _udomark_nontrivial(VIAMR())
 
 
 def test_udo_regression():
     # This test utilizes the the old implementation of UDO which builds the neighborhood of the free boundary using breadth first search,
     # as a regression test for the dmplex based implementation.
     amr = VIAMRRegression()
-    u, lb = _udomark_interesting_mesh_lb(amr)
+    u, lb = _udomark_nontrivial_lb(amr)
     markold = amr.udomarkOLD(u, lb, n=2)
     marknew = amr.udomark(u, lb, n=2)
     assert amr.jaccard(markold, marknew) == 1.0
@@ -109,6 +110,14 @@ def test_fixedrate_total_parallel():
     # tests/test_refine.py::_fixedrate_total_case() gives the same result
     # regardless of process count.
     _fixedrate_total_case(VIAMR(debug=True))
+
+
+@pytest.mark.parallel(nprocs=3)
+def test_nsvmark_nontrivial_parallel():
+    # Confirms tests/test_refine.py::_nsvmark_nontrivial() -- including
+    # the eta_d dominance gate -- gives the same result regardless of process
+    # count.
+    _nsvmark_nontrivial(VIAMR(debug=True))
 
 
 @pytest.mark.parallel(nprocs=3)
@@ -126,6 +135,7 @@ def test_freeboundarygraph2D_circle_parallel():
 if __name__ == "__main__":
     test_refine_udo_parallelUDO()
     test_udo_regression()
-    test_udomark_interesting_case_parallel()
+    test_udomark_nontrivial_parallel()
     test_fixedrate_total_parallel()
+    test_nsvmark_nontrivial_parallel()
     test_freeboundarygraph2D_circle_parallel()
