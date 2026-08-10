@@ -123,7 +123,9 @@ class VIAMR(OptionsManager, AVMMixin):
 
     def scalarrange(self, w):
         """Utility function to return the range of a generic scalar field.  Correct in parallel."""
-        return self._globalextreme(w, minimum=True), self._globalextreme(w, minimum=False)
+        return self._globalextreme(w, minimum=True), self._globalextreme(
+            w, minimum=False
+        )
 
     def meshsizes(self, mesh):
         """Compute number of vertices, number of elements, and range of
@@ -664,8 +666,12 @@ class VIAMR(OptionsManager, AVMMixin):
             # following is equation (2.8)
             G -= (
                 inner(muK ** 2 * res ** 2, w) * dx(degree=3)
-                + 0.5 * inner(mue_p * jump(alpha * grad(uh), n) ** 2, w("+")) * dS(degree=3)
-                + 0.5 * inner(mue_m * jump(alpha * grad(uh), n) ** 2, w("-")) * dS(degree=3)
+                + 0.5
+                * inner(mue_p * jump(alpha * grad(uh), n) ** 2, w("+"))
+                * dS(degree=3)
+                + 0.5
+                * inner(mue_m * jump(alpha * grad(uh), n) ** 2, w("-"))
+                * dS(degree=3)
             )
 
         # each cell needs an independent 1x1 solve, so Jacobi is an exact preconditioner
@@ -745,6 +751,7 @@ class VIAMR(OptionsManager, AVMMixin):
         # check dual admissiblity (up to tolerance)
         assert self._globalextreme(sigmah, minimum=True) >= -dualtol
 
+        # term 1
         # compute the R_\infty part of "practical estimator" in (7.1) in NSV03, from (3.7)
         # using p=\infty and p'=1:
         #    R_\infty = h_T^{-1} \|[[\partial_n u_h]]\|* + X
@@ -758,7 +765,7 @@ class VIAMR(OptionsManager, AVMMixin):
         v0 = TestFunction(DG0)
         # jumpu is in DG0
         with PETSc.Log.Event(
-            "nsvmark()_calls_assemble3"
+            "nsvmark()_calls_assemble_term1"
         ):  # FIXME riesz_rep..() expensive because solve()
             jumpu = assemble(jump(grad(uh), n) * v0("-") * dS).riesz_representation()
         tactive = self.thinelemactive(uh, lb)
@@ -769,7 +776,7 @@ class VIAMR(OptionsManager, AVMMixin):
         #      approximated by evaluating element point-values at the Lagrange
         #      nodes for 7th order polynomials.""
         # BUT using DG7 this way is really slow because it is so big, so we drop
-        # to DG3 by default; see .dim() printing below
+        # to DG3 by default; DG3.dim() = 10*DG0.dim(), while DG7.dim() ~= 40*DG0.dim()
         DGf = FunctionSpace(mesh, "DG", fdegree)
         Rinf = Function(DGf).interpolate((abs(jumpu) / hT) + X_ufl)
         Rinf = self._elemmaxabs(Rinf)
@@ -779,39 +786,40 @@ class VIAMR(OptionsManager, AVMMixin):
         gaph = Function(CG1).interpolate(uh - lb)
         assert self._globalextreme(gaph, minimum=True) >= 0.0
 
-        # finally compute eta_inf; see doc string above for formula
+        # term 3
         # note that blockgap is nonzero in same cells as UDO n=0 fmark
         blockgap_ufl = conditional(sigmah > dualtol, self._elemmaxabs(gaph), 0.0)
         blockgap = Function(DG0).interpolate(blockgap_ufl)
-        CG4 = FunctionSpace(mesh, "CG", 4)
-        # adg = abs delta g; in DG0 and defined over all of Omega
+
+        # term 4
+        # bdryerr is a DG0 function, with test function v0, but computed
+        # using high-res delta g along boundary; noted integral along boundary (ds vs dS)
+        CG4 = FunctionSpace(mesh, "CG", 4)  # CG4.dim() ~ 9*DG0.dim()
         adg = self._elemmaxabs(Function(CG4).interpolate(g_ufl - g))
-        # bdryerr is a DG0 function, but only nonzero along boundary
-        # note restriction is implicit when using ds (versus dS)
         with PETSc.Log.Event(
-            "nsvmark()_calls_assemble4"
+            "nsvmark()_calls_assemble_term4"
         ):  # FIXME riesz_rep..() expensive because solve()
             bdryerr = assemble(adg * v0 * ds).riesz_representation()
-        etainf_ufl = C0 * hT ** 2 * Rinf + Cfb * blockgap + bdryerr
-        etainf = Function(DG0, name="eta_inf").interpolate(etainf_ufl)
 
-        # DIAGNOSTIC. note DG3.dim()=10*DG0.dim() exactly, while DG7 is
-        # about 40 times, and CG4.dim() ~ 9*DG0.dim()
-        # PETSc.Sys.Print(f"VIAMR INFO for nsvmark():  DG0.dim()={DG0.dim()}, DG{fdegree}.dim()={DGf.dim()}, CG4.dim()={CG4.dim()}")
+        # finally compute eta_inf; see doc string above for formula
+        etainf_ufl = C0 * hT ** 2 * Rinf + blockgap + bdryerr
+        etainf = Function(DG0, name="eta_inf").interpolate(etainf_ufl)
 
         # first marking pass: eta_infty over the whole domain
         mark, _, total_error_inf = self._fixedrate(etainf, theta, method)
 
-        # eta_d, the L^d quadrature indicator
+        # term eta_d
         d = mesh.cell_dimension()
         gradsigmanorm = Function(DG0).interpolate(
             sqrt(inner(grad(sigmah), grad(sigmah)))
         )
-        etad_ufl = C1 * hT ** 2 * gradsigmanorm * CellVolume(mesh) ** (1.0 / d) * tactive
+        etad_ufl = (
+            C1 * hT ** 2 * gradsigmanorm * CellVolume(mesh) ** (1.0 / d) * tactive
+        )
         etad = Function(DG0, name="eta_d").interpolate(etad_ufl)
 
-        # second marking pass: eta_d, but only "provided quadrature dominates the
-        # estimator" (NSV03 sec. 7.1)
+        # second marking pass: eta_d, but only when "quadrature dominates the
+        # estimator" (NSV03 section 7.1)
         total_error_d = 0.0
         etainf_max = self._globalextreme(etainf, minimum=False)
         etad_max = self._globalextreme(etad, minimum=False)
@@ -819,6 +827,7 @@ class VIAMR(OptionsManager, AVMMixin):
             markd, _, total_error_d = self._fixedrate(etad, theta, method)
             mark = self.unionmarks(mark, markd)
 
+        # total error estimate, and return
         total_error_est = sqrt(total_error_inf ** 2 + total_error_d ** 2)
         return (mark, etainf, sigmah, total_error_est, etad)
 
@@ -1002,8 +1011,9 @@ class VIAMR(OptionsManager, AVMMixin):
 
         # basic mesh topology information
         nv = mesh.ufl_cell().num_vertices  # =3 for triangles, =4 for quadrilaterals
-        CellVertexMap = mesh.topology.cell_closure  # DG0.dim() x (2*nv + 1) array; each row is cell closure
-        plexelementlist = CellVertexMap[:, -1]  # DMPlex point number (index) of each cell
+        # note CellVertexMap is DG0.dim() x (2*nv + 1) array; each row is cell closure
+        CellVertexMap = mesh.topology.cell_closure
+        plexelementlist = CellVertexMap[:, -1]  # DMPlex point (index) of each cell
 
         # Get lists of indices for active and border elements.  Include halo
         # (ghost) cells so free-boundary vertices/edges lying on a process boundaries
