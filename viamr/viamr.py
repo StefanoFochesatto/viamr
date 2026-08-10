@@ -67,7 +67,7 @@ class VIAMR(OptionsManager, AVMMixin):
       imark = amr.brinactivemark(uh, lb, res_ufl)    # classical BR78 in inactive set
       imark = amr.brinactivemark(uh, lb, res_ufl, Z=Z)   # weighted (BV00) in inactive set
       mark = amr.unionmarks(mark, imark)             # mark according to two methods above
-      mark, _, _, _ = amr.nsvmark(uh, lb, g, f_ufl, g_ufl)  # method from NSV03
+      mark, _, _, _, _ = amr.nsvmark(uh, lb, g, f_ufl, g_ufl)  # method from NSV03
       rmesh = amr.refinemarkedelements(mesh, mark)   # calls PETSc DMPlexTransform for skeleton-based refinement
       rmesh = amr.adaptaveragedmetric(mesh, uh, lb)  # use animate for metric-based adaptation
 
@@ -689,23 +689,35 @@ class VIAMR(OptionsManager, AVMMixin):
         theta=0.5,
         dualtol=1.0e-10,
         C0=0.1,
+        C1=0.01,
         Cfb=1.0,
         fdegree=3,
+        etadratio=1.0,
     ):
         """Compute marking on entire domain according to the local 'practical estimator' from NSV03:
             Nochetto, R. H., Siebert, K. G., & Veeser, A. (2003). Pointwise a posteriori error control for elliptic obstacle problems. Numerische Mathematik, 95(1), 163-195.
-        The main formula (7.1) in NSV03 is the following quantity computed on each triangle T in the mesh:
+        The main formula (7.1) in NSV03 is
             eta_infty =
                   C_0 h_T^2 ||R_infty||_infty                      [term 1]
                 + ||(chi - u_h)^+||_infty                          [term 2]
                 + C_fb 1_{sigma_h > 0} * ||(u_h - chi)^+||_infty   [term 3]
                 + ||g - I_h g||_{infty; partial Omega cap T}       [term 4]
+        But there is a second quantity, the L^d "quadrature indicator" of section 7.1:
+            eta_d = C_1 h_T^2 ||grad(sigma_h)||_{d; Lambda_h cap T}    [term eta_d]
+        Both eta_.. are computed on each triangle T in the mesh.
+
         Meaning:
           term 1:  Estimates the residual relevant to the VI problem; see below for the R_infty formula, which uses the discrete residual sigma_h below.  C_0=0.1 is used by NSV03.
+
           term 2:  Assumed to be zero because we take chi=chi_h here and assert strict admissibility.  [<-- FIXME could be improved]
+
           term 3:  This "blocked gap" is gap = u_h - chi_h, but blocked according to the simplest discrete residual sigma_h, computed below.  (Note that we assert sigma_h > -dualtol below.)  Here we add coefficient C_fb, which is 1.0 in NSV03.  Increasing C_fb will generate refinement near the free boundary.
-          * Term 4 estimates the boundary interpolation error, and we use a formula which is correct if g is in CG4.
-        FIXME also eta_d?
+
+          term 4:  Estimates the boundary interpolation error, and we use a formula which is correct if g is in CG4.
+
+          term eta_d:  Controls the mass-lumping/quadrature error incurred when computing sigma_h (see sec. 6.3 and 7.1 in NSV03).  sigma_h is CG1, so grad(sigma_h) is elementwise constant, and its L^d(T) norm is |grad(sigma_h)|_T * |T|^{1/d}.  Localized to Lambda_h (the discrete contact set, approximated here by tactive below, the same "neighborhood active" indicator used for term 1's X) because sigma = 0 off the contact set (see (1.2) in NSV03), so grad(sigma_h) there is quadrature noise rather than signal.  C_1=0.01 is the practical value used by NSV03 in (7.1).
+
+        Regarding the last term, NSV03 sec. 7.1 notes that eta_d "exhibits different accumulation" than eta_infty.  That is, eta_d, as a genuine L^d(Lambda_h) norm, aggregates over T by an L^d-type sum.  Mixing both into one scalar before marking would let eta_d's different scaling distort the max-based threshold.  Following NSV03, we mark in two separate passes.  First on eta_infty, then on eta_d restricted to Lambda_h, and take the union.  NSV03 further qualifies that the second pass only runs "provided quadrature dominates the estimator," so the second pass runs only if max(eta_d) > etadratio * max(eta_infty).  NSV03 does not give a precise numerical criterion for "dominates", so etadratio is exposed as a parameter.
         """
         # mesh quantities
         mesh = uh.function_space().mesh()
@@ -788,9 +800,28 @@ class VIAMR(OptionsManager, AVMMixin):
         # about 40 times, and CG4.dim() ~ 9*DG0.dim()
         # PETSc.Sys.Print(f"VIAMR INFO for nsvmark():  DG0.dim()={DG0.dim()}, DG{fdegree}.dim()={DGf.dim()}, CG4.dim()={CG4.dim()}")
 
-        # compute mark in whole domain
-        mark, _, total_error_est = self._fixedrate(etainf, theta, method)
-        return (mark, etainf, sigmah, total_error_est)
+        # first marking pass: eta_infty over the whole domain
+        mark, _, total_error_inf = self._fixedrate(etainf, theta, method)
+
+        # eta_d, the L^d quadrature indicator
+        d = mesh.cell_dimension()
+        gradsigmanorm = Function(DG0).interpolate(
+            sqrt(inner(grad(sigmah), grad(sigmah)))
+        )
+        etad_ufl = C1 * hT ** 2 * gradsigmanorm * CellVolume(mesh) ** (1.0 / d) * tactive
+        etad = Function(DG0, name="eta_d").interpolate(etad_ufl)
+
+        # second marking pass: eta_d, but only "provided quadrature dominates the
+        # estimator" (NSV03 sec. 7.1)
+        total_error_d = 0.0
+        etainf_max = self._globalextreme(etainf, minimum=False)
+        etad_max = self._globalextreme(etad, minimum=False)
+        if etad_max > etadratio * etainf_max:
+            markd, _, total_error_d = self._fixedrate(etad, theta, method)
+            mark = self.unionmarks(mark, markd)
+
+        total_error_est = sqrt(total_error_inf ** 2 + total_error_d ** 2)
+        return (mark, etainf, sigmah, total_error_est, etad)
 
     def refinemarkedelements(self, mesh, indicator, isUniform=False):
         """Call PETSc DMPlex routines to do skeleton-based refinement
