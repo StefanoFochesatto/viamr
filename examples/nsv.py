@@ -57,18 +57,6 @@ sp = {
 }
 
 
-def get_etad(mesh, amr, sigmah, tactive):
-    """For each closed triangle T within the thin active set, compute formula (7.1) from Nochetto, Siebert, & Veeser (2003):  \eta_d = C1 |h^2 \grad(\sigma_h)|_d
-    Throws an error in parallel."""
-    C1 = 0.01
-    sigslope = inner(grad(sigmah), grad(sigmah)) ** (d / 2)  # = |\grad\sigma_h|^d
-    _, DG0 = amr.spaces(mesh)
-    hT = project(CellSize(mesh), DG0)
-    v0 = TestFunction(DG0)
-    tmp = assemble(hT ** (2 * d) * sigslope * tactive * v0 * dx).riesz_representation()
-    return Function(DG0, name="eta_d").interpolate(C1 * tmp ** (1.0 / d))
-
-
 print(f"solving {d}D example from Nochetto, Siebert, & Veeser (2003) ...")
 r = 0.7  # parameter in defining problem
 results = {}
@@ -128,7 +116,7 @@ for method in methods:
         else:
             with PETSc.Log.Event("nsv.py_calls_nsvmark"):
                 Cfb = 10.0 if method == "NSVfb" else 1.0
-                (mark, etainf, sigmah, _) = amr.nsvmark(
+                (mark, etainf, sigmah, _, etad) = amr.nsvmark(
                     uh, psih, g, f_ufl, g_ufl, theta=0.5, Cfb=Cfb, dualtol=dualtol
                 )
 
@@ -169,10 +157,9 @@ for method in methods:
     else:
         if mesh.comm.size > 1:
             VTKFile(outfile).write(
-                uh, uerr, sigmah, etainf, active, tactive, rank
+                uh, uerr, sigmah, etainf, etad, active, tactive, rank
             )
         else:
-            etad = get_etad(mesh, amr, sigmah, tactive)
             VTKFile(outfile).write(uh, uerr, sigmah, etainf, etad, active, tactive)
 
 # convergence figure
