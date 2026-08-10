@@ -145,21 +145,16 @@ for method in methods:
     # write Paraview-readable output
     outfile = f"result_{method}.pvd"
     print(f"generating output file {outfile} ...")
-    # FIXME write fields = [...] etc to make this less stupid
+    fields = [uh, uerr, active, tactive, mark]
     if method == "UDOBR":
         imark.rename("UDO inactive mark")
         fmark.rename("UDO FB mark")
-        if mesh.comm.size > 1:
-            VTKFile(outfile).write(uh, uerr, imark, fmark, active, tactive, rank)
-        else:
-            VTKFile(outfile).write(uh, uerr, imark, fmark, active, tactive)
+        fields += [imark, fmark]
     else:
-        if mesh.comm.size > 1:
-            VTKFile(outfile).write(
-                uh, uerr, sigmah, etainf, etad, active, tactive, rank
-            )
-        else:
-            VTKFile(outfile).write(uh, uerr, sigmah, etainf, etad, active, tactive)
+        fields += [sigmah, etainf, etad]
+    if mesh.comm.size > 1:
+        fields.append(rank)
+    VTKFile(outfile).write(*fields)
 
 # convergence figure
 if mesh.comm.rank == 0:
