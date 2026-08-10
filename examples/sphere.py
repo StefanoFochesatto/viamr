@@ -9,6 +9,10 @@
 # We generate .pvd files: result_sphere_{udobr,nsv,uni,avm}.pvd
 # We measure Hausdorff convergence rates in serial.
 # Optionally we generate .csv files for norm and Jaccard convergence rates.
+# We generate three .png convergence figures comparing all methods:
+#   sphere_convergence_unorm.png       ||u_exact - u_h||_2 vs DOFs
+#   sphere_convergence_preferred.png   ||u_exact - tilde u_h||_2 vs DOFs
+#   sphere_convergence_hausdorff.png   hausdorff(Gamma_u, Gamma_uh) vs DOFs
 
 
 # note: use higher targetelements and/or maxlevels for serious convergence
@@ -119,10 +123,14 @@ sp = {
     "snes_converged_reason": None,
 }
 
+results = {}  # results[amrtype] = (dofs, errnorm, errnorm_pres, hausdorffs), for the
+# three convergence figures generated at the end
+
 for amrtype in refinetypes:
     print(f"solving by VIAMR using {amrtype.upper()} method ...")
 
     amr = VIAMR()
+    dofs, errnorms, errnorm_pres, hausdorffs = [], [], [], []
 
     # udomark() needs this overlap to give correct results in parallel
     dp = VIAMR.PARALLEL_OVERLAP
@@ -182,24 +190,31 @@ for amrtype in refinetypes:
         solver.solve(bounds=(lb, ub))
 
         # compute norms
-        en_no = errornorm_deg20(uexactUFL(r), uh)
+        errnorm = errornorm_deg20(uexactUFL(r), uh)
         activeh = amr.elemactive(uh, lb)
-        en_pre = errornorm_preferred_deg20(r, uh, activeh)
-        print(f"  ||u_exact - u_h||_2 = {en_no:.3e}")
-        print(f"  ||u_exact - tilde u_h||_2 = {en_pre:.3e}")
+        errnorm_pre = errornorm_preferred_deg20(r, uh, activeh)
+        print(f"  ||u_exact - u_h||_2 = {errnorm:.3e}")
+        print(f"  ||u_exact - tilde u_h||_2 = {errnorm_pre:.3e}")
         jaccard = amr.jaccardUFL(activeexactUFL(r), activeh)
         print(f"  jaccard(A_u, A_uh) = {jaccard:.5f}")
         uexact = Function(V, name="u_exact").interpolate(uexactUFL(r))
         _, fbexact = amr.freeboundarygraph2D(uexact, lb)
         _, fb = amr.freeboundarygraph2D(uh, lb)
+        # hausdorff() returns None for an empty free boundary (e.g. a coarse
+        # initial mesh); format accordingly
         haus = amr.hausdorff(fbexact, fb)
-        print(f"  hausdorff(Gamma_u, Gamma_uh) = {haus:.5f}")
+        hausstr = f"{haus:.5f}" if haus is not None else "n/a"
+        print(f"  hausdorff(Gamma_u, Gamma_uh) = {hausstr}")
 
         # report, and break if target complexity met
         Nv, Ne, hmin, hmax = amr.meshsizes(mesh)
+        dofs.append(Nv)
+        errnorms.append(errnorm)
+        errnorm_pres.append(errnorm_pre)
+        hausdorffs.append(haus if haus is not None else np.nan)  # nan plots as a gap
         if writecsvs:
             csvfile.write(
-                f"{i},{Nv},{Ne},{hmin:.5f},{hmax:.5f},{en_no:.3e},{en_pre:.3e},{jaccard:.5f},{haus:.5f},{refinetime:.3e}\n"
+                f"{i},{Nv},{Ne},{hmin:.5f},{hmax:.5f},{errnorm:.3e},{errnorm_pre:.3e},{jaccard:.5f},{hausstr},{refinetime:.3e}\n"
             )
         if Ne > targetelements:
             break
@@ -230,6 +245,8 @@ for amrtype in refinetypes:
     if writecsvs:
         csvfile.close()
 
+    results[amrtype] = (dofs, errnorms, errnorm_pres, hausdorffs)
+
     outfile = "result_sphere_" + amrtype + ".pvd"
     print(f"done ... writing to {outfile} ...")
     gap = Function(V, name="gap = uh-lb").interpolate(uh - lb)
@@ -258,3 +275,72 @@ for amrtype in refinetypes:
         fields += [mark, sigmah, lnsigmah, etainf, lnetainf, etad]
     VTKFile(outfile).write(*fields)
     print("")
+
+# convergence figures comparing all methods; one figure per quantity, all
+# methods overlaid, following the convergence-figure convention in nsv.py
+if mesh.comm.rank == 0:
+    import matplotlib.pyplot as plt
+
+    d = 2  # spatial dimension
+    stylemap = {"udobr": "ko", "nsv": "bs", "uni": "rs", "avm": "g^"}
+
+    def _convergence_plot(index, ylabel, title, outfile, rateexp, ratelabel):
+        plt.figure()
+        for amrtype in refinetypes:
+            rdofs, rvals = np.array(results[amrtype][0]), np.array(results[amrtype][index])
+            plt.loglog(rdofs, rvals, stylemap[amrtype], label=amrtype.upper())
+        rdofs, rvals = np.array(results["udobr"][0]), np.array(results["udobr"][index])
+        # anchor to the first finite, positive UDOBR value, not just index 0:
+        # e.g. the Hausdorff distance can be exactly 0.0 on a coarse initial
+        # mesh (coincidentally exact discrete free boundary), and anchoring to
+        # a zero value would make the whole reference line identically zero,
+        # which is invisible on a log-scale axis
+        valid = np.isfinite(rvals) & (rvals > 0)
+        if np.any(valid):
+            anchor = np.argmax(valid)  # index of first valid entry
+            y = rdofs.astype(float) ** rateexp
+            y = y * rvals[anchor] / y[anchor]
+            plt.loglog(rdofs, y, "k:", label=ratelabel)
+        plt.legend()
+        plt.grid(True)
+        plt.xlabel("DOFs")
+        plt.ylabel(ylabel)
+        plt.title(title)
+        plt.savefig(outfile)
+
+    # L^2 norms: DOFs^(-2/d) is the optimal rate for quasi-optimal 2D meshes,
+    # as in nsv.py.  The "preferred" reconstruction (see errornorm_preferred_deg20)
+    # is kept in the same L^2 norm as the plain error, rather than H^1, because
+    # its patched-together tilde u_h is not H^1-conforming: it has genuine
+    # jumps across active/inactive element boundaries, so an elementwise
+    # ("broken") H^1 seminorm computed from it would silently omit the
+    # facet-jump term a real broken-H^1 norm needs, understating rather than
+    # measuring the reconstruction's irregularity.  L^2 has no such issue, and
+    # keeps this plot directly comparable to the plain-error plot.
+    _convergence_plot(
+        1,
+        "||u_exact - u_h||_2",
+        "sphere problem: solution norm vs DOFs",
+        "sphere_convergence_unorm.png",
+        -2.0 / d,
+        "DOFs^(-2/d)",
+    )
+    _convergence_plot(
+        2,
+        "||u_exact - tilde u_h||_2",
+        "sphere problem: preferred-form error norm vs DOFs",
+        "sphere_convergence_preferred.png",
+        -2.0 / d,
+        "DOFs^(-2/d)",
+    )
+    # Hausdorff distance is a geometric (not squared-error) quantity, so the
+    # natural reference is mesh-resolution scaling h ~ DOFs^(-1/d), not the
+    # L^2 rate above.
+    _convergence_plot(
+        3,
+        "hausdorff(Gamma_u, Gamma_uh)",
+        "sphere problem: free-boundary Hausdorff distance vs DOFs",
+        "sphere_convergence_hausdorff.png",
+        -1.0 / d,
+        "DOFs^(-1/d)",
+    )
