@@ -1,21 +1,26 @@
-# Solve a porous-medium nonlinear obstacle problem, with strong form
+# Solve a porous-media nonlinear obstacle problem, with strong form
 #   - div(u^{gamma-1} grad(u)) = f,  u >= 0
 # The domain is a square, and u=g on boundary.  The source term f(r)
 # is a negative constant in a center disc, and linear outside of that.
 # Defaults to gamma=2.  The exact solution is known for any gamma.
 #
 # The solver must handle the degeneracy of the coefficient at
-# the free boundary.  Thus the coefficient is regularized with
-# decreasing epsilon > 0 values on mesh i,
-#   F(u)[v] = (u + eps_i)^{gamma-1} grad(u) . grad (v) - f * v,
-# Also, the Newton initial iterate is raised eps_i above the obstacle.
-# Simple backtracking line search is used for the Newton solver.
+# the free boundary.  Thus the coefficient is regularized:
+#   F(u)[v] = (u + eps)^{gamma-1} grad(u) . grad (v) - f * v
 #
-# The AMR method is UDO+BR.  By default we use the (heuristic)
-# weighted-norm Bernardi & Verfurth (2000) modification of the
-# BR78 estimator.  We report the weighted quasi-norm error.
-# Without the BV00 weighting, very large BR inactive set estimator
-# (=eta) values occur near the free boundary.
+# For a given mesh, an eps-continuation loop is used: eps is stepped down
+# geometrically from a mild eps_start to a small eps_final, re-solving
+# and warm-starting from the previous eps at each step.  This is needed
+# for robustness at larger gamma, where the coefficient (u+eps)^{gamma-1}
+# is more degenerate near the free boundary than at gamma=2.
+#
+# The Newton initial iterate is raised eps_start above the obstacle,
+# and simple backtracking line search is used for the Newton solver.
+#
+# The AMR method is UDO+BV00.  That is, we use the (heuristic) weighted-norm
+# Bernardi & Verfurth (2000) version of the BR78 estimator.  We report the
+# weighted quasi-norm error.  Without the weighting, large BR inactive
+# set estimator (=eta) values occur near the free boundary.
 #
 # We generate a .png convergence figure of the norms vs DOFs.  Because
 # the porous-media operator is degenerate, not uniformly elliptic like
@@ -35,11 +40,15 @@ from pyop2.mpi import MPI  # for MPI reduce in parallel
 m0 = 6  # initial mesh is m0 x m0
 levels = 7  # number of AMR levels; converges to 9, at least, for gamma=2
 gamma = 2.0  # solves porous-media as VI:  - div(u^{gamma-1} grad(u)) = f
+             # note that exact solution has infinite H^1 norm if gamma >= 4
 a, b = 1.2, 1.0  # parameters in building exact solution
 useweightedBR = True  # apply brinactivemark() using BV00 weighting
 
-# schedule of eps_i for mesh i; must have length >= levels + 1
-eps = [0.02, 0.01, 0.005, 0.002, 0.001, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005]
+# eps-continuation: on each mesh, step eps down geometrically, by _shrink, from
+# _start to _final, re-solving and warm-starting at each step
+eps_start = 0.1
+eps_final = 0.0005
+eps_shrink = 0.3
 
 # solver parameters for VI
 sp = {
@@ -61,7 +70,8 @@ sp = {
 
 
 def get_uexact_ufl(x, y):
-    """Exact radial solution to  - Div(grad(gamma^-1 u^gamma)) = f."""
+    """Exact radial solution to  - Div(grad(gamma^-1 u^gamma)) = f.
+    Note that this exact solution has infinite H^1 norm at gamma>=4."""
     r = sqrt(x * x + y * y)
     tmp = ((a + b) / 2.0) * (0.5 * (r ** 2 - 1.0) - ln(r))
     tmp -= (a / 3.0) * ((r ** 3 - 1.0) / 3 - ln(r))
@@ -73,7 +83,7 @@ def maxeta(mesh, eta):  # maximum of BR estimator, even in parallel
     return float(eta.function_space().mesh().comm.allreduce(mine, op=MPI.MAX))
 
 
-print(f"solving gamma={gamma} porous-media obstacle problem using UDO+BR ...")
+print(f"solving gamma={gamma} porous-media obstacle problem using UDO+BV00 ...")
 mesh = RectangleMesh(
     m0,
     m0,
@@ -94,10 +104,10 @@ for i in range(levels + 1):
 
     # initial iterate *above* solution, especially on active set
     if i == 0:
-        uh = Function(V, name="u_h").interpolate(Constant(eps[i]))
+        uh = Function(V, name="u_h").interpolate(Constant(eps_start))
     else:  # cross-mesh interpolation to new mesh
         uUFL = conditional(uh < lb, lb, uh)  # uses old data uh, lb
-        uh = Function(V, name="u_h").interpolate(uUFL + Constant(eps[i]))
+        uh = Function(V, name="u_h").interpolate(uUFL + Constant(eps_start))
 
     # radial source term which is constant then linear
     x, y = SpatialCoordinate(mesh)
@@ -105,9 +115,11 @@ for i in range(levels + 1):
     fUFL = conditional(r <= 1.0, -b, -b + a * (r - 1.0))
     fsource = Function(V, name="f_source").interpolate(fUFL)
 
-    # weak form for porous media, with epsilon regularization
+    # weak form for porous media, with epsilon regularization; epsC is
+    # updated in-place by the continuation loop below
+    epsC = Constant(eps_start)
     v = TestFunction(V)
-    Z = (uh + Constant(eps[i])) ** (gamma - 1.0)
+    Z = abs(uh + epsC) ** (gamma - 1.0)
     F = Z * inner(grad(uh), grad(v)) * dx - fsource * v * dx
 
     # boundary condition u=g needs exact solution
@@ -115,12 +127,19 @@ for i in range(levels + 1):
     g = Function(V, name="g_bdry").interpolate(uUFL)
     bcs = DirichletBC(V, g, "on_boundary")
 
-    # solve with u >= 0
+    # solve with u >= 0, via eps-continuation: step eps down geometrically
+    # from eps_start to eps_final, warm-starting uh from the previous step
     prob = NonlinearVariationalProblem(F, uh, bcs)
     solver = NonlinearVariationalSolver(prob, solver_parameters=sp, options_prefix="s")
     lb = Function(V, name="psi").interpolate(Constant(0.0))
     ub = Function(V).interpolate(Constant(PETSc.INFINITY))
-    solver.solve(bounds=(lb, ub))
+    epsval = eps_start
+    while True:
+        epsC.assign(epsval)
+        solver.solve(bounds=(lb, ub))
+        if epsval <= eps_final:
+            break
+        epsval = max(eps_final, epsval * eps_shrink)
 
     # errors relative to exact; we re-implement errornorm() with fixed
     # quadrature degree; also get weighted quasi-norm
@@ -143,8 +162,11 @@ for i in range(levels + 1):
     eactive = neweactive
 
     # mark and refine by UDO+BR; tot_eta from this is used in reported effectivity index
-    Zunreg = uh ** (gamma - 1.0)
-    res = -div(Zunreg * grad(uh)) - fsource
+    # note: regularize by eps_final, not bare abs(uh), because div()
+    # differentiates symbolically, producing gamma-2 as power; for gamma<2 that is
+    # negative and uh==0 throughout the active set, giving 0**(negative) = inf/nan
+    Zunreg = abs(uh + eps_final) ** (gamma - 1.0)
+    res = - div(Zunreg * grad(uh)) - fsource
     if not useweightedBR:
         Zqn = None
     imark, eta, tot_eta = amr.brinactivemark(uh, Constant(0.0), res, alpha=Zqn)
