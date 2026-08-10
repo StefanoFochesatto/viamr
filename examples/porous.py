@@ -169,7 +169,7 @@ for i in range(levels + 1):
     res = - div(Zunreg * grad(uh)) - fsource
     if not useweightedBR:
         Zqn = None
-    imark, eta, tot_eta = amr.brinactivemark(uh, Constant(0.0), res, alpha=Zqn)
+    imark, eta, tot_eta = amr.brinactivemark(uh, Constant(0.0), res, alpha=Zqn, theta=0.5, method="total")
     eff = tot_eta / (errqn if useweightedBR else errH1)
     fbmark = amr.udomark(uh, lb, n=1)
     mark = amr.unionmarks(fbmark, imark)
