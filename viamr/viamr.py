@@ -82,6 +82,7 @@ class VIAMR(OptionsManager, AVMMixin):
       * Functions whose results depend on number of processes: 1. vcdmark(), 2. adaptaveragedmetric().
       * Functions which only work for 2D meshs: 1. freeboundarygraph2D(), 2. refinemarkedelements()
       * Functions which only work for triangular meshes: 1. refinemarkedelements()
+      * Refinement via PETSc's DMPlex mesh transformations (https://petsc.org/release/overview/plex_transform_table/) allows skeleton based refinement (SBR) in 2D, but currently SBR is not available in 3D (https://petsc.org/release/src/dm/impls/plex/transform/impls/refine/sbr/plexrefsbr.c.html).
     """
 
     PARALLEL_OVERLAP = {

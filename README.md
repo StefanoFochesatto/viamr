@@ -1,12 +1,14 @@
 # VIAMR
 
-This repository contains algorithms for adaptive mesh refinement (AMR) for variational inequalities (VIs).  The methods require the constraint set to be defined by a lower- and upper-bound inequalities.  Primary goals are to have targeted refinement near computed free boundaries, and to be able to measure location errors in free boundaries.  Refinement in the inactive set using a couple of classical PDE-type error estimators is supported.
+This repository contains [Firedrake](https://www.firedrakeproject.org) algorithms for adaptive mesh refinement (AMR) for variational inequalities (VIs).  The constraint set must be defined by a lower- and upper-bound inequalities.
 
-We define the class `VIAMR` in `viamr/viamr.py`.  It provides two element-marking methods based on adjacency to the computed free boundary, namely Unstructured Dilation Operator (UDO) and Varable Coefficient Diffusion (VCD).  The class also provides two methods to refine in the inactive set, namely gradient recovery and the Babuška-Rheinboldt (BR) residual error indicator.  These are all for use with tag-and-refine mesh refinement.
+In describing algorithms we use the language of _active_ and _inactive_ sets.  In an _active set_, also known as a _coincidence set_, one of the bound inequalities holds as an equality.  By contrast, in the _inactive set_ the constraints are strict and the solution satisfies a partial differential equation (PDE).  The primary goals of AMR in this context are to generate rapid convergence in solution norm, to generated accurate computed free boundaries, and to be able to measure location errors in free boundaries and active sets.
 
-A metric-based refinement method is also implemented, which combines anisotropic Hessian-based information with adjaceny to the free boundary.
+The class `VIAMR`, defined in `viamr/viamr.py`, is the primary object in the library.  It bundles interchangeable strategies for deciding _where_ to refine: free-boundary-proximity heuristics, classical estimators applied only in inactive sets (residual estimators and gradient recovery), and a whole-domain estimator designed for VIs.  These methods produce DG0 indicators (markings), with $\{0,1\}$ values, which can be combined by unioning as desired.  Markings can be fed to one of two tag-and-refine mesh refinement methods: PETSc's skeleton-based-refinement transform or Netgen's mesh refinement methods.  (Metric-based re-meshing using the [animate](https://github.com/mesh-adaptation/animate) is also supported.)
 
-These codes support S. Fochesatto (2024). _Adaptive mesh refinement for variational inequalities_, Master of Science project, UAF, and a paper in progress.
+As a [Firedrake](https://www.firedrakeproject.org) library, solution-norm error is a standard way to evaluate quality, but the library supports a diagnostic layer which measures active-set and free-boundary location accuracy (Jaccard distances and Hausdorff metrics).  Free-boundary accuracy is often a goal for computations using variational inequalities.
+
+These codes extend S. Fochesatto (2024). _Adaptive mesh refinement for variational inequalities_, Master of Science project, UAF.  They are the subject of a paper in progress.
 
 ## Dependencies
 
@@ -21,14 +23,10 @@ source ~/venv-firedrake/bin/activate
 Now pip install [shapely](https://pypi.org/project/shapely/), siphash24, vtk, and [ngspetsc](https://github.com/NGSolve/ngsPETSc) in the venv:
 
 ```
-pip install shapely siphash24 vtk ngspetsc
+pip install vtk ngspetsc shapely siphash24
 ```
 
-To use metric-based refinement, the [animate](https://github.com/mesh-adaptation/animate) adaptive mesh refinement library is used.  To install this do
-```
-git clone https://github.com/mesh-adaptation/animate.git
-python3 -m pip install -e animate
-```
+To use metric-based refinement, the [animate](https://github.com/mesh-adaptation/animate) adaptive mesh refinement library is used.  To install this follow the instructions at the [meshadaptation installation wiki page](https://github.com/mesh-adaptation/docs/wiki/Installation-Instructions).
 
 ## Installation
 
@@ -37,8 +35,8 @@ python3 -m pip install -e animate
 Clone the VIAMR repository and enter the directory
 
 ```
-git clone https://github.com/StefanoFochesatto/VI-AMR.git
-cd VI-AMR/
+git clone https://github.com/StefanoFochesatto/viamr.git
+cd viamr/
 ```
 
 ### install
@@ -53,19 +51,6 @@ or plain:
 ```
 pip install .
 ```
-
-#### Build notes May 2025
-
-When running a code which depends on animate, such as `examples/sphere.py`, you might get an error which ends with
-```
-...
-[0] Grid adaptor mmg not registered; you may need to add --download-mmg to your ./configure options
-```
-This error can be resolved by adding `--download-mmg --download-parmmg` to your PETSc configuration, and recompiling PETSc.  For example, go to the `petsc/` directory in your Firedrake installation and do
-```
-python3 ../firedrake-configure --show-petsc-configure-options | xargs -L1 ./configure --download-metis --download-parmetis --download-mmg --download-parmmg --download-eigen
-```
-Then do `make all` and perhaps `make check`.
 
 ### Using Docker
 
@@ -89,7 +74,7 @@ Once the docker container is up and running, you can activate the python environ
 
 ## Usage
 
-These basic examples demonstrate refinement with the UDO, VCD and AVM methods.  First make sure that the firedrake virtual environment is active.  Then do:
+These basic examples demonstrate refinement with the UDO, NSV and AVM methods.  First make sure that the firedrake virtual environment is active.  Then do:
 ```
 cd examples/
 python3 sphere.py
@@ -106,17 +91,8 @@ Meshes can be created using the [Firedrake utility mesh generators](https://www.
 
 ## Known limitations
 
+See the list of known limitations in the [doc string for the VIAMR class](viamr/viamr.py).
 Future bug fixes and feature improvements in Netgen, ngsPETSc, and PETSc DMPlex might change this situation, but for now see the known limitations below.
-
-  1. [PETSc's DMPlex mesh transformations](https://petsc.org/release/overview/plex_transform_table/) include skeleton based refinement (SBR) in 2D, but [currently SBR is not available in 3D](https://petsc.org/release/src/dm/impls/plex/transform/impls/refine/sbr/plexrefsbr.c.html).  This limits `VIAMR.refinemarkedelements()` to applications in 2D.
-  1. Parallel application of `VIAMR.udomark()` (and `VIAMR.thinelemactive()`, and therefore `VIAMR.nsvmark()`) requires that the mesh be built with sufficient vertex overlap.  Use the `VIAMR.PARALLEL_OVERLAP` class attribute for this, e.g. when using a utility mesh:
-      ```
-      UnitSquareMesh(m0, m0, distribution_parameters=VIAMR.PARALLEL_OVERLAP)
-      ```
-      Calling `udomark()`/`thinelemactive()` in parallel on a mesh without this raises a `ValueError` rather than silently giving an incomplete result near partition boundaries.
-  1. `VIAMR.adaptaveragedmetric()` and `VIAMR.vcdmark()` are known to generate different results in serial and parallel.  See [issue #37](https://github.com/StefanoFochesatto/VI-AMR/issues/37) and [issue #38](https://github.com/StefanoFochesatto/VI-AMR/issues/38), respectively.
-  1. `VIAMR.jaccard()` only works in parallel if one mesh is a submesh of the other,.  See the doc string.  Note that `VIAMR.jaccardUFL()` is always valid in parallel.
-  1. `VIAMR.hausdorff()` does not work in parallel.  It is the only part of VIAMR which depends on the [shapely](https://pypi.org/project/shapely/) library.
 
 ## Clearing caches
 
@@ -124,7 +100,6 @@ Firedrake will cache compiled weak forms.  At times, e.g. for addressing quadrat
 ```
 python3 -c "import firedrake.tsfc_interface; firedrake.tsfc_interface.clear_cache()"
 ```
-Another way to address this general issue is seen in `errornorm_deg20()` in `examples/sphere.py`.
 
 ## Testing
 
