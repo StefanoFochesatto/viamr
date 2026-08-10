@@ -25,7 +25,7 @@ uniformlevels = 5  # generally uniform can't reach high levels ... which is the 
 writecsvs = False
 
 # method parameters
-thetaBR = 0.9  # controls BR resolution in inactive set, and convergence rate
+thetaBR = 0.5  # controls BR resolution in inactive set, and convergence rate
 methodBR = "total"  # VIAMR._fixedrate() uses a method; vs "max"; affects tradeoffs
 
 

@@ -111,7 +111,7 @@ for method in methods:
             with PETSc.Log.Event("nsv.py_calls_udomark"):
                 fmark = amr.udomark(uh, psih, n=nUDO)
                 residual = -div(grad(uh)) - f_ufl
-                (imark, _, _) = amr.brinactivemark(uh, psih, residual, theta=0.5)
+                (imark, _, _) = amr.brinactivemark(uh, psih, residual, theta=0.5, method="total")
                 mark = amr.unionmarks(fmark, imark)
         else:
             with PETSc.Log.Event("nsv.py_calls_nsvmark"):
@@ -147,6 +147,7 @@ for method in methods:
     # write Paraview-readable output
     outfile = f"result_{method}.pvd"
     print(f"generating output file {outfile} ...")
+    # FIXME write fields = [...] etc to make this less stupid
     if method == "UDOBR":
         imark.rename("UDO inactive mark")
         fmark.rename("UDO FB mark")
