@@ -6,4 +6,5 @@
 /refinedmesh*
 /*.csv
 /*.png
+/flamegraph.pl
 /__pycache__/
