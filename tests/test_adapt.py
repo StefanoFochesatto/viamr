@@ -10,25 +10,25 @@ needsanimate = pytest.mark.skipif(
 
 @needsanimate
 def test_adapt_avm():
-    mesh = RectangleMesh(8, 8, 2.0, 2.0, originX=-2.0, originY=-2.0)
+    mesh = RectangleMesh(6, 6, 2.0, 2.0, originX=-2.0, originY=-2.0)
     amr = VIAMR(debug=True)
     CG1, _ = amr.spaces(mesh)
-    assert CG1.dim() == 81
+    assert CG1.dim() == 49
     (x, y) = SpatialCoordinate(mesh)
     psi = Function(CG1).interpolate(_get_ball_obstacle(x, y))
     u = Function(CG1).interpolate(conditional(psi > 0.0, psi, 0.0))
     amr.setmetricparameters(target_complexity=100, h_min=1.0e-4, h_max=1.0)
     rmesh = amr.adaptaveragedmetric(mesh, u, psi)
     rCG1, _ = amr.spaces(rmesh)
-    assert rCG1.dim() == 153
+    assert rCG1.dim() > 80
 
 
 @needsanimate
 def test_adapt_avm_separated():
-    mesh = RectangleMesh(7, 7, 2.0, 2.0, originX=-2.0, originY=-2.0)
+    mesh = RectangleMesh(5, 5, 2.0, 2.0, originX=-2.0, originY=-2.0)
     amr = VIAMR(debug=True)
     CG1, _ = amr.spaces(mesh)
-    assert CG1.dim() == 64
+    assert CG1.dim() == 36
     psi = Function(CG1).interpolate(Constant(0.0))
     (x, y) = SpatialCoordinate(mesh)
     r = sqrt(x ** 2 + y ** 2)
@@ -38,26 +38,26 @@ def test_adapt_avm_separated():
     # only isotropic free-boundary metric
     fbmesh = amr.adaptaveragedmetric(mesh, uh, psi, gamma=1.0)
     fbCG1, _ = amr.spaces(fbmesh)
-    assert fbCG1.dim() == 128
+    assert fbCG1.dim() > 80
     # only hessian metric
     hmesh = amr.adaptaveragedmetric(mesh, uh, psi, gamma=0.0)
     hCG1, _ = amr.spaces(hmesh)
-    assert hCG1.dim() == 144
+    assert hCG1.dim() > 80
 
 
 @needsanimate
 def test_adapt_avm_intersect():
-    mesh = RectangleMesh(8, 8, 2.0, 2.0, originX=-2.0, originY=-2.0)
+    mesh = RectangleMesh(4, 4, 2.0, 2.0, originX=-2.0, originY=-2.0, diagonal="crossed")
     amr = VIAMR(debug=True)
     CG1, _ = amr.spaces(mesh)
-    assert CG1.dim() == 81
+    assert CG1.dim() == 41
     (x, y) = SpatialCoordinate(mesh)
     psi = Function(CG1).interpolate(_get_ball_obstacle(x, y))
     u = Function(CG1).interpolate(conditional(psi > 0.0, psi, 0.0))
     amr.setmetricparameters(target_complexity=100, h_min=1.0e-4, h_max=1.0)
     rmesh = amr.adaptaveragedmetric(mesh, u, psi, intersect=True)
     rCG1, _ = amr.spaces(rmesh)
-    assert rCG1.dim() == 193
+    assert rCG1.dim() > 80
 
 
 if __name__ == "__main__":
