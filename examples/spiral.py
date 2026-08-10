@@ -125,6 +125,7 @@ for amrtype in typelist:
     outfile = "result_spiral_" + amrtype + ".pvd"
     print(f"done ... writing to {outfile} ...")
     gap = Function(V, name="gap = uh-lb").interpolate(uh - lb)
+    fields = [uh, lb, gap]
     if amrtype in ["udobr", "vcdbr"]:
         # for output file, compute imark, mark on final mesh
         residual = -div(grad(uh))
@@ -136,10 +137,10 @@ for amrtype in typelist:
         mark = amr.unionmarks(mark, imark)
         imark.rename("imark (BR)")
         mark.rename("mark")
-        VTKFile(outfile).write(uh, lb, gap, mark, imark)
+        fields += [mark, imark]
     else:
-        # for output file, compute mark, etainf, sigmah on final mesh
-        (mark, etainf, sigmah, _) = amr.nsvmark(
+        # for output file, compute fields on final mesh
+        (mark, etainf, sigmah, _, etad) = amr.nsvmark(
             uh,
             lb,
             Constant(0.0),
@@ -151,5 +152,6 @@ for amrtype in typelist:
         mark.rename("mark")
         lnsigmah = Function(V, name="ln(sigma_h)").interpolate(ln(sigmah + dualtol))
         lnetainf = Function(V, name="ln(eta_inf)").interpolate(ln(etainf))
-        VTKFile(outfile).write(uh, lb, gap, mark, sigmah, lnsigmah, etainf, lnetainf)
+        fields += [mark, sigmah, lnsigmah, etainf, lnetainf, etad]
+    VTKFile(outfile).write(*fields)
     print("")

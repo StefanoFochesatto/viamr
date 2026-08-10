@@ -237,6 +237,7 @@ for amrtype in refinetypes:
     error = Function(V, name="error = |pi_h(uexact) - uh|").interpolate(
         abs(uexact - uh)
     )
+    fields = [uh, lb, gap, uexact, error]
     if amrtype == "udobr":
         # for output file, compute imark, mark on final mesh
         residual = -div(grad(uh))
@@ -245,18 +246,15 @@ for amrtype in refinetypes:
         mark = amr.unionmarks(mark, imark)
         imark.rename("imark (BR)")
         mark.rename("mark")
-        VTKFile(outfile).write(uh, lb, gap, uexact, error, mark, imark)
+        fields += [mark, imark]
     elif amrtype == "nsv":
         # for output file, compute mark, etainf, sigmah on final mesh FIXME
         g = Function(V).interpolate(g_ufl)
-        (mark, etainf, sigmah, _) = amr.nsvmark(uh, lb, g, Constant(0.0), g_ufl)
+        (mark, etainf, sigmah, _, etad) = amr.nsvmark(uh, lb, g, Constant(0.0), g_ufl)
         mark.rename("mark")
         dualtol = 1.0e-10
         lnsigmah = Function(V, name="ln(sigma_h)").interpolate(ln(sigmah + dualtol))
         lnetainf = Function(V, name="ln(eta_inf)").interpolate(ln(etainf))
-        VTKFile(outfile).write(
-            uh, lb, gap, uexact, error, mark, sigmah, lnsigmah, etainf, lnetainf
-        )
-    else:
-        VTKFile(outfile).write(uh, lb, gap, uexact, error)
+        fields += [mark, sigmah, lnsigmah, etainf, lnetainf, etad]
+    VTKFile(outfile).write(*fields)
     print("")
