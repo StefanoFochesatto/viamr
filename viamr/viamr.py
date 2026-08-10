@@ -690,7 +690,6 @@ class VIAMR(OptionsManager, AVMMixin):
         dualtol=1.0e-10,
         C0=0.1,
         C1=0.01,
-        Cfb=1.0,
         fdegree=3,
         etadratio=1.0,
     ):
@@ -700,7 +699,7 @@ class VIAMR(OptionsManager, AVMMixin):
             eta_infty =
                   C_0 h_T^2 ||R_infty||_infty                      [term 1]
                 + ||(chi - u_h)^+||_infty                          [term 2]
-                + C_fb 1_{sigma_h > 0} * ||(u_h - chi)^+||_infty   [term 3]
+                + 1_{sigma_h > 0} * ||(u_h - chi)^+||_infty        [term 3]
                 + ||g - I_h g||_{infty; partial Omega cap T}       [term 4]
         But there is a second quantity, the L^d "quadrature indicator" of section 7.1:
             eta_d = C_1 h_T^2 ||grad(sigma_h)||_{d; Lambda_h cap T}    [term eta_d]
@@ -711,7 +710,7 @@ class VIAMR(OptionsManager, AVMMixin):
 
           term 2:  Assumed to be zero because we take chi=chi_h here and assert strict admissibility.  [<-- FIXME could be improved]
 
-          term 3:  This "blocked gap" is gap = u_h - chi_h, but blocked according to the simplest discrete residual sigma_h, computed below.  (Note that we assert sigma_h > -dualtol below.)  Here we add coefficient C_fb, which is 1.0 in NSV03.  Increasing C_fb will generate refinement near the free boundary.
+          term 3:  This "blocked gap" is gap = u_h - chi_h, but blocked according to the simplest discrete residual sigma_h, computed below.  (Note that we assert sigma_h > -dualtol below.)
 
           term 4:  Estimates the boundary interpolation error, and we use a formula which is correct if g is in CG4.
 

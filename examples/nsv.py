@@ -60,7 +60,6 @@ sp = {
 print(f"solving {d}D example from Nochetto, Siebert, & Veeser (2003) ...")
 r = 0.7  # parameter in defining problem
 results = {}
-# FIXME disable "fb" variant for now:   methods = ["UDOBR", "NSV", "NSVfb"]
 methods = ["UDOBR", "NSV"]
 for method in methods:
     mesh = mesh0
@@ -115,9 +114,8 @@ for method in methods:
                 mark = amr.unionmarks(fmark, imark)
         else:
             with PETSc.Log.Event("nsv.py_calls_nsvmark"):
-                Cfb = 10.0 if method == "NSVfb" else 1.0
                 (mark, etainf, sigmah, _, etad) = amr.nsvmark(
-                    uh, psih, g, f_ufl, g_ufl, theta=0.5, Cfb=Cfb, dualtol=dualtol
+                    uh, psih, g, f_ufl, g_ufl, theta=0.5, dualtol=dualtol
                 )
 
         # done with this method if we reach target complexity
