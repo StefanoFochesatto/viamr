@@ -24,6 +24,10 @@ maxlevels = 11  # backstop target element complexity; set to 15 for more data?
 uniformlevels = 5  # generally uniform can't reach high levels ... which is the point
 writecsvs = False
 
+# method parameters
+thetaBR = 0.9  # controls BR resolution in inactive set, and convergence rate
+methodBR = "total"  # VIAMR._fixedrate() uses a method; vs "max"; affects tradeoffs
+
 
 import time
 import numpy as np
@@ -50,9 +54,6 @@ except:
     pass
 else:
     refinetypes.append("avm")  # if import succeeded
-
-# method parameters
-thetaBR = 0.9  # controls BR resolution in inactive set, and convergence rate
 
 # AVM parameters; attempts to do apples-to-apples vs UDOBR
 initialhAVM = 4.0 / m0
@@ -249,7 +250,7 @@ for amrtype in refinetypes:
         else:
             mark = amr.udomark(uh, lb, n=1)
             residual = -div(grad(uh))
-            (imark, _, _) = amr.brinactivemark(uh, lb, residual, theta=thetaBR)
+            (imark, _, _) = amr.brinactivemark(uh, lb, residual, theta=thetaBR, method=methodBR)
             mark = amr.unionmarks(mark, imark)
             mesh = amr.refinemarkedelements(mesh, mark)
         if amrtype != "uni":
