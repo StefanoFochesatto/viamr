@@ -9,9 +9,10 @@
 # We generate .pvd files: result_sphere_{udobr,nsv,uni,avm}.pvd
 # We measure Hausdorff convergence rates in serial.
 # Optionally we generate .csv files for norm and Jaccard convergence rates.
-# We generate three .png convergence figures comparing all methods:
+# We generate four .png convergence figures comparing all methods:
 #   sphere_convergence_unorm.png       ||u_exact - u_h||_2 vs DOFs
 #   sphere_convergence_preferred.png   ||u_exact - tilde u_h||_2 vs DOFs
+#   sphere_convergence_h1.png          |u_exact - u_h|_{H^1 seminorm} vs DOFs
 #   sphere_convergence_hausdorff.png   hausdorff(Gamma_u, Gamma_uh) vs DOFs
 
 
@@ -107,6 +108,16 @@ def errornorm_preferred_deg20(r, uh, activeh):
     return np.sqrt(normsq)
 
 
+def errornorm_H1semi_deg20(u, uh):
+    """H^1 seminorm (i.e. Dirichlet-energy / grad-L^2) error norm of the plain
+    (not "preferred") numerical solution, avoiding the TSFC warning.  This is
+    the norm brinactivemark()'s unweighted BR78 estimator directly targets
+    (see its docstring), so it's the natural check on whether that estimator
+    is doing what it's designed to do, independent of L^2 behavior."""
+    normsq = assemble(inner(grad(u - uh), grad(u - uh)) * dx(degree=20))
+    return np.sqrt(normsq)
+
+
 # solver parameters for VI
 sp = {
     "snes_type": "vinewtonrsls",
@@ -123,14 +134,14 @@ sp = {
     "snes_converged_reason": None,
 }
 
-results = {}  # results[amrtype] = (dofs, errnorm, errnorm_pres, hausdorffs), for the
-# three convergence figures generated at the end
+results = {}  # results[amrtype] = (dofs, errnorm, errnorm_pres, hausdorffs, errnorm_h1s),
+# for the four convergence figures generated at the end
 
 for amrtype in refinetypes:
     print(f"solving by VIAMR using {amrtype.upper()} method ...")
 
     amr = VIAMR()
-    dofs, errnorms, errnorm_pres, hausdorffs = [], [], [], []
+    dofs, errnorms, errnorm_pres, hausdorffs, errnorm_h1s = [], [], [], [], []
 
     # udomark() needs this overlap to give correct results in parallel
     dp = VIAMR.PARALLEL_OVERLAP
@@ -158,7 +169,7 @@ for amrtype in refinetypes:
     if writecsvs:
         csvfile = open(f"sphere_{amrtype}.csv", "w")
         csvfile.write(
-            "I,NV,NE,HMIN,HMAX,ENORM,ENORMPREF,JACCARD,HAUSDORFF,REFINETIME\n"
+            "I,NV,NE,HMIN,HMAX,ENORM,ENORMPREF,ENORMH1,JACCARD,HAUSDORFF,REFINETIME\n"
         )
 
     for i in range(maxlevels + 1):
@@ -193,8 +204,10 @@ for amrtype in refinetypes:
         errnorm = errornorm_deg20(uexactUFL(r), uh)
         activeh = amr.elemactive(uh, lb)
         errnorm_pre = errornorm_preferred_deg20(r, uh, activeh)
+        errnorm_h1 = errornorm_H1semi_deg20(uexactUFL(r), uh)
         print(f"  ||u_exact - u_h||_2 = {errnorm:.3e}")
         print(f"  ||u_exact - tilde u_h||_2 = {errnorm_pre:.3e}")
+        print(f"  |u_exact - u_h|_{{H^1}} = {errnorm_h1:.3e}")
         jaccard = amr.jaccardUFL(activeexactUFL(r), activeh)
         print(f"  jaccard(A_u, A_uh) = {jaccard:.5f}")
         uexact = Function(V, name="u_exact").interpolate(uexactUFL(r))
@@ -212,9 +225,10 @@ for amrtype in refinetypes:
         errnorms.append(errnorm)
         errnorm_pres.append(errnorm_pre)
         hausdorffs.append(haus if haus is not None else np.nan)  # nan plots as a gap
+        errnorm_h1s.append(errnorm_h1)
         if writecsvs:
             csvfile.write(
-                f"{i},{Nv},{Ne},{hmin:.5f},{hmax:.5f},{errnorm:.3e},{errnorm_pre:.3e},{jaccard:.5f},{hausstr},{refinetime:.3e}\n"
+                f"{i},{Nv},{Ne},{hmin:.5f},{hmax:.5f},{errnorm:.3e},{errnorm_pre:.3e},{errnorm_h1:.3e},{jaccard:.5f},{hausstr},{refinetime:.3e}\n"
             )
         if Ne > targetelements:
             break
@@ -245,7 +259,7 @@ for amrtype in refinetypes:
     if writecsvs:
         csvfile.close()
 
-    results[amrtype] = (dofs, errnorms, errnorm_pres, hausdorffs)
+    results[amrtype] = (dofs, errnorms, errnorm_pres, hausdorffs, errnorm_h1s)
 
     outfile = "result_sphere_" + amrtype + ".pvd"
     print(f"done ... writing to {outfile} ...")
@@ -289,12 +303,9 @@ if mesh.comm.rank == 0:
         for amrtype in refinetypes:
             rdofs, rvals = np.array(results[amrtype][0]), np.array(results[amrtype][index])
             plt.loglog(rdofs, rvals, stylemap[amrtype], label=amrtype.upper())
-        rdofs, rvals = np.array(results["udobr"][0]), np.array(results["udobr"][index])
-        # anchor to the first finite, positive UDOBR value, not just index 0:
-        # e.g. the Hausdorff distance can be exactly 0.0 on a coarse initial
-        # mesh (coincidentally exact discrete free boundary), and anchoring to
-        # a zero value would make the whole reference line identically zero,
-        # which is invisible on a log-scale axis
+        rdofs, rvals = np.array(results["uni"][0]), np.array(results["uni"][index])
+        # anchor to the first finite, positive UNI value, not just index 0;
+        #    relevant to coarse initial mesh
         valid = np.isfinite(rvals) & (rvals > 0)
         if np.any(valid):
             anchor = np.argmax(valid)  # index of first valid entry
@@ -311,12 +322,7 @@ if mesh.comm.rank == 0:
     # L^2 norms: DOFs^(-2/d) is the optimal rate for quasi-optimal 2D meshes,
     # as in nsv.py.  The "preferred" reconstruction (see errornorm_preferred_deg20)
     # is kept in the same L^2 norm as the plain error, rather than H^1, because
-    # its patched-together tilde u_h is not H^1-conforming: it has genuine
-    # jumps across active/inactive element boundaries, so an elementwise
-    # ("broken") H^1 seminorm computed from it would silently omit the
-    # facet-jump term a real broken-H^1 norm needs, understating rather than
-    # measuring the reconstruction's irregularity.  L^2 has no such issue, and
-    # keeps this plot directly comparable to the plain-error plot.
+    # its patched-together tilde u_h is not H^1-conforming.
     _convergence_plot(
         1,
         "||u_exact - u_h||_2",
@@ -341,6 +347,18 @@ if mesh.comm.rank == 0:
         "hausdorff(Gamma_u, Gamma_uh)",
         "sphere problem: free-boundary Hausdorff distance vs DOFs",
         "sphere_convergence_hausdorff.png",
+        -1.0 / d,
+        "DOFs^(-1/d)",
+    )
+    # H^1 seminorm: classical (Falk-type) a priori theory for the obstacle
+    # problem gives first-order convergence, i.e. DOFs^(-1/d), same as
+    # Hausdorff's mesh-resolution rate, not the L^2 rate above.  This is the
+    # norm brinactivemark()'s BR78 estimator directly targets.
+    _convergence_plot(
+        4,
+        "|u_exact - u_h|_{H^1}",
+        "sphere problem: H^1 seminorm error vs DOFs",
+        "sphere_convergence_h1.png",
         -1.0 / d,
         "DOFs^(-1/d)",
     )
