@@ -2,7 +2,7 @@
 
 ## introduction
 
-This file documents the more mathematical aspects of `steady.py`, and of its numerical methods.
+This file documents the more mathematical aspects of `steady.py` and `dome.py`, and their numerical methods.
 
 The mathematical glacier problem is to determine the steady-state surface elevation, equivalently thickness, of a glacier on land.  The glacier lives in a time-independent climate, and it sits on a time-independent bedrock topography.  The ice flow model is the shallow ice approximation (SIA).
 
@@ -15,7 +15,9 @@ There are two fields which are input data:
   * a bed elevation function $z=b(x,y)$, and
   * a surface mass balance (SMB) function $a(x,y,z)$
 
-In default runs done by `steady.py`, $b$ and $a$ are given by synthetic formulas.  However, $b$ can be read from a file with option `-bdata`.
+In default runs done by `steady.py`, $b$ and $a$ are given by synthetic formulas.  However, $b$ can instead be read from a file, option `-bdata`.  Under option `-elevdepend` the $a$ values come from a elevation-dependent model.
+
+In running `dome.py` $b=0$ and $a$ is given by a synthetic formula.
 
 The surface elevation $z=s(x,y)$, and the corresponding thickness $H(x,y)=s(x,y)-b(x,y)$, are the primary unknowns of the model.  Note that the SMB function might depend on the surface elevation $z$: $a=a(x,y,s(x,y))$
 

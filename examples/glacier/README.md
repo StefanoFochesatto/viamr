@@ -16,39 +16,20 @@ python3 steady.py
 ```
 To get help add `-h`.
 
-To demonstrate options, here we add elevation-dependent surface mass balance, refine differently, and run in parallel:
+To demonstrate options, here we add elevation-dependent surface mass balance, some uniform refinement, and run in parallel:
 ```
 mpiexec -n 4 python3 steady.py -picard -elevdepend -sELA 800 -m 20 -refine 4 -uniform 1 -opvd result_cap.pvd
 ```
 
-To simulate a synthetic "dome" glacier, with known exact solution, generating convergence data in a .csv file:
+To simulate a synthetic "dome" glacier, with known exact solution, generating convergence and effectivity-index figures, see `dome.py` instead:
 ```
-python3 steady.py -prob dome -ocsv dome.csv -opvd result_dome.pvd
+python3 dome.py
 ```
+Note that `dome.py` has no command-line interface.  See and edit the "major parameters" at the top of the file to change resolution etc.
 
 ### convergence and AMR efficiency
 
-In the paper there is an example showing norm and geometrical errors against mesh complexity (number of elements).  Uniform and UDO+BR mesh refinement methods are shown.  Here are these runs:
-
-```
-mpiexec -n 12 python3 steady.py -prob dome -m 5 -refine 8 -uniform 8 -ocsv uniform.csv
-mpiexec -n 12 python3 steady.py -prob dome -m 5 -refine 13 -ocsv udo.csv
-```
-
-### bumpy bed examples
-
-```
-python3 steady.py -uniform 2 -refine 6 -prob cap -opvd result_cap.pvd
-python3 steady.py -uniform 2 -refine 6 -prob range -opvd result_range.pvd
-```
-
-### elevation-dependent surface mass balance examples
-
-```
-mpiexec -n 4 python3 steady.py -prob cap -picard -elevdepend -sELA 1000.0 -m 20 -uniform 1 -udo_n 2 -pcount 20 -refine 6 -opvd result_cap_1000.pvd
-```
-Vary `-sELA`, say 1000.0 -> 800.0 -> 600.0, to see increase in glaciation (inactive set area).
-
+In the paper there is an example showing norm and geometrical errors against mesh complexity (number of elements), comparing the two primal-variable formulations, $u$ versus $s$.  It uses `dome.py`.
 
 ## realistic example which uses data for bed topography
 

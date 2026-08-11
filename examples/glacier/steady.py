@@ -70,6 +70,7 @@ if args.bdata:
     topg, nearb = topg_nc.function(delnear=100.0e3)
     # generate mesh compatible with data mesh, but at user (-m) resolution, typically lower
     mesh = topg_nc.rectmesh(args.m)
+    # FIXME use dirichlet b.c. to set s=b below sea level
 else:
     # generate [0,L]^2 mesh via Firedrake
     pprint(
