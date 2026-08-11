@@ -31,12 +31,17 @@ class VIAMR(OptionsManager, AVMMixin):
 
     The public API of the VIAMR class consists of:
 
-      udomark(), vcdmark():  2 marking methods which target the computed free boundary
+      udomark():  marking method targeting refinement of the computed free boundary, based on a purely-discrete unstructured-dilation operation
 
-      gradreinactivemark(), brinactivemark():  2 classical a posterior error indicator marking methods applied in the computed inactive set.  the latter implements methods from
-      Babushka & Rheinboldt (1978) and the weighted extension from Bernardi & Verfurth (2000)
+      vcdmark():  marking method targeting refinement of the computed free boundary, based on diffusing the computed free boundary using mesh size in a variable coefficient
+
+      gradreinactivemark():  classical a posterior error estimator, applied in the computed inactive set, using CG1 recovery of the DG0 gradient
+
+      brinactivemark():  classical a posterior error estimator, applied in the computed inactive set, implementing either the method from Babushka & Rheinboldt (1978) or its weighted extension from Bernardi & Verfurth (2000)
 
       nsvmark():  mark using the "practical estimator" from Nochetto, Siebert, & Veeser (2003) = NSV03
+
+      unionmark():  a method for combining existing marks
 
       refinemarkedelements():  a method which calls PETSc for skeleton-based-refinement (SBR)
 
@@ -46,13 +51,11 @@ class VIAMR(OptionsManager, AVMMixin):
 
       elemactive(), thinelemactive():  two versions of element markings for computed active sets
 
-      unionmark():  a method for combining existing marks
-
       lowerboundcelldiameter():  unmark elements with cell diameters below a minimum cell diameter
 
       jaccard(), jaccardUFL():  computation of the Jaccard similarity index for two active sets
 
-      hausdorff():  compute the Hausdorff distance between two edge sets E1, E2
+      hausdorff2D():  compute the Hausdorff distance between two edge sets E1, E2 in a planar mesh
 
       freeboundarygraph2D():  for 2D obstacle problems, return the computed free boundary
 
@@ -61,28 +64,31 @@ class VIAMR(OptionsManager, AVMMixin):
     .. code-block:: python3
 
       amr = VIAMR()
-      mark = amr.udomark(uh, lb)                     # free-boundary targeted marking method
-      mark = amr.vcdmark(uh, lb)                     # same, but based on diffusion
-      imark = amr.gradrecinactivemark(uh, lb)        # classical gradient recovery in inactive set
-      imark = amr.brinactivemark(uh, lb, res_ufl)    # classical BR78 in inactive set
-      imark = amr.brinactivemark(uh, lb, res_ufl, Z=Z)   # weighted (BV00) in inactive set
-      mark = amr.unionmarks(mark, imark)             # mark according to two methods above
+      fbmark = amr.udomark(uh, lb)                             # free-boundary targeted marking method
+      fbmark = amr.vcdmark(uh, lb)                             # same, but based on diffusion
+      imark, _, _ = amr.gradrecinactivemark(uh, lb)            # classical gradient recovery in inactive set
+      imark, _, _ = amr.brinactivemark(uh, lb, res_ufl)        # classical BR78 estimator in inactive set
+      imark, _, _ = amr.brinactivemark(uh, lb, res_ufl, Z=Z)   # weighted estimator (BV00) in inactive set
       mark, _, _, _, _ = amr.nsvmark(uh, lb, g, f_ufl, g_ufl)  # method from NSV03
-      rmesh = amr.refinemarkedelements(mesh, mark)   # calls PETSc DMPlexTransform for skeleton-based refinement
-      rmesh = amr.adaptaveragedmetric(mesh, uh, lb)  # use animate for metric-based adaptation
+      mark = amr.unionmarks(fbmark, imark)                     # mark if either is marked
+      rmesh = amr.refinemarkedelements(mesh, mark)             # PETSc DMPlexTransform for skeleton-based refinement
+      amesh = amr.adaptaveragedmetric(mesh, uh, lb)            # animate for metric-based adaptation
 
-    Regarding the arguments: uh is a computed VI solution, lb=psi is the lower bound (obstacle), res_ufl is a UFL expression for the residual (applicable in the inactive set), mark is an element marking in DG0 (Definition 4.2 in paper), and rmesh is a refined or adapted mesh.
+    Regarding the arguments: uh is a computed VI solution, lb is the lower-bound obstacle, res_ufl is a UFL expression for the residual (applicable in the inactive set), Z is a weighting field (see examples), f_ufl is the source term in Poisson equation, and g_ufl are the boundary values.
 
-    Regarding the refinemarkedelements(), compare refine_marked_elements() from NetGen/ngspetsc.
+    Regarding returned values: fbmark, imark, and mark are element markings in DG0 (Definition 4.2 in paper), rmesh is a refined mesh, and amesh is an adapted mesh.
 
-    There are also some utility methods: spaces(), meshsizes(), meshreport(), checkadmissible(), and countmark().  Other methods starting with an underscore are (roughly) intended to be private to the VIAMR class.
+    Note: compare refinemarkedelements() to refine_marked_elements() from NetGen/ngspetsc.
+
+    There are also some utility methods, including: spaces(), meshsizes(), meshreport(), scalarrange(), checkadmissible(), and countmark().  Other methods starting with an underscore are (roughly) intended to be private to the VIAMR class.
 
     Known limitations:
       * Functions which do not work in parallel: 1. jaccard(..., submesh=False).
       * Functions whose results depend on number of processes: 1. vcdmark(), 2. adaptaveragedmetric().
-      * Functions which only work for 2D meshs: 1. freeboundarygraph2D(), 2. refinemarkedelements()
+      * Functions which only work for 2D meshs: 1. freeboundarygraph2D(), 2. hausdorff2D(), 3. refinemarkedelements()
       * Functions which only work for triangular meshes: 1. refinemarkedelements()
-      * Refinement via PETSc's DMPlex mesh transformations (https://petsc.org/release/overview/plex_transform_table/) allows skeleton based refinement (SBR) in 2D, but currently SBR is not available in 3D (https://petsc.org/release/src/dm/impls/plex/transform/impls/refine/sbr/plexrefsbr.c.html).
+
+    Regarding the last limitation, refinement via PETSc's DMPlex mesh transformations (https://petsc.org/release/overview/plex_transform_table/) allows skeleton based refinement (SBR) in 2D, but currently SBR is not available in 3D (https://petsc.org/release/src/dm/impls/plex/transform/impls/refine/sbr/plexrefsbr.c.html).
     """
 
     PARALLEL_OVERLAP = {
@@ -121,12 +127,6 @@ class VIAMR(OptionsManager, AVMMixin):
             op = MPI.MAX
         return w.function_space().mesh().comm.allreduce(local, op=op)
 
-    def scalarrange(self, w):
-        """Utility function to return the range of a generic scalar field.  Correct in parallel."""
-        return self._globalextreme(w, minimum=True), self._globalextreme(
-            w, minimum=False
-        )
-
     def meshsizes(self, mesh):
         """Compute number of vertices, number of elements, and range of
         mesh diameters."""
@@ -144,6 +144,12 @@ class VIAMR(OptionsManager, AVMMixin):
             f"{indentstr}current mesh: {nv} vertices, {ne} elements, h in [{hmin:.5f},{hmax:.5f}]"
         )
         return None
+
+    def scalarrange(self, w):
+        """Utility function to return the range of a generic scalar field.  Correct in parallel."""
+        return self._globalextreme(w, minimum=True), self._globalextreme(
+            w, minimum=False
+        )
 
     def checkadmissible(self, uh, bound, strict=False, upper=False):
         """Utility function to check admissibility or strict admissibility of uh.  Returns True if uh >= bound (upper=False) or uh <= bound (upper=True)."""
