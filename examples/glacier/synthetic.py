@@ -1,11 +1,21 @@
-# Formulas for synthetic glacier examples.  The "dome" case exact solution
-# is here, and the bumpy bed formula used by steady.py with -prob cap|range.
+# Formulas for synthetic glacier examples.
+#
+# The "dome" case is a manufactured solution from e.g. Bueler (2016).
+# Here dome_s_ufl() is the exact surface, and dome_a_ufl() is the SMB.
+# Thus (b=0, dome_a_ufl(), dome_s_ufl()) exactly solve the VI (PDE) by
+# construction.
+#
+# Note that steady.py imports dome_a_ufl() for -prob cap|range, only as
+# a plausible-looking radially-symmetric forcing function.  Also steady.py
+# optionally uses model_a_ufl() under option -elevdepend.
+#
+# The bumpy bed formula bumps_b_ufl() is used by steady.py too.
 
 import numpy as np
 from pyop2.mpi import MPI
 import firedrake as fd
 from firedrake.petsc import PETSc
-from physics import secpera, n, Gamma
+from physics import secpera, n, Gamma, H2u
 
 # constants (same for all problems)
 L = 1800.0e3  # domain is [0,L]^2, with fields centered at (xc,xc)
@@ -59,19 +69,6 @@ def dome_a_ufl(x, n=3.0, problem="cap"):
         return a0
 
 
-def _exactdome_H(V, returnu=False):
-    """Put the exact dome solution H=s, or u = H^(1/omega), into a Function(V)."""
-    x = fd.SpatialCoordinate(V.mesh())
-    if returnu:
-        p = n + 1  # typical:  p = 4
-        omega = (p - 1) / (2 * p)  #  omega = 3/8
-        uexact = fd.Function(V).interpolate(dome_s_ufl(x) ** (1.0 / omega))
-        uexact.rename("u_exact")
-        return uexact
-    else:
-        return fd.Function(V, name="H_exact").interpolate(dome_s_ufl(x))
-
-
 def dome_normerrors(uh, Hh):
     """Returns:
       * H^1 seminorm error in u
@@ -85,13 +82,13 @@ def dome_normerrors(uh, Hh):
     with Hdiff.dat.vec_ro as v:
         HerrLinf = abs(v).max()[1]
     CG2 = fd.FunctionSpace(V.mesh(), "CG", 2)
-    uexact = _exactdome_H(CG2, returnu=True)
+    uexact = H2u(dome_s_ufl(x))
     dus = fd.inner(fd.grad(uexact - uh), fd.grad(uexact - uh))
     uerrH1semi = fd.assemble(dus * fd.dx(degree=6)) ** 0.5
     uerrH1rel = fd.errornorm(uexact, uh, norm_type="H1") / fd.norm(
         uexact, norm_type="H1"
     )
-    return uerrH1semi, uerrH1rel, HerrLinf, uexact
+    return uerrH1semi, uerrH1rel, HerrLinf
 
 
 def dome_radiuserror(mesh, vfb):

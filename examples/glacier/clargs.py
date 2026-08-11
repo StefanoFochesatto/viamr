@@ -7,20 +7,23 @@ the domain is read from the file.
 
 By default (-prob cap) we use a random, but smooth, bed topography, while the
 surface mass balance is radially-symmetric and depends on horizontal location.
-Option -prob range generates a different SMB; results in a disconnected
-glacier.  Option -prob dome solves a flat bed case with radially-symmetric
-surface mass balance, where the exact solution is known and the numerical error
-is reported.  Option -bdata reads the bed elevation from a NetCDF (.nc) file.
+Option -prob range generates a different SMB, which results in a disconnected
+glacier.  Option -bdata reads the bed elevation from a NetCDF (.nc) file.
 
 An elevation-dependent surface mass balance model is turned on with -elevdepend.
-Set -sELA for equilibrium line altitude.  This case requires -picard, though
-the solver is mostly Newton in that case also.
+Set -sELA for equilibrium line altitude.
+
+We apply vinewtonrsls + mumps, a VI-adapted Newton method with direct solution of
+the step equations, as the PETSc solver.  Optionally (-picard), we can wrap an
+outer Picard iteration around it, which iterates on the surface elevation dependence
+of the SMB (if any).  Note that the solver is mostly Newton in the -picard case,
+actually.  Option -elevdepend only works with -picard.
 
 We apply the UDO method for free-boundary refinement.  The default mode
 does n=1 UDO at the free boundary.  To this we add the weighted form of the BR78
 residual estimator in the inactive set, that is, the method from BV00.
 
-We apply vinewtonrsls + mumps as the PETSc solver.
+For a flat-bed "dome" case with known exact solution, see dome.py instead.
 """
 
 from argparse import ArgumentParser, RawTextHelpFormatter
@@ -62,13 +65,6 @@ parser.add_argument(
     help="number of cells in each direction on initial mesh [default=20]",
 )
 parser.add_argument(
-    "-ocsv",
-    metavar="FILE",
-    type=str,
-    default="",
-    help="output file name for dome error report (.csv)",
-)
-parser.add_argument(
     "-opvd",
     metavar="FILE",
     type=str,
@@ -108,8 +104,8 @@ parser.add_argument(
     type=str,
     default="cap",
     metavar="X",
-    choices=["cap", "range", "dome"],
-    help="choose problem {cap, range, dome} [default=cap]",
+    choices=["cap", "range"],
+    help="choose problem {cap, range} [default=cap]",
 )
 parser.add_argument(
     "-refine",

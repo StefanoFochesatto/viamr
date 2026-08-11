@@ -1,7 +1,8 @@
 # Physical formulas for glaciers, and associated constants.
+# Also some standardized solver parameters.
 
 import firedrake as fd
-from pyop2.mpi import MPI
+from firedrake.petsc import PETSc
 
 debug = False  # debugging solver failures
 
@@ -107,3 +108,30 @@ def surfacevelocity(s, H):
     CU = ((n + 2) / (n + 1)) * Gamma
     dss = fd.inner(fd.grad(s), fd.grad(s))
     return CU * H ** p * dss ** ((p - 2) / 2) * fd.grad(s)
+
+
+def glaciermeshreport(amr, mesh, indent=2):
+    nv, ne, hmin, hmax = amr.meshsizes(mesh)
+    hmin /= 1000.0
+    hmax /= 1000.0
+    return ne, hmin
+
+
+# parameters for a VI-adapted Newton method
+solve_params = {
+    "snes_type": "vinewtonrsls",
+    "snes_vi_zero_tolerance": 1.0e-2,
+    "snes_rtol": 1.0e-6,
+    "snes_atol": 1.0e-10,
+    "snes_stol": 0.0,
+    "snes_linesearch_type": "bt",
+    "snes_linesearch_order": "1",
+    "snes_max_it": 1000,
+    "snes_converged_reason": None,
+    # "snes_max_funcs": 10000,
+    # "snes_monitor": None,
+    # "snes_vi_monitor": None,
+    "ksp_type": "preonly",
+    "pc_type": "lu",
+    "pc_factor_mat_solver_type": "mumps",
+}

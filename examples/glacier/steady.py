@@ -16,9 +16,6 @@ assert args.m >= 1, "at least one cell in mesh"
 assert args.refine >= 0, "cannot refine a negative number of times"
 assert args.pcount >= 1, "at least one Picard iteration required"
 assert args.udo_n >= 0, "cannot use UDO with negative levels"
-assert (
-    not args.elevdepend or args.prob != "dome"
-), "combination invalid: -elevdepend & -prob dome"
 assert args.picard or not args.elevdepend, "Picard iteration required for -elevdepend"
 
 import numpy as np
@@ -44,16 +41,13 @@ from physics import (
     weakform_s,
     residual_s_ufl,
     surfacevelocity,
+    glaciermeshreport,
+    solve_params,
     debug,
 )
 from synthetic import (
     L,
-    dome_L,
-    dome_H0,
-    dome_s_ufl,
     dome_a_ufl,
-    dome_normerrors,
-    dome_radiuserror,
     bumps_b_ufl,
     model_a_ufl,
 )
@@ -64,12 +58,6 @@ if args.opvdsub:
     assert bx[0] < bx[1] and bx[2] < bx[3], "-box not valid"
     assert args.bdata or (0.0 <= bx[0] < bx[1] <= L), "x range not valid for [0,L]"
     assert args.bdata or (0.0 <= bx[2] < bx[3] <= L), "y range not valid for [0,L]"
-
-# set up .csv if generating numerical error data
-if args.ocsv:
-    assert args.prob == "dome", "option -ocsv only valid for -prob dome"
-    csvfile = open(args.ocsv, "w")
-    print("REFINE,NE,HMIN,UERRH1,HERRINF,DRMAX", file=csvfile)
 
 # generate mesh, possibly by reading data for bed topography
 if args.bdata:
@@ -96,42 +84,12 @@ else:
         distribution_parameters=VIAMR.PARALLEL_OVERLAP,
     )
 
-# solver parameters
-sp = {
-    "snes_type": "vinewtonrsls",
-    "snes_vi_zero_tolerance": 1.0e-2,  # max u=H^{8/3} is about 10^9; tol is 1 part in 10^-11
-    "snes_rtol": 1.0e-6,
-    "snes_atol": 1.0e-10,
-    "snes_stol": 0.0,
-    "snes_linesearch_type": "bt",
-    "snes_linesearch_order": "1",
-    "snes_max_it": 1000,
-    # "snes_max_funcs": 10000,
-    "snes_converged_reason": None,
-    # "snes_monitor": None,
-    # "snes_vi_monitor": None,
-    "ksp_type": "preonly",
-    "pc_type": "lu",
-    "pc_factor_mat_solver_type": "mumps",
-}
-
-
-def glaciermeshreport(amr, mesh, indent=2):
-    nv, ne, hmin, hmax = amr.meshsizes(mesh)
-    hmin /= 1000.0
-    hmax /= 1000.0
-    indentstr = indent * " "
-    PETSc.Sys.Print(
-        f"{indentstr}current mesh: {nv} vertices, {ne} elements, h in [{hmin:.3f},{hmax:.3f}] km"
-    )
-    return ne, hmin
-
 
 # encapsulate solve to avoid code duplication
 def vinewtonsolve(G, w, bcs=None, lower=None, upper=None):
     problem = NonlinearVariationalProblem(G, w, bcs=bcs)
     solver = NonlinearVariationalSolver(
-        problem, solver_parameters=sp, options_prefix="steady"
+        problem, solver_parameters=solve_params, options_prefix="steady"
     )
     solver.solve(bounds=(lower, upper))
     return None
@@ -141,6 +99,7 @@ def vinewtonsolve(G, w, bcs=None, lower=None, upper=None):
 amr = VIAMR(debug=True, activetol=1.0)
 for i in range(args.refine + 1):
     pprint(f"solving using variable {args.primal} on mesh level {i}:")
+    amr.meshreport(mesh, indent=2)
 
     # describe current mesh
     ne, hmin = glaciermeshreport(amr, mesh)
@@ -153,10 +112,7 @@ for i in range(args.refine + 1):
     if args.bdata:
         b = Function(V).project(topg)  # cross-mesh projection from data mesh
     else:
-        if args.prob == "dome":
-            b = Function(V).interpolate(Constant(0.0))
-        else:
-            b = Function(V).interpolate(bumps_b_ufl(x, problem=args.prob))
+        b = Function(V).interpolate(bumps_b_ufl(x, problem=args.prob))
     b.rename("b = bedrock topography")
 
     # surface mass balance function on current mesh; depends on b in one case
@@ -270,20 +226,6 @@ for i in range(args.refine + 1):
         pprint("")
     oldei = ei
 
-    # report numerical errors if exact solution known
-    if not args.bdata and args.prob == "dome":
-        uerr_H1_semi, uerr_H1_rel, Herr_Linf, uexact = dome_normerrors(u, H)
-        vfb, _ = amr.freeboundarygraph2D(u, Function(V).interpolate(0.0))
-        drmax = dome_radiuserror(mesh, vfb)
-        pprint(
-            f"  |u-uexact|_H1rel = {uerr_H1_rel:.3e};  |H-Hexact|_Linf = {Herr_Linf:.3f} m;  |dr|_Linf = {drmax/1000.0:.3f} km"
-        )
-        if args.ocsv:
-            print(
-                f"{i:d},{ne:d},{hmin:.2f},{uerr_H1_rel:.3e},{Herr_Linf:.3f},{drmax:.3f}",
-                file=csvfile,
-            )
-
     # mark and refine based on constraint H >= 0 (or u >= 0 or s >= b)
     uni = i < args.uniform
     if uni:
@@ -292,13 +234,13 @@ for i in range(args.refine + 1):
         fbmark = amr.udomark(H, Constant(0.0), n=args.udo_n)
         if args.primal == "u":
             res, Z = residual_u_ufl(u, a, b)
-            imark, _, total_eta = amr.brinactivemark(
+            imark, _, _ = amr.brinactivemark(
                 u, Constant(0.0), res, theta=args.theta, method="total", alpha=Z
             )
         else:
             res, Z = residual_s_ufl(s, a, b)
             # use u > 0 when calling brinactivemark(), so "jump(grad(u))" is for u, even though eta calculated with s
-            imark, _, total_eta = amr.brinactivemark(
+            imark, _, _ = amr.brinactivemark(
                 u, Constant(0.0), res, theta=args.theta, method="total", alpha=Z
             )
         if args.hmin > 0.0:
@@ -311,21 +253,13 @@ for i in range(args.refine + 1):
 
         # report on AMR
         pprint(
-            f"  elements marked by UDO+BR weighted: {pfb:.2f}% free-bdry, {pin:.2f}% of inactive",
-            end=""
+            f"  elements marked by UDO+BR weighted: {pfb:.2f}% free-bdry, {pin:.2f}% of inactive"
         )
-        if not args.bdata and args.prob == "dome":
-            pprint(f";  eff_H1 = {total_eta / uerr_H1_semi:.3f}")
-        else:
-            pprint("")
 
     # refine (when proceeding to next mesh)
     if i < args.refine:
         pprint(f"  refining" + (" uniformly" if uni else "") + " ...")
         mesh = amr.refinemarkedelements(mesh, "uniform" if uni else mark)
-
-if args.ocsv:
-    csvfile.close()
 
 if args.opvdsub:  # note boxind gets written into -opvd file
     x, y = SpatialCoordinate(mesh)
@@ -345,10 +279,6 @@ if args.opvd:
     grads.interpolate(grad(s))
     grads.rename("Gs = grad(s)")
     fields = [H, s, u, Us, q, a, b, grads, mark]
-    if not args.bdata and args.prob == "dome":
-        uerr = Function(uexact.function_space()).interpolate(u - uexact)
-        uerr.rename("uerr = u-u_exact")
-        fields.append(uerr)
     if args.opvdsub:
         fields.append(boxind)
     if mesh.comm.size > 1:
