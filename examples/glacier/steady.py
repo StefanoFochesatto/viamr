@@ -322,7 +322,7 @@ for i in range(args.refine + 1):
     # refine (when proceeding to next mesh)
     if i < args.refine:
         pprint(f"  refining" + (" uniformly" if uni else "") + " ...")
-        mesh = amr.refinemarkedelements(mesh, mark, isUniform=uni)
+        mesh = amr.refinemarkedelements(mesh, "uniform" if uni else mark)
 
 if args.ocsv:
     csvfile.close()

@@ -78,17 +78,15 @@ class VIAMR(OptionsManager, AVMMixin):
 
     Regarding returned values: fbmark, imark, and mark are element markings in DG0 (Definition 4.2 in paper), rmesh is a refined mesh, and amesh is an adapted mesh.
 
-    Note: compare refinemarkedelements() to refine_marked_elements() from NetGen/ngspetsc.
-
     There are also some utility methods, including: spaces(), meshsizes(), meshreport(), scalarrange(), checkadmissible(), and countmark().  Other methods starting with an underscore are (roughly) intended to be private to the VIAMR class.
 
     Known limitations:
       * Functions which do not work in parallel: 1. jaccard(..., submesh=False).
       * Functions whose results depend on number of processes: 1. vcdmark(), 2. adaptaveragedmetric().
       * Functions which only work for 2D meshs: 1. freeboundarygraph2D(), 2. hausdorff2D(), 3. refinemarkedelements()
-      * Functions which only work for triangular meshes: 1. refinemarkedelements()
+      * Functions which only work for 2D triangular meshes: 1. refinemarkedelements()
 
-    Regarding the last limitation, refinement via PETSc's DMPlex mesh transformations (https://petsc.org/release/overview/plex_transform_table/) allows skeleton based refinement (SBR) in 2D, but currently SBR is not available in 3D (https://petsc.org/release/src/dm/impls/plex/transform/impls/refine/sbr/plexrefsbr.c.html).
+    Regarding the last limitation, see the doc string of refinemarkedelements(), and compare to refine_marked_elements() from NetGen/ngspetsc.
     """
 
     PARALLEL_OVERLAP = {
@@ -819,46 +817,68 @@ class VIAMR(OptionsManager, AVMMixin):
         total_error_est = sqrt(total_error_inf ** 2 + total_error_d ** 2)
         return (mark, etainf, sigmah, total_error_est, etad)
 
-    def refinemarkedelements(self, mesh, indicator, isUniform=False):
-        """Call PETSc DMPlex routines to do skeleton-based refinement
-        (SBR; Plaza & Carey, 2000).  This version works in parallel,
-        but only in 2D; see TODO in
+    def refinemarkedelements(self, mesh, indicator):
+        """Call PETSc DMPlex routines to do skeleton-based refinement (SBR; Plaza & Carey, 2000).
+        This version works in parallel, but only in 2D.
+
+        Regarding 2D limitation, see TODO in
           https://petsc.org/release/src/dm/impls/plex/transform/impls/refine/sbr/plexrefsbr.c.html.
-        See https://petsc.org/release/overview/plex_transform_table/
-        and associated links.  Compare this method to Netgen's
-        refine_marked_elements() which also does SBR, in 2D or 3D.
-        Optionally does uniform refinement."""
+        Also see
+          https://petsc.org/release/overview/plex_transform_table/
+        and associated links.
 
-        # FIXME improve this method and its docs: capture current option and return it at end; ignores indicator if isUniform=True, but that is not clear
+        Compare this method to Netgen's refine_marked_elements() which also does SBR, in 2D or 3D,
+        but which does not apply to Firedrake-native meshes.
 
-        # section for DG0 indicator
-        tdim = mesh.topological_dimension
-        entity_dofs = np.zeros(tdim + 1, dtype=IntType)
-        entity_dofs[-1] = 1
-        indicatorSect, _ = dmcommon.create_section(mesh, entity_dofs)
+        Parameters
+        ----------
+        mesh : firedrake.Mesh
+            The mesh to refine.
+        indicator : firedrake.Function or "uniform"
+            A DG0 indicator function marking which cells to refine
+            (nonzero means refine).  Pass the literal string "uniform"
+            instead to refine every cell uniformly.
 
-        # create a DMPlex adaptation label to mark cells for refinement
+        Returns
+        -------
+        firedrake.Mesh
+            The refined mesh.
+        """
+        isUniform = indicator == "uniform"
         dm = mesh.topology_dm
-        dm.createLabel("markviamr")
-        adaptLabel = dm.getLabel("markviamr")
-        adaptLabel.setDefaultValue(0)
-
-        # dmcommon provides a python binding for this operation of setting
-        # the label given an indicator function data array
-        if self.debug:
-            _, DG0 = self.spaces(mesh)
-            assert indicator.function_space().ufl_element() == DG0.ufl_element()
-        dmcommon.mark_points_with_function_array(
-            dm, indicatorSect, 0, indicator.dat.data_with_halos, adaptLabel, 1
-        )
 
         # augment/override options database to indicate type of refinement
         # (For now the only way to set the active label with petsc4py uses
         # PETSc.Options() because DMPlexTransformSetActive() has no binding.)
+        # Save whatever was already in the (global) options database so
+        # this call does not permanently leak state into it.
         opts = PETSc.Options()
+        optkeys = ("dm_plex_transform_active", "dm_plex_transform_type")
+        savedopts = {key: opts[key] for key in optkeys if key in opts}
+
         if isUniform:
             opts["dm_plex_transform_type"] = "refine_regular"
         else:
+            # section for DG0 indicator
+            tdim = mesh.topological_dimension
+            entity_dofs = np.zeros(tdim + 1, dtype=IntType)
+            entity_dofs[-1] = 1
+            indicatorSect, _ = dmcommon.create_section(mesh, entity_dofs)
+
+            # create a DMPlex adaptation label to mark cells for refinement
+            dm.createLabel("markviamr")
+            adaptLabel = dm.getLabel("markviamr")
+            adaptLabel.setDefaultValue(0)
+
+            # dmcommon provides a python binding for this operation of setting
+            # the label given an indicator function data array
+            if self.debug:
+                _, DG0 = self.spaces(mesh)
+                assert indicator.function_space().ufl_element() == DG0.ufl_element()
+            dmcommon.mark_points_with_function_array(
+                dm, indicatorSect, 0, indicator.dat.data_with_halos, adaptLabel, 1
+            )
+
             opts["dm_plex_transform_active"] = "markviamr"
             opts["dm_plex_transform_type"] = "refine_sbr"
 
@@ -868,11 +888,12 @@ class VIAMR(OptionsManager, AVMMixin):
         dmTransform.setFromOptions()
         dmTransform.setUp()
         dmAdapt = dmTransform.apply(dm)
+        dmTransform.destroy()
 
-        # labels are no longer needed
-        dmAdapt.removeLabel("markviamr")
-        dm.removeLabel("markviamr")
-        dmTransform.destroy()  # do we need this?
+        if not isUniform:
+            # labels are no longer needed
+            dmAdapt.removeLabel("markviamr")
+            dm.removeLabel("markviamr")
 
         # remove other labels to stop further distribution in mesh()
         # (Koki's suggestion)
@@ -883,7 +904,14 @@ class VIAMR(OptionsManager, AVMMixin):
         # create a new mesh from the adapted dm
         dp = mesh._distribution_parameters  # original parameters
         refinedmesh = Mesh(dmAdapt, distribution_parameters=dp, comm=mesh.comm)
-        opts["dm_plex_transform_type"] = "refine_regular"  # reset
+
+        # restore options database to its state before this call
+        for key in optkeys:
+            if key in savedopts:
+                opts[key] = savedopts[key]
+            elif key in opts:
+                del opts[key]
+
         return refinedmesh
 
     def jaccard(self, active1, active2, submesh=False):
@@ -1149,7 +1177,7 @@ class VIAMR(OptionsManager, AVMMixin):
         The un-marking method is to take the current mesh, namely
           mesh0 = uh0.function_space().mesh(),
         and uniformly refine it to get a refined mesh:
-          mesh1 = VIAMR.refinemarkedelements(mesh0, None, isUniform=True)
+          mesh1 = VIAMR.refinemarkedelements(mesh0, "uniform")
         Then compute the residual on the refined mesh from the interpolated input uh0
         and the refined obstacle:
           lb1 = psi_fcn(mesh1)  # generally has more detail than lb0
