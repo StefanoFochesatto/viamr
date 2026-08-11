@@ -12,7 +12,7 @@
 #   sphere_convergence_unorm.png       ||u_exact - u_h||_2 vs DOFs
 #   sphere_convergence_preferred.png   ||u_exact - tilde u_h||_2 vs DOFs
 #   sphere_convergence_h1.png          |u_exact - u_h|_{H^1 seminorm} vs DOFs
-#   sphere_convergence_hausdorff.png   hausdorff(Gamma_u, Gamma_uh) vs DOFs
+#   sphere_convergence_hausdorff.png   hausdorff2D(Gamma_u, Gamma_uh) vs DOFs
 #   sphere_effectivity.png             estimator/true-error effectivity index
 #                                       vs DOFs, for UDOBR and NSV only
 #
@@ -233,11 +233,11 @@ for amrtype in refinetypes:
         uexact = Function(V, name="u_exact").interpolate(uexactUFL(r))
         _, fbexact = amr.freeboundarygraph2D(uexact, lb)
         _, fb = amr.freeboundarygraph2D(uh, lb)
-        # hausdorff() returns None for an empty free boundary (e.g. a coarse
+        # hausdorff2D() returns None for an empty free boundary (e.g. a coarse
         # initial mesh); format accordingly
-        haus = amr.hausdorff(fbexact, fb)
+        haus = amr.hausdorff2D(fbexact, fb)
         hausstr = f"{haus:.5f}" if haus is not None else "n/a"
-        print(f"  hausdorff(Gamma_u, Gamma_uh) = {hausstr}")
+        print(f"  hausdorff2D(Gamma_u, Gamma_uh) = {hausstr}")
 
         # report, and break if target complexity met
         Nv, Ne, hmin, hmax = amr.meshsizes(mesh)
@@ -380,7 +380,7 @@ if mesh.comm.rank == 0:
     # L^2 rate above.
     _convergence_plot(
         3,
-        "hausdorff(Gamma_u, Gamma_uh)",
+        "hausdorff2D(Gamma_u, Gamma_uh)",
         "sphere problem: free-boundary Hausdorff distance vs DOFs",
         "sphere_convergence_hausdorff.png",
         -1.0 / d,

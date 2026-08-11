@@ -162,12 +162,12 @@ for i in range(levels + 1):
         jac = amr.jaccard(neweactive, eactive, submesh=True)
     eactive = neweactive
 
-    # free-boundary Hausdorff distance vs exact; hausdorff() returns None
+    # free-boundary Hausdorff distance vs exact; hausdorff2D() returns None
     # for an empty free-boundary edge set (e.g. a coarse initial mesh)
     uexact = Function(V, name="u_exact").interpolate(uUFL)
     _, fbexact = amr.freeboundarygraph2D(uexact, lb)
     _, fb = amr.freeboundarygraph2D(uh, lb)
-    haus = amr.hausdorff(fbexact, fb)
+    haus = amr.hausdorff2D(fbexact, fb)
     hausstr = f"{haus:.5f}" if haus is not None else "n/a"
     hausdorffs.append(haus if haus is not None else np.nan)  # nan plots as a gap
 
@@ -187,7 +187,7 @@ for i in range(levels + 1):
     # report errors, effectivity index, Jaccard agreement
     print(f"  ||u-u_h||_L2={errL2:.3e};  |u-u_h|_H1={errH1:.3e};  |u-u_h|_qn={errqn:.3e}")
     print(f"  eff={eff:.2f}" + (f";  Jaccard({i-1},{i})={100*jac:.2f}%" if i > 0 else ""))
-    print(f"  hausdorff(Gamma_u, Gamma_uh) = {hausstr}")
+    print(f"  hausdorff2D(Gamma_u, Gamma_uh) = {hausstr}")
 
     # actually refine if we will solve on next mesh
     if i < levels:
@@ -260,6 +260,6 @@ if mesh.comm.rank == 0:
         plt.legend()
     plt.grid(True)
     plt.xlabel("DOFs")
-    plt.ylabel("hausdorff(Gamma_u, Gamma_uh)")
+    plt.ylabel("hausdorff2D(Gamma_u, Gamma_uh)")
     plt.title(f"porous-media problem (gamma={gamma}): free-boundary Hausdorff distance")
     plt.savefig(hausfile)

@@ -936,8 +936,8 @@ class VIAMR(OptionsManager, AVMMixin):
             return -1.0
         return AreaIntersection / AreaUnion
 
-    def hausdorff(self, E1, E2, densify=0.99):
-        """Compute the (densified, approximate) Hausdorff distance between two
+    def hausdorff2D(self, E1, E2, densify=0.99):
+        """Compute the (densified, approximate) Hausdorff distance between two planar
         edge-coordinate sets E1, E2, e.g. as returned by freeboundarygraph2D().
         densify is the shapely densify fraction in (0,1]: each segment is
         subdivided into 1/densify pieces before comparison, which turns the
@@ -946,7 +946,7 @@ class VIAMR(OptionsManager, AVMMixin):
         see shapely.hausdorff_distance()."""
         if len(E1) == 0 or len(E2) == 0:
             warnings.warn(
-                "VIAMR.hausdorff() called with an empty free-boundary edge set; "
+                "VIAMR.hausdorff2D() called with an empty free-boundary edge set; "
                 "returning None"
             )
             return None
@@ -954,7 +954,7 @@ class VIAMR(OptionsManager, AVMMixin):
             import shapely
         except ImportError:
             raise ImportError(
-                "VIAMR.hausdorff() requires shapely; install it with 'pip install shapely'"
+                "VIAMR.hausdorff2D() requires shapely; install it with 'pip install shapely'"
             )
         return shapely.hausdorff_distance(
             shapely.MultiLineString(E1), shapely.MultiLineString(E2), densify
@@ -971,7 +971,7 @@ class VIAMR(OptionsManager, AVMMixin):
 
         Returns (coordsV, coordsE): coordsV is a list of [x,y] vertex
         coordinates, and coordsE is a list of [[x1,y1],[x2,y2]] edge
-        coordinate pairs.  The latter is the format hausdorff() expects
+        coordinate pairs.  The latter is the format hausdorff2D() expects
         for its "edge sets".
 
         Only implemented for 2D meshes (raises ValueError otherwise).
@@ -1061,13 +1061,12 @@ class VIAMR(OptionsManager, AVMMixin):
             coordsV = set(coordsV)
             coordsE = set(coordsE)
 
+        # return plain lists-of-lists
         if not coordsV:
             warnings.warn(
                 "VIAMR.freeboundarygraph2D() found an empty free boundary; "
                 "returning an empty graph"
             )
-
-        # return plain lists-of-lists
         return [list(v) for v in coordsV], [[list(e[0]), list(e[1])] for e in coordsE]
 
     def _filtermesh(self, mesh, indicator):
