@@ -302,6 +302,7 @@ for amrtype in refinetypes:
     results[amrtype] = (dofs, errnorms, errnorm_pres, hausdorffs, errnorm_h1s)
     effs[amrtype] = (eff_dofs, eff_vals)
 
+    # generate .pvd output file, with AMR fields for final mesh
     outfile = "result_sphere_" + amrtype + ".pvd"
     print(f"done ... writing to {outfile} ...")
     gap = Function(V, name="gap = uh-lb").interpolate(uh - lb)
@@ -311,23 +312,17 @@ for amrtype in refinetypes:
     )
     fields = [uh, lb, gap, uexact, error]
     if amrtype == "udobr":
-        # for output file, compute imark, mark on final mesh
         residual = -div(grad(uh))
-        imark, _, _ = amr.brinactivemark(uh, lb, residual, theta=thetaBR)
-        mark = amr.udomark(uh, lb, n=1)
-        mark = amr.unionmarks(mark, imark)
+        imark, _, _ = amr.brinactivemark(uh, lb, residual, theta=thetaBR, method=methodBR)
+        mark = amr.unionmarks(amr.udomark(uh, lb, n=1), imark)
         imark.rename("imark (BR)")
         mark.rename("mark")
         fields += [mark, imark]
     elif amrtype == "nsv":
-        # for output file, compute mark, etainf, sigmah on final mesh FIXME
         g = Function(V).interpolate(g_ufl)
         (mark, etainf, sigmah, _, etad) = amr.nsvmark(uh, lb, g, Constant(0.0), g_ufl)
         mark.rename("mark")
-        dualtol = 1.0e-10
-        lnsigmah = Function(V, name="ln(sigma_h)").interpolate(ln(sigmah + dualtol))
-        lnetainf = Function(V, name="ln(eta_inf)").interpolate(ln(etainf))
-        fields += [mark, sigmah, lnsigmah, etainf, lnetainf, etad]
+        fields += [mark, sigmah, etainf, etad]
     VTKFile(outfile).write(*fields)
     print("")
 
@@ -391,10 +386,8 @@ if mesh.comm.rank == 0:
         -1.0 / d,
         "DOFs^(-1/d)",
     )
-    # H^1 seminorm: classical (Falk-type) a priori theory for the obstacle
-    # problem gives first-order convergence, i.e. DOFs^(-1/d), same as
-    # Hausdorff's mesh-resolution rate, not the L^2 rate above.  This is the
-    # norm brinactivemark()'s BR78 estimator directly targets.
+    # H^1 seminorm = energy norm: a priori theory for obstacle problem gives
+    # first-order convergence, DOFs^(-1/d), BR78 estimator targets this norm
     _convergence_plot(
         4,
         "|u_exact - u_h|_{H^1}",
@@ -405,11 +398,8 @@ if mesh.comm.rank == 0:
     )
 
     # effectivity index = estimator / true error, in whichever norm the
-    # estimator targets (energy norm for BR78, sup norm for NSV03); unlike
-    # the norm-convergence figures above, there's no power-law rate to plot
-    # against, since a reliable+efficient estimator should stay O(1) (ideally
-    # near 1) as DOFs grow, so this uses a linear y-axis with a semilogx
-    # x-axis, and a horizontal reference line at the ideal value of 1
+    # estimator targets (energy norm for BR78, sup norm for NSV03)
+    # a reliable and efficient estimator should stay O(1) as DOFs grow
     plt.figure()
     effstylemap = {"udobr": ("ko", "BR78 (inactive-set, energy norm)"),
                     "nsv": ("bs", "NSV03 (sup norm)")}
