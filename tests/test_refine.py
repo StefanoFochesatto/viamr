@@ -366,10 +366,12 @@ def test_udomark_nontrivial():
     _udomark_nontrivial(VIAMR())
 
 
-def test_udomark_restrict():
-    # Exercises udomark(restrict=...), and thus VIAMR._filtermesh(), which
-    # otherwise has no test coverage.
-    amr = VIAMR(debug=True)
+def _udomark_restrict_case(amr):
+    # Shared by test_udomark_restrict() here and
+    # tests/test_parallel.py::test_udomark_restrict_parallel(), so the two
+    # assert the identical mesh sizes/counts from one definition. Exercises
+    # udomark(restrict=...), and thus VIAMR._filtermesh(), which otherwise
+    # has no test coverage.
     u, lb = _udomark_nontrivial_lb(amr)
     mesh = u.function_space().mesh()
     assert amr.meshsizes(mesh)[1] == 800
@@ -388,6 +390,11 @@ def test_udomark_restrict():
     markfull = amr.udomark(u, lb, n=2)
     assert amr.countmark(markfull) == 506
 
+
+def test_udomark_restrict():
+    amr = VIAMR(debug=True)
+    _udomark_restrict_case(amr)
+    u, lb = _udomark_nontrivial_lb(amr)
     with pytest.raises(ValueError):
         amr.udomark(u, lb, restrict="bogus")
 

@@ -13,6 +13,7 @@ from test_refine import (
     _nsvmark_nontrivial,
     _udomark_nontrivial,
     _udomark_nontrivial_lb,
+    _udomark_restrict_case,
 )
 
 
@@ -140,6 +141,15 @@ def test_hausdorff2D_parallel():
     _hausdorff2D_case(VIAMR(debug=True))
 
 
+@pytest.mark.parallel(nprocs=3)
+def test_udomark_restrict_parallel():
+    # Confirms tests/test_refine.py::_udomark_restrict_case() -- i.e.
+    # udomark(restrict=...) and thus VIAMR._filtermesh(), which uses PETSc's
+    # DMPlex "transform_filter" transform -- gives the same restricted
+    # submesh sizes and mark counts regardless of process count.
+    _udomark_restrict_case(VIAMR(debug=True))
+
+
 if __name__ == "__main__":
     test_refine_udo_parallelUDO()
     test_udo_regression()
@@ -148,3 +158,4 @@ if __name__ == "__main__":
     test_nsvmark_nontrivial_parallel()
     test_freeboundarygraph2D_circle_parallel()
     test_hausdorff2D_parallel()
+    test_udomark_restrict_parallel()
