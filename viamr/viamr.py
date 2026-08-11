@@ -827,6 +827,8 @@ class VIAMR(OptionsManager, AVMMixin):
         refine_marked_elements() which also does SBR, in 2D or 3D.
         Optionally does uniform refinement."""
 
+        # FIXME improve this method and its docs: capture current option and return it at end; ignores indicator if isUniform=True, but that is not clear
+
         # section for DG0 indicator
         tdim = mesh.topological_dimension
         entity_dofs = np.zeros(tdim + 1, dtype=IntType)
