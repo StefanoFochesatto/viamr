@@ -1134,3 +1134,26 @@ class VIAMR(OptionsManager, AVMMixin):
         opts["dm_plex_transform_type"] = "refine_regular"
 
         return refinedmesh
+
+    def safeactiveunmark(self, uh0, lb0, F_strong_fcn, psi_fcn):  # FIXME TODO
+        """Return a marking (DG0 field with {0,1} values) where 1 indicates a part of the
+        current active set, defined by uh0 and lb0, in which it is safe *not* to mark.
+        This allows solver efficiency in some problems where the obstacle is not regular
+        but the operator is such that the interiors of certain active sets can avoid
+        wasted-effort refinement.
+
+        The input F_strong_fcn is a function which returns a UFL expression for the residual:
+          res = F_strong_fcn(uh, lb)
+        The un-marking method is to take the current mesh, namely
+          mesh0 = uh0.function_space().mesh(),
+        and uniformly refine it to get a refined mesh:
+          mesh1 = VIAMR.refinemarkedelements(mesh0, None, isUniform=True)
+        Then compute the residual on the refined mesh from the interpolated input uh0
+        and the refined obstacle:
+          lb1 = psi_fcn(mesh1)  # generally has more detail than lb0
+          uh1 = Function(lb1.function_space()).interpolate(uh0)  # cross-mesh interpolation
+          res1 = F_strong_fcn(uh1, lb1)
+        Then (FIXME) return which part of the mesh0 active set is safe to not mark for
+        refinement.
+        """
+        raise NotImplementedError
