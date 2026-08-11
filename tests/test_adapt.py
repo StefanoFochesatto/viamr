@@ -46,6 +46,32 @@ def test_adapt_avm_separated():
 
 
 @needsanimate
+def test_adapt_avm_metric_only():
+    # Exercises adaptaveragedmetric(..., metric=True), which returns the
+    # RiemannianMetric itself instead of adapting the mesh, in all three
+    # gamma branches (isotropic-only, hessian-only, averaged).
+    from animate import RiemannianMetric
+
+    mesh = RectangleMesh(5, 5, 2.0, 2.0, originX=-2.0, originY=-2.0)
+    amr = VIAMR(debug=True)
+    CG1, _ = amr.spaces(mesh)
+    psi = Function(CG1).interpolate(Constant(0.0))
+    (x, y) = SpatialCoordinate(mesh)
+    r = sqrt(x**2 + y**2)
+    uh = Function(CG1).interpolate(conditional(r < 1, 1.0 + cos(pi * r), 0.0))
+    amr.setmetricparameters(target_complexity=100, h_min=1.0e-4, h_max=1.0)
+
+    fbmetric = amr.adaptaveragedmetric(mesh, uh, psi, gamma=1.0, metric=True)
+    assert isinstance(fbmetric, RiemannianMetric)
+
+    hmetric = amr.adaptaveragedmetric(mesh, uh, psi, gamma=0.0, metric=True)
+    assert isinstance(hmetric, RiemannianMetric)
+
+    avgmetric = amr.adaptaveragedmetric(mesh, uh, psi, metric=True)  # gamma=0.5
+    assert isinstance(avgmetric, RiemannianMetric)
+
+
+@needsanimate
 def test_adapt_avm_intersect():
     mesh = RectangleMesh(4, 4, 2.0, 2.0, originX=-2.0, originY=-2.0, diagonal="crossed")
     amr = VIAMR(debug=True)
@@ -63,4 +89,5 @@ def test_adapt_avm_intersect():
 if __name__ == "__main__":
     test_adapt_avm()
     test_adapt_avm_separated()
+    test_adapt_avm_metric_only()
     test_adapt_avm_intersect()

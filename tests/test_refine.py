@@ -1,3 +1,4 @@
+import pytest
 from firedrake import *
 from viamr import VIAMR
 
@@ -365,6 +366,32 @@ def test_udomark_nontrivial():
     _udomark_nontrivial(VIAMR())
 
 
+def test_udomark_restrict():
+    # Exercises udomark(restrict=...), and thus VIAMR._filtermesh(), which
+    # otherwise has no test coverage.
+    amr = VIAMR(debug=True)
+    u, lb = _udomark_nontrivial_lb(amr)
+    mesh = u.function_space().mesh()
+    assert amr.meshsizes(mesh)[1] == 800
+
+    markactive = amr.udomark(u, lb, n=2, restrict="active")
+    meshactive = markactive.function_space().mesh()
+    assert amr.meshsizes(meshactive)[1] == 154
+    assert amr.countmark(markactive) == 154
+
+    markinactive = amr.udomark(u, lb, n=2, restrict="inactive")
+    meshinactive = markinactive.function_space().mesh()
+    assert amr.meshsizes(meshinactive)[1] == 750
+    assert amr.countmark(markinactive) == 456
+
+    # unrestricted call still works and is unaffected by the restricted calls
+    markfull = amr.udomark(u, lb, n=2)
+    assert amr.countmark(markfull) == 506
+
+    with pytest.raises(ValueError):
+        amr.udomark(u, lb, restrict="bogus")
+
+
 if __name__ == "__main__":
     test_overrefine_udo()
     test_finer_udo()
@@ -378,3 +405,4 @@ if __name__ == "__main__":
     test_nsvmark_nontrivial()
     test_fixedrate_total()
     test_udomark_nontrivial()
+    test_udomark_restrict()

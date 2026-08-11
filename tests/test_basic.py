@@ -66,6 +66,28 @@ def test_unionmarks():
     assert abs(assemble(mark * dx) - 9.92) < 1.0e-10  # union of marked area
 
 
+def test_lowerboundcelldiameter():
+    mesh = _get_netgen_mesh(TriHeight=1.2)
+    amr = VIAMR(debug=True)
+    _, DG0 = amr.spaces(mesh)
+    ne = DG0.dim()
+    mark = Function(DG0).interpolate(Constant(1.0))
+    diam = Function(DG0).interpolate(CellDiameter(mesh))
+    hmin0, hmax0 = amr.scalarrange(diam)
+
+    # hmin=0 keeps every cell marked
+    kept = amr.lowerboundcelldiameter(mark, 0.0)
+    assert amr.countmark(kept) == ne
+
+    # hmin bigger than every cell's diameter unmarks everything
+    allgone = amr.lowerboundcelldiameter(mark, hmax0 + 1.0)
+    assert amr.countmark(allgone) == 0
+
+    # a threshold strictly between hmin0 and hmax0 unmarks only smaller cells
+    partial = amr.lowerboundcelldiameter(mark, 1.5)
+    assert amr.countmark(partial) == 11
+
+
 def test_elemactive():
     mesh = UnitSquareMesh(3, 2)
     amr = VIAMR(debug=True)
@@ -286,6 +308,7 @@ if __name__ == "__main__":
     test_spaces_sizes()
     test_mark_none()
     test_unionmarks()
+    test_lowerboundcelldiameter()
     test_elemactive()
     test_thinelemactive()
     test_overlapping_jaccard()
