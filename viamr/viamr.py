@@ -457,36 +457,27 @@ class VIAMR(OptionsManager, AVMMixin):
         uh,
         lb,
         bracket=[0.2, 0.8],
-        coefficient=0.5,
         returnSmooth=False,
         directsolver=False,
         vcdsolveriters=4,
-        printsolvertime=False,
     ):
-        """Mark mesh using Variable Coefficient Diffusion (VCD) algorithm.
-        The algorithm computes a nodal active set indicator and then
-        diffuses it, using a variable mesh-sized based coefficient.  Diffusion
-        is by solving a single backward Euler time step for the corresponding
-        time-dependent diffusion equation.  Thresholding for the middle
-        values of this field marks only those elements which are close to the
-        free boundary.  The output is an element-wise marking for which elements,
-        near the free boundary, should be refined.
-        Tuning advice:  Generally the bracket [a,b] should be adjusted as follows:
+        """Mark mesh using Variable Coefficient Diffusion (VCD) algorithm.  The algorithm computes a nodal active set indicator and then diffuses it, using a variable coefficient based on mesh geometry.  Diffusion is by solving a single backward Euler time step for the corresponding time-dependent diffusion equation.  The linear equations are solved by a fixed number of iterations of ICC-preconditioned CG.  Thresholding to capture the middle values of this field then marks only those elements which are close to the free boundary.  The output is an element-wise marking for elements to refine near the free boundary.
+        Tuning advice:  The bracket [a,b] should be adjusted as follows:
           * lower a from default 0.2 to mark more elements in/near *inactive* set
           * raise b from default 0.8 to mark more elements in/near *active* set"""
 
-        # Compute nodal active set indicator within some tolerance
+        # Compute nodal active set indicator
         mesh = uh.function_space().mesh()
         CG1, DG0 = self.spaces(mesh)
         nu = self._nodalactive(uh, lb)
 
-        # Diffuse according to square of cell diameter: D = C h^2.  The nodal
-        # active indicator gives the initial field u0.  Solve one backward
+        # Diffuse according to square of cell diameter, with diffusivity D = (1/2) h^2.
+        # The nodal active indicator gives the initial field u0.  Solve one backward
         # Euler time-step using a linear solver.
         w = TrialFunction(CG1)
         v = TestFunction(CG1)
         h = CellDiameter(mesh)
-        a = w * v * dx + coefficient * h ** 2 * inner(grad(w), grad(v)) * dx
+        a = w * v * dx + 0.5 * h ** 2 * inner(grad(w), grad(v)) * dx
         L = nu * v * dx
         u = Function(CG1, name="Smoothed Nodal Active")
 
@@ -508,24 +499,13 @@ class VIAMR(OptionsManager, AVMMixin):
             }
             if mesh.comm.size > 1:
                 sp.update({"pc_type": "asm", "pc_asm_overlap": 1, "sub_pc_type": "icc"})
-        if printsolvertime:
-            start = time.perf_counter()
         solve(a == L, u, solver_parameters=sp, options_prefix="viamr_vcd")
-        if printsolvertime:
-            end = time.perf_counter()
-            PETSc.Sys.Print(
-                f"VIAMR INFO  vcdmark() solver time = {end - start:.6f} seconds"
-            )
-
-        if returnSmooth:
-            return u
 
         # apply thresholding and interpolate into DG0
-        mark = Function(DG0, name="mark (vcdmark)")
-        mark.interpolate(
-            conditional(u > bracket[0], conditional(u < bracket[1], 1, 0), 0)
-        )
-        return mark
+        if returnSmooth:
+            return u
+        middleUFL = conditional(u > bracket[0], conditional(u < bracket[1], 1, 0), 0)
+        return Function(DG0, name="mark (vcdmark)").interpolate(middleUFL)
 
     def _fixedrate(self, eta, theta, method):
         """Marks elements according to the values of estimator eta in DG0 and a threshold which depends on the scalar theta.  The number of elements marked is an increasing function of theta.  The default 'max' strategy marks all elements with eta greater than
