@@ -817,6 +817,85 @@ class VIAMR(OptionsManager, AVMMixin):
         total_error_est = sqrt(total_error_inf ** 2 + total_error_d ** 2)
         return (mark, etainf, sigmah, total_error_est, etad)
 
+    def _dmplextransform(self, mesh, transform_type, indicator=None):
+        """Apply a PETSc DMPlexTransform of the given type to mesh's topology_dm,
+        returning the resulting Firedrake mesh.  Shared by refinemarkedelements()
+        (transform_type "refine_sbr" or "refine_regular") and _filtermesh()
+        (transform_type "transform_filter").
+
+        If indicator (a DG0 Function) is given, its nonzero cells are copied onto
+        a DMPlex label and that label is set as the transform's active label --
+        this drives both "refine_sbr" (refine only marked cells) and
+        "transform_filter" (extract the submesh of marked cells).
+        
+        If indicator is None then transform_type="refine_regular" is required.
+        In that case, no label is created."""
+        dm = mesh.topology_dm
+
+        # (For now the only way to set the active label with petsc4py uses
+        # PETSc.Options() because DMPlexTransformSetActive() has no binding.)
+        # Save whatever was already in the (global) options database so
+        # this call does not permanently leak state into it.
+        opts = PETSc.Options()
+        optkeys = ("dm_plex_transform_active", "dm_plex_transform_type")
+        savedopts = {key: opts[key] for key in optkeys if key in opts}
+
+        if indicator is not None:
+            # section for DG0 indicator
+            tdim = mesh.topological_dimension
+            entity_dofs = np.zeros(tdim + 1, dtype=IntType)
+            entity_dofs[-1] = 1
+            indicatorSect, _ = dmcommon.create_section(mesh, entity_dofs)
+
+            # create a DMPlex label to mark cells for the transform
+            dm.createLabel("_viamr_dmplextransform")
+            adaptLabel = dm.getLabel("_viamr_dmplextransform")
+            adaptLabel.setDefaultValue(0)
+
+            # dmcommon provides a python binding for this operation of setting
+            # the label given an indicator function data array
+            if self.debug:
+                _, DG0 = self.spaces(mesh)
+                assert indicator.function_space().ufl_element() == DG0.ufl_element()
+            dmcommon.mark_points_with_function_array(
+                dm, indicatorSect, 0, indicator.dat.data_with_halos, adaptLabel, 1
+            )
+            opts["dm_plex_transform_active"] = "_viamr_dmplextransform"
+
+        opts["dm_plex_transform_type"] = transform_type
+
+        # create a DMPlexTransform object to apply the transform
+        dmTransform = PETSc.DMPlexTransform().create(comm=mesh.comm)
+        dmTransform.setDM(dm)
+        dmTransform.setFromOptions()
+        dmTransform.setUp()
+        dmAdapt = dmTransform.apply(dm)
+        dmTransform.destroy()
+
+        if indicator is not None:
+            # label is no longer needed
+            dmAdapt.removeLabel("_viamr_dmplextransform")
+            dm.removeLabel("_viamr_dmplextransform")
+
+        # remove other labels to stop further distribution in mesh()
+        # (Koki's suggestion)
+        dmAdapt.removeLabel("pyop2_core")
+        dmAdapt.removeLabel("pyop2_owned")
+        dmAdapt.removeLabel("pyop2_ghost")
+
+        # create a new mesh from the adapted dm
+        dp = mesh._distribution_parameters  # original parameters
+        newmesh = Mesh(dmAdapt, distribution_parameters=dp, comm=mesh.comm)
+
+        # restore options database to its state before this call
+        for key in optkeys:
+            if key in savedopts:
+                opts[key] = savedopts[key]
+            elif key in opts:
+                del opts[key]
+
+        return newmesh
+
     def refinemarkedelements(self, mesh, indicator):
         """Call PETSc DMPlex routines to do skeleton-based refinement (SBR; Plaza & Carey, 2000).
         This version works in parallel, but only in 2D.
@@ -844,75 +923,9 @@ class VIAMR(OptionsManager, AVMMixin):
         firedrake.Mesh
             The refined mesh.
         """
-        isUniform = indicator == "uniform"
-        dm = mesh.topology_dm
-
-        # augment/override options database to indicate type of refinement
-        # (For now the only way to set the active label with petsc4py uses
-        # PETSc.Options() because DMPlexTransformSetActive() has no binding.)
-        # Save whatever was already in the (global) options database so
-        # this call does not permanently leak state into it.
-        opts = PETSc.Options()
-        optkeys = ("dm_plex_transform_active", "dm_plex_transform_type")
-        savedopts = {key: opts[key] for key in optkeys if key in opts}
-
-        if isUniform:
-            opts["dm_plex_transform_type"] = "refine_regular"
-        else:
-            # section for DG0 indicator
-            tdim = mesh.topological_dimension
-            entity_dofs = np.zeros(tdim + 1, dtype=IntType)
-            entity_dofs[-1] = 1
-            indicatorSect, _ = dmcommon.create_section(mesh, entity_dofs)
-
-            # create a DMPlex adaptation label to mark cells for refinement
-            dm.createLabel("markviamr")
-            adaptLabel = dm.getLabel("markviamr")
-            adaptLabel.setDefaultValue(0)
-
-            # dmcommon provides a python binding for this operation of setting
-            # the label given an indicator function data array
-            if self.debug:
-                _, DG0 = self.spaces(mesh)
-                assert indicator.function_space().ufl_element() == DG0.ufl_element()
-            dmcommon.mark_points_with_function_array(
-                dm, indicatorSect, 0, indicator.dat.data_with_halos, adaptLabel, 1
-            )
-
-            opts["dm_plex_transform_active"] = "markviamr"
-            opts["dm_plex_transform_type"] = "refine_sbr"
-
-        # create a DMPlexTransform object to apply the refinement
-        dmTransform = PETSc.DMPlexTransform().create(comm=mesh.comm)
-        dmTransform.setDM(dm)
-        dmTransform.setFromOptions()
-        dmTransform.setUp()
-        dmAdapt = dmTransform.apply(dm)
-        dmTransform.destroy()
-
-        if not isUniform:
-            # labels are no longer needed
-            dmAdapt.removeLabel("markviamr")
-            dm.removeLabel("markviamr")
-
-        # remove other labels to stop further distribution in mesh()
-        # (Koki's suggestion)
-        dmAdapt.removeLabel("pyop2_core")
-        dmAdapt.removeLabel("pyop2_owned")
-        dmAdapt.removeLabel("pyop2_ghost")
-
-        # create a new mesh from the adapted dm
-        dp = mesh._distribution_parameters  # original parameters
-        refinedmesh = Mesh(dmAdapt, distribution_parameters=dp, comm=mesh.comm)
-
-        # restore options database to its state before this call
-        for key in optkeys:
-            if key in savedopts:
-                opts[key] = savedopts[key]
-            elif key in opts:
-                del opts[key]
-
-        return refinedmesh
+        if indicator == "uniform":
+            return self._dmplextransform(mesh, "refine_regular")
+        return self._dmplextransform(mesh, "refine_sbr", indicator=indicator)
 
     def jaccard(self, active1, active2, submesh=False):
         """Compute the Jaccard metric from two element-wise DG0 active set indicators.  By definition, the Jaccard metric of two sets is
@@ -1108,62 +1121,9 @@ class VIAMR(OptionsManager, AVMMixin):
         return [list(v) for v in coordsV], [[list(e[0]), list(e[1])] for e in coordsE]
 
     def _filtermesh(self, mesh, indicator):
-
-        # Create Section for DG0 indicator
-        tdim = mesh.topological_dimension
-        entity_dofs = np.zeros(tdim + 1, dtype=IntType)
-        entity_dofs[:] = 0
-        entity_dofs[-1] = 1
-        indicatorSect, _ = dmcommon.create_section(mesh, entity_dofs)
-
-        # Pull Plex from mesh
-        dm = mesh.topology_dm
-
-        # Create a filter label
-        dm.createLabel("filter")
-        adaptLabel = dm.getLabel("filter")
-        adaptLabel.setDefaultValue(0)
-
-        # Set label values with function array
-        dmcommon.mark_points_with_function_array(
-            dm, indicatorSect, 0, indicator.dat.data_with_halos, adaptLabel, 1
-        )
-
-        # Create a DMPlexTransform object to apply the filter
-        opts = PETSc.Options()
-
-        opts["dm_plex_transform_active"] = "filter"
-        opts["dm_plex_transform_type"] = "transform_filter"
-        dmTransform = PETSc.DMPlexTransform().create(comm=mesh.comm)
-        dmTransform.setDM(dm)
-
-        # For now the only way to set the active label with petsc4py is with PETSc.Options() (DMPlexTransformSetActive() has no binding)
-        dmTransform.setFromOptions()
-        dmTransform.setUp()
-        dmAdapt = dmTransform.apply(dm)
-
-        # Labels are no longer needed we need to call destroy on them.
-        dmAdapt.removeLabel("filter")
-        dm.removeLabel("filter")
-        dmTransform.destroy()
-
-        # Remove labels to stop further distribution in mesh()
-        # dm.distributeSetDefault(False) <- Matt's suggestion
-        dmAdapt.removeLabel("pyop2_core")
-        dmAdapt.removeLabel("pyop2_owned")
-        dmAdapt.removeLabel("pyop2_ghost")
-        # ^ Koki's suggestion
-
-        # Pull distribution parameters from original dm
-        distParams = mesh._distribution_parameters
-
-        # Create a new mesh from the adapted dm
-        refinedmesh = Mesh(dmAdapt, distribution_parameters=distParams, comm=mesh.comm)
-
-        # Set transform type back to regular refinemenet
-        opts["dm_plex_transform_type"] = "refine_regular"
-
-        return refinedmesh
+        """Return the submesh containing only the cells where the DG0 indicator
+        is nonzero, via PETSc's DMPlex "transform_filter" transform."""
+        return self._dmplextransform(mesh, "transform_filter", indicator=indicator)
 
     def safeactiveunmark(self, uh0, lb0, F_strong_fcn, psi_fcn):  # FIXME TODO
         """Return a marking (DG0 field with {0,1} values) where 1 indicates a part of the
