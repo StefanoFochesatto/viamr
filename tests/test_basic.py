@@ -159,23 +159,33 @@ def test_third_jaccard_ufl():
     assert abs(amr.jaccardUFL(active1, active2) - 1.0 / 3.0) < 1.0e-10
 
 
-def test_hausdorff():
+def _hausdorff2D_case(amr):
+    # Shared by test_hausdorff2D() here and
+    # tests/test_parallel.py::test_hausdorff2D_parallel(), so the two assert
+    # the identical distance from one definition.  distribution_parameters=
+    # VIAMR.PARALLEL_OVERLAP is needed for freeboundarygraph2D() to give
+    # correct results in parallel.
     # to have free boundaries line up with conditional statements
-    mesh = RectangleMesh(10, 10, 1, 1)
-    amr = VIAMR(debug=True)
+    mesh = RectangleMesh(
+        10, 10, 1, 1, distribution_parameters=VIAMR.PARALLEL_OVERLAP
+    )
     CG1, _ = amr.spaces(mesh)
     x, y = SpatialCoordinate(mesh)
     sol1 = Function(CG1).interpolate(Constant(1.0))
     lb = Function(CG1).interpolate(conditional(x <= 0.2, 1, 0))
     _, E1 = amr.freeboundarygraph2D(sol1, lb)
-    assert amr.hausdorff(E1, E1) == 0
+    assert amr.hausdorff2D(E1, E1) == 0
     lb2 = Function(CG1).interpolate(conditional(x <= 0.4, 1, 0))
     _, E2 = amr.freeboundarygraph2D(sol1, lb2)
-    assert amr.hausdorff(E1, E2) == 0.2
+    assert amr.hausdorff2D(E1, E2) == 0.2
 
 
-def test_quad_mesh_hausdorff():
-    # same as test_hausdorff() but on a
+def test_hausdorff2D():
+    _hausdorff2D_case(VIAMR(debug=True))
+
+
+def test_quad_mesh_hausdorff2D():
+    # same as test_hausdorff2D() but on a
     # quadrilateral mesh, to exercise freeboundarygraph2D()'s quad support
     mesh = RectangleMesh(10, 10, 1, 1, quadrilateral=True)
     amr = VIAMR(debug=True)
@@ -184,10 +194,10 @@ def test_quad_mesh_hausdorff():
     sol1 = Function(CG1).interpolate(Constant(1.0))
     lb = Function(CG1).interpolate(conditional(x <= 0.2, 1, 0))
     _, E1 = amr.freeboundarygraph2D(sol1, lb)
-    assert amr.hausdorff(E1, E1) == 0
+    assert amr.hausdorff2D(E1, E1) == 0
     lb2 = Function(CG1).interpolate(conditional(x <= 0.4, 1, 0))
     _, E2 = amr.freeboundarygraph2D(sol1, lb2)
-    assert amr.hausdorff(E1, E2) == 0.2
+    assert amr.hausdorff2D(E1, E2) == 0.2
 
 
 def _freeboundarygraph2D_circle_case(amr, quadrilateral=False):
@@ -283,8 +293,8 @@ if __name__ == "__main__":
     test_symmetry_jaccard()
     test_jaccard_submesh_uniform()
     test_third_jaccard_ufl()
-    test_hausdorff()
-    test_quad_mesh_hausdorff()
+    test_hausdorff2D()
+    test_quad_mesh_hausdorff2D()
     test_freeboundarygraph2D_circle()
     test_freeboundarygraph2D_circle_quad()
     test_globalextreme_uses()

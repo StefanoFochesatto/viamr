@@ -6,6 +6,7 @@ from test_basic import (
     _get_netgen_mesh,
     _get_ball_obstacle,
     _freeboundarygraph2D_circle_case,
+    _hausdorff2D_case,
 )
 from test_refine import (
     _fixedrate_total_case,
@@ -132,6 +133,13 @@ def test_freeboundarygraph2D_circle_parallel():
     assert len(coordsE) == 36
 
 
+@pytest.mark.parallel(nprocs=3)
+def test_hausdorff2D_parallel():
+    # Confirms tests/test_basic.py::_hausdorff2D_case() gives the same
+    # Hausdorff distance regardless of process count.
+    _hausdorff2D_case(VIAMR(debug=True))
+
+
 if __name__ == "__main__":
     test_refine_udo_parallelUDO()
     test_udo_regression()
@@ -139,3 +147,4 @@ if __name__ == "__main__":
     test_fixedrate_total_parallel()
     test_nsvmark_nontrivial_parallel()
     test_freeboundarygraph2D_circle_parallel()
+    test_hausdorff2D_parallel()
