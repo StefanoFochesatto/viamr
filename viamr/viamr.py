@@ -514,14 +514,20 @@ class VIAMR(OptionsManager, AVMMixin):
         return Function(DG0, name="mark (vcdmark)").interpolate(middleUFL)
 
     def _fixedrate(self, eta, theta, method):
-        """Marks elements according to the values of estimator eta in DG0 and a threshold which depends on the scalar theta.  The number of elements marked is an increasing function of theta.  The default 'max' strategy marks all elements with eta greater than
+        """Marks elements according to the values of estimator eta in DG0 and a threshold which depends on the scalar theta.
+
+        The default 'max' strategy marks all elements with eta greater than
           ethresh = theta * max eta
+        Here theta is a relative threshold, and the number of elements marked is a *decreasing function of theta*: theta near 1 marks only the worst elements, theta near 0 marks nearly all of them.  (See Verfuerth (2013). A Posteriori Error Estimation Techniques for Finite Element Methods, Oxford University Press, section 4.2.)
+
         The 'total' strategy sorts all elements (globally, across processes) by decreasing eta value.  Then the threshold
           ethresh = eta(index)
         equals the eta value where theta times the total sum of eta is equal to the sum of the eta values above ethresh.  (I.e. theta gives the fraction of the total eta sum.)  The 'total' strategy is the refine-only version of the "fixed-rate" strategy, with X=theta and Y=0, described in section 4.2 of
           W. Bangerth & R. Rannacher (2003).  Adaptive Finite Element Methods for
           Differential Equations, Springer Basel.
-        Both strategies give identical results regardless of the number of processes.  Note the 'total' strategy allgathers eta onto every process, so it does not scale to very large meshes on very large process counts."""
+        This is also the bulk/Doerfler marking criterion (W. Doerfler, 1996, SIAM J. Numer. Anal. 33(3)).  Here theta is a fraction of the total error, so the number of elements marked is an *increasing function of theta*.
+
+        Both strategies give identical results in parallel.  The 'total' strategy allgathers eta onto every process, so it may not scale to very-large meshes and process counts."""
 
         with eta.dat.vec_ro as eta_:
             if method == "max":
