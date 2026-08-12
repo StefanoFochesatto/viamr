@@ -66,11 +66,10 @@ if args.bdata:
     topg_nc = DataNetCDF(args.bdata, "topg")
     # topg_nc.preview()
     topg_nc.describe_grid(print=PETSc.Sys.Print, indent=4)
-    pprint(f"putting topg onto matching Firedrake structured data mesh ...")
     topg, nearb = topg_nc.function(delnear=100.0e3)
     # generate mesh compatible with data mesh, but at user (-m) resolution, typically lower
-    mesh = topg_nc.rectmesh(args.m)
-    # FIXME use dirichlet b.c. to set s=b below sea level
+    mesh, mx, my = topg_nc.rectmesh(args.m)
+    pprint(f"putting topg onto Firedrake structured {mx} x {my} data mesh ...")
 else:
     # generate [0,L]^2 mesh via Firedrake
     pprint(

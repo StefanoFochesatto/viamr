@@ -43,7 +43,7 @@ pip install netCDF4
 ```
 Then do
 ```
-python3 steady.py -data eastgr.nc -opvd result_data.pvd
+python3 steady.py -bdata eastgr.nc -opvd result_data.pvd
 ```
 Perhaps add options `-uniform 2 -refine 6 -pcount 20` etc.
 

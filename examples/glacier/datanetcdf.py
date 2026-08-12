@@ -47,9 +47,11 @@ class DataNetCDF:
     def rectmesh(self, m):
         """generate a Firedrake rectangular mesh matching data mesh domain
         but with m elements in the x dimension."""
+        mx = m
+        my = int((self.Wy / self.Wx) * m)
         mesh = fd.RectangleMesh(
-            m,
-            int((self.Wy / self.Wx) * m),
+            mx,
+            my,
             self.ur[0],
             self.ur[1],
             originX=self.ll[0],
@@ -57,7 +59,7 @@ class DataNetCDF:
             diagonal="crossed",
             distribution_parameters=VIAMR.PARALLEL_OVERLAP,
         )
-        return mesh
+        return mesh, mx, my
 
     def function(self, delnear=100.0e3):
         """return a Firedrake CG1 function on a rectangular P1 (CG1 triangles)
