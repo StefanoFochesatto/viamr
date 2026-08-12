@@ -236,17 +236,18 @@ for i in range(args.refine + 1):
     if uni:
         mark = Function(DG0).interpolate(Constant(1.0))
     else:
-        fbmark = amr.udomark(H, Constant(0.0), n=args.udo_n)
         if args.primal == "u":
+            fbmark = amr.udomark(H, Constant(0.0), n=args.udo_n)
             res, Z = residual_u_ufl(u, a, b)
             imark, _, _ = amr.brinactivemark(
                 u, Constant(0.0), res, theta=args.theta, method="total", alpha=Z
             )
         else:
+            fbmark = amr.udomark(s, b, n=args.udo_n)
             res, Z = residual_s_ufl(s, a, b)
             # use u > 0 when calling brinactivemark(), so "jump(grad(u))" is for u, even though eta calculated with s
             imark, _, _ = amr.brinactivemark(
-                u, Constant(0.0), res, theta=args.theta, method="total", alpha=Z  # FIXME try s, b again
+                s, b, res, theta=args.theta, method="total", alpha=Z
             )
         if args.hmin > 0.0:
             fbmark = amr.lowerboundcelldiameter(fbmark, args.hmin)

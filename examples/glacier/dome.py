@@ -125,9 +125,9 @@ for primal in primals:
             res, Z = residual_u_ufl(w, a, lb)
         else:
             res, Z = residual_s_ufl(w, a, lb)
-        fbmark = amr.udomark(w, Constant(0.0), n=udo_n)
+        fbmark = amr.udomark(w, Constant(0.0), n=udo_n)  # because of flat bed, psi=0 regardless of -primal
         imark, _, total_eta = amr.brinactivemark(
-            w, lb, res, theta=theta, method="total", alpha=Z
+            w, Constant(0.0), res, theta=theta, method="total", alpha=Z
         )
         mark = amr.unionmarks(fbmark, imark)
 
