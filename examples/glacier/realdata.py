@@ -1,6 +1,8 @@
 import numpy as np
 import firedrake as fd
 from viamr import VIAMR
+from functools import cached_property
+from firedrake.dmhooks import get_appctx
 
 
 class DataNetCDF:
@@ -61,11 +63,11 @@ class DataNetCDF:
         )
         return mesh, mx, my
 
-    def function(self, delnear=100.0e3):
-        """return a Firedrake CG1 function on a rectangular P1 (CG1 triangles)
-        Firedrake data mesh matching the vertices read from NetCDF file;
-        also returns a Firedrake CG1 function which is 1 near the boundary
-        and zero otherwise; recover the mesh itself by VAR.function_space().mesh()"""
+    def function(self, delnear=100.0e3, degree=1):
+        """return a Firedrake CG_degree function on a rectangular
+        Firedrake data mesh matching the vertices read from NetCDF file
+
+        FIXME not parallel.  just add halos?"""
         dmesh = fd.RectangleMesh(
             self.mx - 1,
             self.my - 1,
@@ -77,20 +79,33 @@ class DataNetCDF:
         )
         dCG1 = fd.FunctionSpace(dmesh, "CG", 1)
         fCG1 = fd.Function(dCG1)
-        nearCG1 = fd.Function(dCG1)  # set to zero here
         for k in range(len(fCG1.dat.data)):
             xk, yk = dmesh.coordinates.dat.data[k]
             i = int((xk - self.ll[0]) / self.hx)
             j = int((yk - self.ll[1]) / self.hy)
             fCG1.dat.data[k] = self.v[i][j]
-            db = min(
-                [
-                    abs(xk - self.ll[0]),
-                    abs(xk - self.ur[0]),
-                    abs(yk - self.ll[1]),
-                    abs(yk - self.ur[1]),
-                ]
-            )
-            if db < delnear:
-                nearCG1.dat.data[k] = 1.0
-        return fCG1, nearCG1
+        if degree == 1:
+            return fCG1  # done already
+        else:
+            assert degree > 1
+            V = fd.FunctionSpace(dmesh, "CG", degree)
+            f = fd.Function(V).project(fCG1)  # push up the detail a bit
+            return f
+
+
+class ZeroBelowSeaLevel(fd.DirichletBC):
+
+    def __init__(self, V, g, sealevel=0.0):
+        self.sl = sealevel
+        super().__init__(V, g, None)
+
+    @cached_property
+    def nodes(self):
+        V = self.function_space()
+        # get application ctx from where it was stored, namely the coordinates DM
+        ctx = get_appctx(V.mesh().coordinates.function_space().dm)
+        assert ctx is not None, f"got None for appctx from {V.mesh()} coordinates DM"
+        assert "b" in ctx, f"key 'b' not in context dictionary returned by DM"
+        # return nodes with bed elevation less than sea level
+        b = fd.Function(V).interpolate(ctx["b"])
+        return np.where(b.dat.data_ro_with_halos < self.sl)[0]

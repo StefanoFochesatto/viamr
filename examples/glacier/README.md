@@ -33,19 +33,24 @@ In the paper there is an example showing norm and geometrical errors against mes
 
 ## realistic example which uses data for bed topography
 
-FIXME: WIP
-
-The NetCDF file `eastgr.nc` is already present.  It contains the ice-free bed topography for a portion of eastern Greenland, on a relatively low-resolution 5 km quadrilateral mesh.
+A NetCDF file `eastgr.nc` is already present in the current directory.  It contains the ice-free bed topography for a portion of eastern Greenland, on a 5 km quadrilateral mesh.  This is substantially finer than the initial meshes we run the solver on,
+though of course it is not terribly high-resolution either.
 
 To [read NetCDF files](https://unidata.github.io/netcdf4-python/) do
 ```
 pip install netCDF4
 ```
-Then do
+Here is a recommended run:
 ```
-python3 steady.py -bdata eastgr.nc -opvd result_data.pvd
+python3 steady.py -bdata eastgr.nc -primal u -picard -refine 5 -udo_n 0 -theta 0.8
 ```
-Perhaps add options `-uniform 2 -refine 6 -pcount 20` etc.
+The options `-udo_n 0 -theta 0.8` yield more-balanced marking, with significant effort in the inactive set, even though resolving the nearly-fractal free boundary needs elements too.
+
+Variations could add an initial uniform refinement (`-uniform 0`), or stop marking for refinement as one approaches data level (`-hmin 5000`).  A significantly-higher resolution run would probably only be justified if the bed topography data was made higher resolution.
+
+Also note `-elevdepend` seems to work.
+
+Currently `-primal s`, and not using `-picard`, seems to not work.  Consider adjusting `-pcount` when using `-picard`.
 
 ### re-generating the NetCDF file
 

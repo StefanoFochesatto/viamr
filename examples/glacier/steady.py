@@ -25,10 +25,11 @@ petsc4py.init(passthroughoptions)
 from firedrake import *
 from firedrake.petsc import PETSc
 from pyop2.mpi import MPI
+from firedrake.dmhooks import pop_appctx, push_appctx
 
 pprint = PETSc.Sys.Print  # parallel print
 from viamr import VIAMR
-from datanetcdf import DataNetCDF
+from realdata import DataNetCDF, ZeroBelowSeaLevel
 from physics import (
     secpera,
     n,
@@ -64,16 +65,15 @@ if args.bdata:
     pprint(f"reading topg from {args.bdata} and ignoring -prob choice ...")
     args.prob = None
     topg_nc = DataNetCDF(args.bdata, "topg")
-    # topg_nc.preview()
+    # topg_nc.preview()  # generate matplotlib figure
     topg_nc.describe_grid(print=PETSc.Sys.Print, indent=4)
-    topg, nearb = topg_nc.function(delnear=100.0e3)
+    topg = topg_nc.function(delnear=100.0e3, degree=2)  # topg is in CG2 on the data mesh
     # generate mesh compatible with data mesh, but at user (-m) resolution, typically lower
     mesh, mx, my = topg_nc.rectmesh(args.m)
     pprint(f"putting topg onto Firedrake structured {mx} x {my} data mesh ...")
 else:
-    # generate [0,L]^2 mesh via Firedrake
     pprint(
-        f"generating {args.m} x {args.m} initial mesh, with synthetic data for problem {args.prob} ..."
+        f"generating {args.m} x {args.m} initial mesh on square domain, for problem {args.prob} ..."
     )
     mesh = RectangleMesh(
         args.m,
@@ -111,8 +111,11 @@ for i in range(args.refine + 1):
     # bedrock on current mesh
     if args.bdata:
         b = Function(V).project(topg)  # cross-mesh projection from data mesh
+        # see ZeroBelowSeaLevel class for how the following works
+        _ = pop_appctx(mesh.coordinates.function_space().dm)
+        push_appctx(mesh.coordinates.function_space().dm, {"b": b})
     else:
-        b = Function(V).interpolate(bumps_b_ufl(x, problem=args.prob))
+        b = Function(V).interpolate(bumps_b_ufl(x, problem=args.prob))  # synthetic bed
     b.rename("b = bedrock topography")
 
     # surface mass balance function on current mesh; depends on b in one case
@@ -121,9 +124,7 @@ for i in range(args.refine + 1):
         c0 = -3.4e-8
         c1 = (6.3e-8 - c0) / 3.6e3
         a_lapse = c0 + c1 * topg
-        a = Function(V).interpolate(
-            conditional(nearb > 0.0, -1.0e-6, a_lapse)
-        )  # also cross-mesh re nearb
+        a = Function(V).interpolate(a_lapse)
     elif args.elevdepend:
         # initialize from s = b assumption
         a = Function(V).interpolate(model_a_ufl(b, sELA=args.sELA))
@@ -163,12 +164,16 @@ for i in range(args.refine + 1):
         bcs = [
             DirichletBC(V, Constant(0.0), "on_boundary"),
         ]
+        if args.bdata:
+            bcs.append(ZeroBelowSeaLevel(V, Constant(0.0)))
     else:
         s = Function(V, name="s = surface elevation").interpolate(sold)
         lb = b
         bcs = [
             DirichletBC(V, b, "on_boundary"),
         ]
+        if args.bdata:
+            bcs.append(ZeroBelowSeaLevel(V, b))
     ub = Function(V).interpolate(Constant(PETSc.INFINITY))
 
     # solve, by Picard solve loop or directly by Newton
@@ -241,7 +246,7 @@ for i in range(args.refine + 1):
             res, Z = residual_s_ufl(s, a, b)
             # use u > 0 when calling brinactivemark(), so "jump(grad(u))" is for u, even though eta calculated with s
             imark, _, _ = amr.brinactivemark(
-                u, Constant(0.0), res, theta=args.theta, method="total", alpha=Z
+                u, Constant(0.0), res, theta=args.theta, method="total", alpha=Z  # FIXME try s, b again
             )
         if args.hmin > 0.0:
             fbmark = amr.lowerboundcelldiameter(fbmark, args.hmin)
@@ -278,7 +283,7 @@ if args.opvd:
     grads = Function(VectorFunctionSpace(mesh, "DG", degree=0))
     grads.interpolate(grad(s))
     grads.rename("Gs = grad(s)")
-    fields = [H, s, u, Us, q, a, b, grads, mark]
+    fields = [H, s, u, Us, q, a, b, grads, mark, fbmark, imark]
     if args.opvdsub:
         fields.append(boxind)
     if mesh.comm.size > 1:
