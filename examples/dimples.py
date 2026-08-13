@@ -22,8 +22,9 @@ from viamr import VIAMR
 
 print = PETSc.Sys.Print  # enables correct printing in parallel
 
-m0 = 16  # initial mesh is m0 x m0
-levels = 4  # number of AMR levels
+m0 = 10  # initial mesh is m0 x m0
+targetelements = 1.0e5  # all methods stop refining once this is met
+maxlevels = 11  # backstop target element complexity; set to 15 for more data?
 thetaBR = 0.5  # controls BR resolution in inactive set
 methodBR = "total"
 
@@ -47,10 +48,8 @@ def uexactUFL(r):
 
 
 def f_ufl():
-    """Source term f in the strong form -div(grad(u)) - f; f=0 (harmonic),
-    matching sphere.py.  Kept as an explicit function, rather than inlined,
-    for parity with psiUFL()/uexactUFL() and to leave room for a non-constant
-    f in the future dimpled version below."""
+    """Source term f; f=0 (harmonic) matches sphere.py. FIXME f needed for
+    dimpled version."""
     return Constant(0.0)
 
 
@@ -59,26 +58,18 @@ def F_strong(u, f):
     return -div(grad(u)) - f
 
 
-def errornorm_H1semi_inactive_deg20(u, uh, iamark):
+def errornorm_H1semi_inactive_deg(u, uh, iamark, fixeddegree=6):
     """H^1 seminorm (energy norm) error of uh against exact solution u,
-    restricted to the *computed inactive set* iamark (a DG0 indicator, as
-    returned by VIAMR.eleminactive(uh, lb, strong=True)), with fixed
-    high-degree quadrature to avoid a TSFC warning; adapted from sphere.py's
-    errornorm_H1semi_deg20().
+    restricted to the *computed inactive set* iamark, a DG0 indicator, as
+    returned by VIAMR.eleminactive(uh, lb, strong=True).  Usess fixed
+    high-degree quadrature to avoid a TSFC warning.
 
-    Restricting to the inactive set is essential when comparing AMR methods
-    that may (like nsvsafe) correctly stop refining a provably-safe active
-    set: since u=psi there regardless of mesh resolution, further
-    refinement cannot reduce error in that region, so including it in the
-    norm would unfairly penalize a method for *not* wasting effort there.
-    Note this sidesteps, rather than needing, sphere.py's "preferred"
-    L2 reconstruction trick (patching in psi on the active set): that
-    reconstruction is explicitly not H^1-conforming (see sphere.py's
-    errornorm_preferred_deg20() docstring), so restricting the domain of
-    integration -- rather than patching the field -- is the natural H^1
-    analogue."""
+    Restricting to the inactive set is appropriate when comparing AMR
+    methods that correctly stop refining a safe active set: since u=psi
+    there regardless of mesh resolution, further refinement does not
+    reduce error against the known (continuum) data psi."""
     dus = inner(grad(u - uh), grad(u - uh))
-    normsq = assemble(dus * iamark * dx(degree=20))
+    normsq = assemble(dus * iamark * dx(degree=fixeddegree))
     return np.sqrt(normsq)
 
 
@@ -123,9 +114,8 @@ for amrtype in amrtypes:
         distribution_parameters=VIAMR.PARALLEL_OVERLAP,
     )
     amr = VIAMR()
-    totalsafe = 0  # cumulative elements exempted by safeactiveunmark(); *safe modes only
-
-    for i in range(levels + 1):
+    for i in range(maxlevels + 1):
+        print(f"mesh {i}:")
         V = FunctionSpace(mesh, "CG", 1)
         amr.meshreport(mesh)
         x, y = SpatialCoordinate(mesh)
@@ -148,13 +138,15 @@ for amrtype in amrtypes:
         ub = Function(V).interpolate(Constant(PETSc.INFINITY))
         solver.solve(bounds=(lb, ub))
 
+        _, Ne, _, _ = amr.meshsizes(mesh)
         active = amr.elemactive(uh, lb)
         iamark = amr.eleminactive(uh, lb, strong=True)
-        errH1 = errornorm_H1semi_inactive_deg20(g_ufl, uh, iamark)  # g_ufl = uexactUFL(r)
-        print(f"  active elements: {amr.countmark(active)}")
+        errH1 = errornorm_H1semi_inactive_deg(g_ufl, uh, iamark)  # g_ufl = uexactUFL(r)
+        Na = amr.countmark(active)
+        print(f"  active elements: {Na} ({100.0 * Na / Ne:.2f} %)")
         print(f"  |u_exact - u_h|_H1 (inactive set) = {errH1:.3e}")
 
-        if i == levels:
+        if Ne > targetelements:
             break
 
         if amrtype in ("nsv", "nsvsafe"):
@@ -169,24 +161,39 @@ for amrtype in amrtypes:
         if amrtype == "nsvsafe":
             safe = amr.safeactiveunmark(uh, lb, F_strong, psi_ufl, f_ufl())
             nsafe = amr.countmark(safe)
-            totalsafe += nsafe
             DG0 = safe.function_space()
             mark = Function(DG0, name="mark").interpolate(mark * (1.0 - safe))
-            print(f"  safeactiveunmark exempted {nsafe} elements from marking")
+            print(f"  safeactiveunmark() exempted {nsafe} elements from marking in active set")
 
         mesh = amr.refinemarkedelements(mesh, mark)
 
-    print(f"  {amrtype}: done, {amr.meshsizes(mesh)[1]} elements in final mesh")
-    if amrtype == "nsvsafe":
-        print(f"  {amrtype}: {totalsafe} total elements exempted across all levels")
-
-    outfile = f"result_dimples_sphere_{amrtype}.pvd"
+    # write output files
+    outfile = f"result_dimples_{amrtype}.pvd"
     active.rename("active")
-    fields = [uh, lb, active]
-    if amrtype == "nsvsafe":
-        safe = amr.safeactiveunmark(uh, lb, F_strong, psi_ufl, f_ufl())
-        safe.rename("safe (safeactiveunmark)")
-        fields.append(safe)
+    gap = Function(V, name="gap = uh-lb").interpolate(uh - lb)
+    uexact = Function(V, name="u_exact").interpolate(uexactUFL(r))
+    uerr = Function(V, name="error = |uexact - uh|").interpolate(
+        abs(uexact - uh)
+    )
+    fields = [uh, lb, gap, uerr, active]
+    if amrtype == "udobr":
+        fbmark = amr.udomark(uh, lb, n=1)
+        residual = -div(grad(uh))
+        imark, _, _ = amr.brinactivemark(uh, lb, residual, theta=thetaBR, method=methodBR)
+        mark = amr.unionmarks(fbmark, imark)
+        fields += [fbmark, imark, mark]
+    if amrtype in ["nsv", "nsvsafe"]:
+        g = Function(V).interpolate(g_ufl)
+        mark, _, _, _, _ = amr.nsvmark(uh, lb, g, f_ufl(), g_ufl)
+        if amrtype == "nsvsafe":
+            safe = amr.safeactiveunmark(uh, lb, F_strong, psi_ufl, f_ufl())
+            safe.rename("safe active unmarked")
+            DG0 = safe.function_space()
+            mark = Function(DG0, name="mark").interpolate(mark * (1.0 - safe))
+            fields += [mark, safe]
+        else:
+            fields.append(mark)
+    print(f"done ... writing to {outfile} ...")
     VTKFile(outfile).write(*fields)
     print("")
 
