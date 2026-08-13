@@ -151,19 +151,20 @@ for amrtype in amrtypes:
 
         if amrtype in ("nsv", "nsvsafe"):
             g = Function(V).interpolate(g_ufl)
-            mark, _, _, _, _ = amr.nsvmark(uh, lb, g, f_ufl(), g_ufl)
+            safe = None
+            if amrtype == "nsvsafe":
+                # compute safe *before* nsvmark(), so its eta values are
+                # excluded from the marking threshold itself, not merely
+                # filtered from the mark afterward (see nsvmark() docstring)
+                safe = amr.safeactiveunmark(uh, lb, F_strong, psi_ufl, f_ufl())
+                print(f"  safeactiveunmark() excludes {amr.countmark(safe)} "
+                      "active elements from the nsvmark() threshold")
+            mark, _, _, _, _ = amr.nsvmark(uh, lb, g, f_ufl(), g_ufl, safe=safe)
         else:
             fbmark = amr.udomark(uh, lb, n=1)
             residual = -div(grad(uh))
             imark, _, _ = amr.brinactivemark(uh, lb, residual, theta=thetaBR, method=methodBR)
             mark = amr.unionmarks(fbmark, imark)
-
-        if amrtype == "nsvsafe":
-            safe = amr.safeactiveunmark(uh, lb, F_strong, psi_ufl, f_ufl())
-            nsafe = amr.countmark(safe)
-            DG0 = safe.function_space()
-            mark = Function(DG0, name="mark").interpolate(mark * (1.0 - safe))
-            print(f"  safeactiveunmark() exempted {nsafe} elements from marking in active set")
 
         mesh = amr.refinemarkedelements(mesh, mark)
 
@@ -184,15 +185,14 @@ for amrtype in amrtypes:
         fields += [fbmark, imark, mark]
     if amrtype in ["nsv", "nsvsafe"]:
         g = Function(V).interpolate(g_ufl)
-        mark, _, _, _, _ = amr.nsvmark(uh, lb, g, f_ufl(), g_ufl)
+        safe = None
         if amrtype == "nsvsafe":
             safe = amr.safeactiveunmark(uh, lb, F_strong, psi_ufl, f_ufl())
             safe.rename("safe active unmarked")
-            DG0 = safe.function_space()
-            mark = Function(DG0, name="mark").interpolate(mark * (1.0 - safe))
-            fields += [mark, safe]
-        else:
-            fields.append(mark)
+        mark, _, _, _, _ = amr.nsvmark(uh, lb, g, f_ufl(), g_ufl, safe=safe)
+        fields.append(mark)
+        if amrtype == "nsvsafe":
+            fields.append(safe)
     print(f"done ... writing to {outfile} ...")
     VTKFile(outfile).write(*fields)
     print("")

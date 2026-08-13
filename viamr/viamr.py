@@ -555,11 +555,24 @@ class VIAMR(OptionsManager, AVMMixin):
         )
         return mark, ethresh, total_error_est
 
-    def gradrecinactivemark(self, uh, lb, theta=0.5, method="max"):
+    def _maskexclude(self, eta, mask):
+        """Return eta zeroed outside of mask (a DG0 {0,1} indicator), or eta
+        unchanged if mask is None.  Always apply this to eta *before*
+        VIAMR._fixedrate(), if elements must be kept out of
+        consideration for marking (e.g. VIAMR.safeactiveunmark())."""
+        if mask is None:
+            return eta
+        DG0 = eta.function_space()
+        return Function(DG0, name=eta.name()).interpolate(eta * mask)
+
+    def gradrecinactivemark(self, uh, lb, theta=0.5, method="max", safe=None):
         """Return marking within the computed inactive set by using an
         a posteriori gradient-recovery error indicator.  See Chapter 4 of
           M. Ainsworth & J. T. Oden (2000).  A Posteriori Error Estimation in
-          Finite Element Analysis, John Wiley & Sons, Inc., New York."""
+          Finite Element Analysis, John Wiley & Sons, Inc., New York.
+        The optional input safe is a DG0 {0,1} indicator, e.g. the output of
+        safeactiveunmark(), of elements to additionally exclude from
+        consideration; see VIAMR._maskexclude()."""
         mesh = uh.function_space().mesh()
         v = CellVolume(mesh)
         # recover a CG1 gradient of uh by projection
@@ -576,21 +589,27 @@ class VIAMR(OptionsManager, AVMMixin):
         # each cell needs an independent 1x1 solve, so Jacobi is an exact preconditioner
         sp = {"mat_type": "matfree", "ksp_type": "richardson", "pc_type": "jacobi"}
         solve(G == 0, eta_sq, solver_parameters=sp)
-        eta = Function(DG0).interpolate(sqrt(eta_sq))  # eta from eta^2
-        # restrict grad recovery eta to inactive set
+        eta = Function(DG0, name="eta on inactive set").interpolate(sqrt(eta_sq))  # eta from eta^2
+        # restrict grad recovery eta to inactive set, further excluding any
+        # certified-safe elements, before computing the threshold
         imark = self.eleminactive(uh, lb)
-        ieta = Function(DG0, name="eta on inactive set").interpolate(eta * imark)
+        mask = imark if safe is None else Function(DG0).interpolate(imark * (1.0 - safe))
+        ieta = self._maskexclude(eta, mask)
         # compute mark in inactive set
         mark, _, total_error_est = self._fixedrate(ieta, theta, method)
         return (mark, ieta, total_error_est)
 
-    def brinactivemark(self, uh, lb, res, theta=0.5, method="max", alpha=None):
+    def brinactivemark(self, uh, lb, res, theta=0.5, method="max", alpha=None, safe=None):
         """Return marking within the computed inactive set by using the
         a posteriori Babuška-Rheinboldt (1978) residual error indicator,
         or a weighted version of it.
 
         The primary inputs are the current solution uh, the obstacle lb (to restrict
         to the inactive set), and the residual res as a UFL expression.
+
+        The optional input safe is a DG0 {0,1} indicator, e.g. the output of
+        safeactiveunmark(), of elements to additionally exclude from
+        consideration; see VIAMR._maskexclude().
 
         The output BR indicator eta is computed as a function in DG0.  We call
         VIAMR._fixedrate() to mark using eta and a threshold theta.
@@ -671,10 +690,13 @@ class VIAMR(OptionsManager, AVMMixin):
         # each cell needs an independent 1x1 solve, so Jacobi is an exact preconditioner
         sp = {"mat_type": "matfree", "ksp_type": "richardson", "pc_type": "jacobi"}
         solve(G == 0, eta_sq, solver_parameters=sp)
-        eta = Function(DG0).interpolate(sqrt(eta_sq))  # eta from eta^2
-        # restrict BR eta to inactive set; strong=True means all dofs must be inactive to get imark=1
+        eta = Function(DG0, name="eta on inactive set").interpolate(sqrt(eta_sq))  # eta from eta^2
+        # restrict BR eta to inactive set; strong=True means all dofs must be inactive to
+        # get imark=1; further exclude any certified-safe elements, before computing the
+        # threshold
         imark = self.eleminactive(uh, lb, strong=True)
-        ieta = Function(DG0, name="eta on inactive set").interpolate(eta * imark)
+        mask = imark if safe is None else Function(DG0).interpolate(imark * (1.0 - safe))
+        ieta = self._maskexclude(eta, mask)
         mark, _, total_error_est = self._fixedrate(ieta, theta, method)
         return (mark, ieta, total_error_est)
 
@@ -692,6 +714,7 @@ class VIAMR(OptionsManager, AVMMixin):
         C1=0.01,
         fdegree=3,
         etadratio=1.0,
+        safe=None,
     ):
         """Compute marking on entire domain according to the local 'practical estimator' from NSV03:
             Nochetto, R. H., Siebert, K. G., & Veeser, A. (2003). Pointwise a posteriori error control for elliptic obstacle problems. Numerische Mathematik, 95(1), 163-195.
@@ -719,6 +742,13 @@ class VIAMR(OptionsManager, AVMMixin):
           term eta_d:  Controls the mass-lumping/quadrature error incurred when computing sigma_h (see sec. 6.3 and 7.1 in NSV03).  sigma_h is CG1, so grad(sigma_h) is elementwise constant, and its L^d(T) norm is |grad(sigma_h)|_T * |T|^{1/d}.  Localized to Lambda_h (the discrete contact set, approximated here by tactive below, the same "neighborhood active" indicator used for term 1's X) because sigma = 0 off the contact set (see (1.2) in NSV03), so grad(sigma_h) there is quadrature noise rather than signal.  C_1=0.01 is the practical value used by NSV03 in (7.1).
 
         Regarding the last term, NSV03 sec. 7.1 notes that eta_d "exhibits different accumulation" than eta_infty.  That is, eta_d, as a genuine L^d(Lambda_h) norm, aggregates over T by an L^d-type sum.  Mixing both into one scalar before marking would let eta_d's different scaling distort the max-based threshold.  Following NSV03, we mark in two separate passes.  First on eta_infty, then on eta_d restricted to Lambda_h, and take the union.  NSV03 further qualifies that the second pass only runs "provided quadrature dominates the estimator," so the second pass runs only if max(eta_d) > etadratio * max(eta_infty).  NSV03 does not give a precise numerical criterion for "dominates", so etadratio is exposed as a parameter.
+
+        The optional input safe is a DG0 {0,1} indicator, e.g. the output of
+        safeactiveunmark(), of active-set elements certified safe to leave
+        unmarked.  When given, eta_infty and eta_d are masked to zero on
+        those elements *before* VIAMR._fixedrate() applies its threshold
+        strategy.  (Thus the eta_... fields are not merely filtered from
+        the resulting mark afterward.)
         """
         # mesh quantities
         mesh = uh.function_space().mesh()
@@ -801,8 +831,13 @@ class VIAMR(OptionsManager, AVMMixin):
         etainf_ufl = C0 * hT ** 2 * Rinf + blockgap + bdryerr
         etainf = Function(DG0, name="eta_inf").interpolate(etainf_ufl)
 
+        # mask out any certified-safe elements *before* thresholding, so they
+        # cannot set (or dilute) the _fixedrate() threshold; see VIAMR._maskexclude()
+        notsafe = None if safe is None else Function(DG0).interpolate(1.0 - safe)
+        etainf_eff = self._maskexclude(etainf, notsafe)
+
         # first marking pass: eta_infty over the whole domain
-        mark, _, total_error_inf = self._fixedrate(etainf, theta, method)
+        mark, _, total_error_inf = self._fixedrate(etainf_eff, theta, method)
 
         # term eta_d
         d = mesh.cell_dimension()
@@ -813,14 +848,15 @@ class VIAMR(OptionsManager, AVMMixin):
             C1 * hT ** 2 * gradsigmanorm * CellVolume(mesh) ** (1.0 / d) * tactive
         )
         etad = Function(DG0, name="eta_d").interpolate(etad_ufl)
+        etad_eff = self._maskexclude(etad, notsafe)
 
         # second marking pass: eta_d, but only when "quadrature dominates the
         # estimator" (NSV03 section 7.1)
         total_error_d = 0.0
-        etainf_max = self._globalextreme(etainf, minimum=False)
-        etad_max = self._globalextreme(etad, minimum=False)
+        etainf_max = self._globalextreme(etainf_eff, minimum=False)
+        etad_max = self._globalextreme(etad_eff, minimum=False)
         if etad_max > etadratio * etainf_max:
-            markd, _, total_error_d = self._fixedrate(etad, theta, method)
+            markd, _, total_error_d = self._fixedrate(etad_eff, theta, method)
             mark = self.unionmarks(mark, markd)
 
         # total error estimate, and return
