@@ -62,7 +62,7 @@ def pytest_collection_modifyitems(config, items):
         if item.nodeid in _results:
             passed, nprocs, _ = _results[item.nodeid]
             status = "PASSED" if passed else "FAILED"
-            print(f"[parallel] {item.nodeid}: already run under mpiexec -n {nprocs}: {status}")
+            print(f"[par] {item.nodeid} already run: {status}")
         else:
             keep.append(item)
     items[:] = keep
@@ -161,6 +161,6 @@ def _run_parallel_test(nodeid, filepath, funcname, nprocs):
     env = dict(os.environ, **{_CHILD_FLAG: "1"})
     proc = subprocess.run(cmd, capture_output=True, text=True, env=env)
     passed = proc.returncode == 0
-    print(f"[parallel] running {nodeid} under mpiexec -n {nprocs} ... "
+    print(f"[par] running {nodeid} under mpiexec -n {nprocs} ... "
           f"{'ok' if passed else 'FAILED'}")
     return passed, nprocs, proc.stdout + proc.stderr

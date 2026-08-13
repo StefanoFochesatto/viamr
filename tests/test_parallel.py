@@ -65,7 +65,8 @@ class VIAMRRegression(VIAMR):
         return self._bfsneighbors(mesh, elemborder, n)
 
 
-def test_refine_udo_parallelUDO():
+@pytest.mark.parallel(nprocs=2)
+def test_refine_udo_par():
     mesh1 = _get_netgen_mesh(TriHeight=0.1)
     amr = VIAMR(debug=True)
     CG1, _ = amr.spaces(mesh1)
@@ -92,7 +93,7 @@ def test_refine_udo_parallelUDO():
 
 
 @pytest.mark.parallel(nprocs=3)
-def test_udomark_nontrivial_parallel():
+def test_udomark_nontrivial_par():
     _udomark_nontrivial(VIAMR())
 
 
@@ -107,15 +108,15 @@ def test_udo_regression():
 
 
 @pytest.mark.parallel(nprocs=3)
-def test_fixedrate_total_parallel():
+def test_fixedrate_total_par():
     # 8 cells split unevenly (e.g. 2/3/3) across processes; confirms
     # tests/test_refine.py::_fixedrate_total_case() gives the same result
     # regardless of process count.
     _fixedrate_total_case(VIAMR(debug=True))
 
 
-@pytest.mark.parallel(nprocs=3)
-def test_nsvmark_nontrivial_parallel():
+@pytest.mark.parallel(nprocs=2)
+def test_nsvmark_nontrivial_par():
     # Confirms tests/test_refine.py::_nsvmark_nontrivial() -- including
     # the eta_d dominance gate -- gives the same result regardless of process
     # count.
@@ -123,7 +124,7 @@ def test_nsvmark_nontrivial_parallel():
 
 
 @pytest.mark.parallel(nprocs=3)
-def test_freeboundarygraph2D_circle_parallel():
+def test_freeboundarygraph2D_par():
     # Confirms tests/test_basic.py::_freeboundarygraph2D_circle_case() gives
     # the same free boundary graph (vertex/edge count) regardless of process
     # count, i.e. that the allgather-and-deduplicate step in
@@ -135,14 +136,14 @@ def test_freeboundarygraph2D_circle_parallel():
 
 
 @pytest.mark.parallel(nprocs=3)
-def test_hausdorff2D_parallel():
+def test_hausdorff2D_par():
     # Confirms tests/test_basic.py::_hausdorff2D_case() gives the same
     # Hausdorff distance regardless of process count.
     _hausdorff2D_case(VIAMR(debug=True))
 
 
 @pytest.mark.parallel(nprocs=3)
-def test_udomark_restrict_parallel():
+def test_udomark_restrict_par():
     # Confirms tests/test_refine.py::_udomark_restrict_case() -- i.e.
     # udomark(restrict=...) and thus VIAMR._filtermesh(), which uses PETSc's
     # DMPlex "transform_filter" transform -- gives the same restricted
@@ -151,11 +152,11 @@ def test_udomark_restrict_parallel():
 
 
 if __name__ == "__main__":
-    test_refine_udo_parallelUDO()
+    test_refine_udo_par()
     test_udo_regression()
-    test_udomark_nontrivial_parallel()
-    test_fixedrate_total_parallel()
-    test_nsvmark_nontrivial_parallel()
-    test_freeboundarygraph2D_circle_parallel()
-    test_hausdorff2D_parallel()
-    test_udomark_restrict_parallel()
+    test_udomark_nontrivial_par()
+    test_fixedrate_total_par()
+    test_nsvmark_nontrivial_par()
+    test_freeboundarygraph2D_par()
+    test_hausdorff2D_par()
+    test_udomark_restrict_par()
