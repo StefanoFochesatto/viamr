@@ -43,6 +43,8 @@ class VIAMR(OptionsManager, AVMMixin):
 
       unionmark():  a method for combining existing marks
 
+      safeactiveunmark():  a method which detects active-set elements where higher-order inspection gives evidence that refinement is wasted effort; this needs exact data for the obstacle and source term
+
       refinemarkedelements():  a method which calls PETSc for skeleton-based-refinement (SBR)
 
       adaptaveragedmetric():  a method which does metric-based mesh adaptation by combining an anisotropic metric with a free-boundary targeted isotropic metric
@@ -1131,25 +1133,106 @@ class VIAMR(OptionsManager, AVMMixin):
         is nonzero, via PETSc's DMPlex "transform_filter" transform."""
         return self._dmplextransform(mesh, "transform_filter", indicator=indicator)
 
-    def safeactiveunmark(self, uh0, lb0, F_strong_fcn, psi_fcn):  # FIXME TODO
-        """Return a marking (DG0 field with {0,1} values) where 1 indicates a part of the
-        current active set, defined by uh0 and lb0, in which it is safe *not* to mark.
-        This allows solver efficiency in some problems where the obstacle is not regular
-        but the operator is such that the interiors of certain active sets can avoid
+    def safeactiveunmark(
+        self,
+        uh0,
+        lb0,
+        F_strong_fcn,
+        psi_ufl,
+        f_ufl,
+        psi_mode="analytic",
+        f_mode="analytic",
+        pdegree=2,
+        stricttol=1.0e-10,
+    ):
+        """Return a marking (DG0 field with {0,1} values) where 1 indicates a part
+        of the current active set, defined by uh0 and lb0, in which it is safe
+        *not* to mark.  This allows solver efficiency in problems where the
+        operator is such that the interiors of active sets can avoid
         wasted-effort refinement.
 
-        The input F_strong_fcn is a function which returns a UFL expression for the residual:
-          res = F_strong_fcn(uh, lb)
-        The un-marking method is to take the current mesh, namely
-          mesh0 = uh0.function_space().mesh(),
-        and uniformly refine it to get a refined mesh:
-          mesh1 = VIAMR.refinemarkedelements(mesh0, "uniform")
-        Then compute the residual on the refined mesh from the interpolated input uh0
-        and the refined obstacle:
-          lb1 = psi_fcn(mesh1)  # generally has more detail than lb0
-          uh1 = Function(lb1.function_space()).interpolate(uh0)  # cross-mesh interpolation
-          res1 = F_strong_fcn(uh1, lb1)
-        Then (FIXME) return which part of the mesh0 active set is safe to not mark for
-        refinement.
+        The strong (NCP) form of the unilateral obstacle problem is
+          u >= psi,   L(u) - f >= 0,   (u - psi)(L(u) - f) = 0.
+        In general we could write F(u,f)=L(u)-f; see below.  We assume here
+        that L(u) has some kind of positive-definiteness or coercivity; this
+        is not checked but see examples.
+
+        On the (true) active set, u = psi, so on this set it reduces to
+        requiring
+          sigma_psi := L(psi) - f >= 0.
+        This is a condition on the given data (psi,f) alone, independent of
+        the discrete iterate uh0.
+
+        The safety check in this method evaluates sigma_psi at higher degree
+        than the current functions, but on the same mesh.  The idea is that
+        if sigma_psi stays at or above a strictly-positive tolerance on a
+        mesh cell then it is safe to leave unmarked.  Refining it cannot
+        reveal a hidden inactive region, because the check already used
+        higher-resolution data than the current mesh provides.  We require a
+        strict positive margin
+          sigma_psi > stricttol,
+        because this is a *safety* certificate.  As approximation error is
+        already inherent in psi_mode,f_mode="analytic" (see below),
+        declaring an element safe only when it clears zero by a margin is
+        the conservative choice.
+
+        This method is O(N) work if N represents current mesh complexity,
+        e.g. element count, but with a decent constant because of the use of
+        higher-order elements.
+
+        Inputs uh0, lb0 are the current discrete solution and obstacle.
+        They are only used to determine the current active set
+        (self.elemactive(uh0, lb0)).
+
+        F_strong_fcn is a function returning a UFL expression for the
+        strong-form residual:
+          res = F_strong_fcn(u, f)     # UFL for L(u) - f
+        so that sigma_psi = F_strong_fcn(psi_ufl, f_ufl).  psi_ufl, f_ufl
+        are the user's *exact* obstacle and source data (not the
+        generally-coarser lb0), as UFL expressions.
+
+        psi_mode="analytic" assumes psi_ufl is an exact analytic UFL
+        expression, evaluable (including derivatives) to arbitrary
+        precision.  The higher resolution used for the safety check is then
+        obtained by p-refinement on the *current* mesh, using Bernstein
+        polynomials.  Similarly f_mode="analytic" assumes f_ufl is exact
+        analytic UFL.
+
+        psi_mode and f_mode are independent, because in practice psi and f
+        often come from unrelated sources.  (E.g. for glacier problems, psi
+        is bed topography from a DEM while f is surface mass balance from a
+        climate model, on a different grid.)
+
+        FIXME A future psi_mode="data" or f_mode="data" would instead
+        support psi and/or f given as (e.g. gridded/observational) data
+        rather than analytic UFL.  This would need edge-jump-estimator
+        machinery such as in brinactivemark(), rather than mere pointwise
+        UFL differentiation, since second derivatives of piecewise-linear
+        discrete data are weakly zero.  Not yet implemented.
         """
-        raise NotImplementedError
+        if psi_mode != "analytic" or f_mode != "analytic":
+            raise NotImplementedError(
+                f"safeactiveunmark() with psi_mode='{psi_mode}', f_mode='{f_mode}' "
+                "is not implemented; only psi_mode='analytic', f_mode='analytic' "
+                "(exact UFL psi_ufl, f_ufl) is currently supported"
+            )
+        mesh = uh0.function_space().mesh()
+        _, DG0 = self.spaces(mesh)
+        active0 = self.elemactive(uh0, lb0)
+
+        # p-refined estimate of sigma_psi = L(psi) - f, sampled at higher resolution
+        # than the current mesh; represented in the Bernstein basis so that its
+        # elementwise coefficient extremes rigorously bound the interpolant's
+        # range over each cell (convex hull property), not just its value at the
+        # Lagrange nodes
+        CGp = FunctionSpace(mesh, "CG", pdegree)
+        psip = Function(CGp).interpolate(psi_ufl)
+        sigma_ufl = F_strong_fcn(psip, f_ufl)
+        Bp = FunctionSpace(mesh, "Bernstein", pdegree)
+        sigma = Function(Bp).interpolate(sigma_ufl)
+
+        # an active element is safe to unmark if sigma_psi stays strictly
+        # above stricttol everywhere within it
+        sigmamin = self._elemextreme(sigma, minimum=True, defaultval=PETSc.INFINITY)
+        safe_ufl = active0 * conditional(sigmamin > stricttol, 1.0, 0.0)
+        return Function(DG0, name="mark (safeactiveunmark)").interpolate(safe_ufl)

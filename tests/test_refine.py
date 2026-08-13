@@ -399,6 +399,77 @@ def test_udomark_restrict():
         amr.udomark(u, lb, restrict="bogus")
 
 
+def _safeactiveunmark_case(amr, f_ufl):
+    # classical obstacle problem operator, -div(grad(u)) - f, with a paraboloid
+    # obstacle psi = 0.1 - (x-0.5)^2 - (y-0.5)^2, so -div(grad(psi)) = 4
+    # everywhere; sigma_psi = 4 - f_ufl is then a known constant
+    mesh = UnitSquareMesh(4, 4)
+    CG1, _ = amr.spaces(mesh)
+    x, y = SpatialCoordinate(mesh)
+    psi_ufl = 0.1 - (x - 0.5) ** 2 - (y - 0.5) ** 2
+    lb0 = Function(CG1).interpolate(psi_ufl)
+    uh0 = Function(CG1).interpolate(psi_ufl)  # fully active
+
+    def F_strong(u, f):
+        return -div(grad(u)) - f
+
+    safe = amr.safeactiveunmark(uh0, lb0, F_strong, psi_ufl, f_ufl)
+    return amr, uh0, lb0, safe
+
+
+def test_safeactiveunmark_allsafe():
+    # sigma_psi = 4 - (-0.5) = 4.5 > 0 everywhere: every active element is safe
+    amr, uh0, lb0, safe = _safeactiveunmark_case(VIAMR(debug=True), Constant(-0.5))
+    active0 = amr.elemactive(uh0, lb0)
+    assert amr.countmark(safe) == amr.countmark(active0)
+
+
+def test_safeactiveunmark_nonesafe():
+    # sigma_psi = 4 - 10 = -6 < 0 everywhere: no active element is safe
+    amr, _, _, safe = _safeactiveunmark_case(VIAMR(debug=True), Constant(10.0))
+    assert amr.countmark(safe) == 0
+
+
+def test_safeactiveunmark_restricted_to_active():
+    # sigma_psi > 0 everywhere, but only the left half of the domain is active;
+    # safe must never extend beyond the current active set
+    amr = VIAMR(debug=True)
+    mesh = UnitSquareMesh(4, 4)
+    CG1, _ = amr.spaces(mesh)
+    x, y = SpatialCoordinate(mesh)
+    psi_ufl = 0.1 - (x - 0.5) ** 2 - (y - 0.5) ** 2
+    lb0 = Function(CG1).interpolate(psi_ufl)
+    uh0 = Function(CG1).interpolate(
+        conditional(x < 0.5, psi_ufl, psi_ufl + 1.0)  # active only for x < 0.5
+    )
+
+    def F_strong(u, f):
+        return -div(grad(u)) - f
+
+    safe = amr.safeactiveunmark(uh0, lb0, F_strong, psi_ufl, Constant(-0.5))
+    active0 = amr.elemactive(uh0, lb0)
+    assert amr.countmark(active0) < amr.countmark(amr.eleminactive(uh0, lb0))
+    assert amr.countmark(safe) == amr.countmark(active0)
+
+
+def test_safeactiveunmark_notimplemented():
+    amr, uh0, lb0, _ = _safeactiveunmark_case(VIAMR(debug=True), Constant(-0.5))
+
+    def F_strong(u, f):
+        return -div(grad(u)) - f
+
+    x, y = SpatialCoordinate(uh0.function_space().mesh())
+    psi_ufl = 0.1 - (x - 0.5) ** 2 - (y - 0.5) ** 2
+    with pytest.raises(NotImplementedError):
+        amr.safeactiveunmark(
+            uh0, lb0, F_strong, psi_ufl, Constant(-0.5), psi_mode="data"
+        )
+    with pytest.raises(NotImplementedError):
+        amr.safeactiveunmark(
+            uh0, lb0, F_strong, psi_ufl, Constant(-0.5), f_mode="data"
+        )
+
+
 if __name__ == "__main__":
     test_overrefine_udo()
     test_finer_udo()
