@@ -97,40 +97,40 @@ def activeexactUFL(r):
     return conditional(le(r, afree), 1.0, 0.0)
 
 
-def errornorm_deg20(u, uh):
+def errornorm_deg(u, uh, fixeddegree=6):
     """L^2 error norm, but avoiding TSFC warning"""
     # set high degree quadrature to avoid TSFC warning
-    normsq = assemble((u - uh) ** 2 * dx(degree=20))
+    normsq = assemble((u - uh) ** 2 * dx(degree=fixeddegree))
     return np.sqrt(normsq)
 
 
-def errornorm_preferred_deg20(r, uh, activeh):
+def errornorm_preferred_deg(r, uh, activeh, fixeddegree=6):
     """L^2 error norm against "preferred" form of numerical solution"""
     tildeuh = conditional(eq(activeh, 1.0), psiUFL(r), uh)  # preferred
     # high degree quadrature important in next line; setting it avoids TSFC warning
-    normsq = assemble((uexactUFL(r) - tildeuh) ** 2 * dx(degree=20))
+    normsq = assemble((uexactUFL(r) - tildeuh) ** 2 * dx(degree=fixeddegree))
     return np.sqrt(normsq)
 
 
-def errornorm_H1semi_deg20(u, uh):
+def errornorm_H1semi_deg(u, uh, fixeddegree=6):
     """H^1 seminorm (i.e. Dirichlet-energy / grad-L^2) error norm of the plain
     (not "preferred") numerical solution, avoiding the TSFC warning.  This is
     the norm brinactivemark()'s unweighted BR78 estimator directly targets
     (see its docstring), so it's the natural check on whether that estimator
     is doing what it's designed to do, independent of L^2 behavior."""
-    normsq = assemble(inner(grad(u - uh), grad(u - uh)) * dx(degree=20))
+    normsq = assemble(inner(grad(u - uh), grad(u - uh)) * dx(degree=fixeddegree))
     return np.sqrt(normsq)
 
 
-def errornorm_Linf_deg4(amr, u, uh):
+def errornorm_Linf(amr, u, uh, pdegree=4):
     """Approximate sup-norm (L^infty) error, via interpolation of the
     (generally non-polynomial) exact-minus-computed difference into a
-    higher-degree CG space, then VIAMR.scalarrange() for a parallel-safe
+    higher-degree CG^p space, then VIAMR.scalarrange() for a parallel-safe
     max; same technique nsvmark() itself uses internally for non-polynomial
     data (e.g. its bdryerr term).  This is the norm NSV03's "pointwise a
     posteriori error control" theory targets, in contrast to BR78/BV00's
     energy (H^1 seminorm) norm."""
-    W = FunctionSpace(uh.function_space().mesh(), "CG", 4)
+    W = FunctionSpace(uh.function_space().mesh(), "CG", pdegree)
     err = Function(W).interpolate(abs(u - uh))
     return amr.scalarrange(err)[1]
 
@@ -221,10 +221,10 @@ for amrtype in refinetypes:
         solver.solve(bounds=(lb, ub))
 
         # compute norms
-        errnorm = errornorm_deg20(uexactUFL(r), uh)
+        errnorm = errornorm_deg(uexactUFL(r), uh)
         activeh = amr.elemactive(uh, lb)
-        errnorm_pre = errornorm_preferred_deg20(r, uh, activeh)
-        errnorm_h1 = errornorm_H1semi_deg20(uexactUFL(r), uh)
+        errnorm_pre = errornorm_preferred_deg(r, uh, activeh)
+        errnorm_h1 = errornorm_H1semi_deg(uexactUFL(r), uh)
         print(f"  ||u_exact - u_h||_2 = {errnorm:.3e}")
         print(f"  ||u_exact - tilde u_h||_2 = {errnorm_pre:.3e}")
         print(f"  |u_exact - u_h|_{{H^1}} = {errnorm_h1:.3e}")
@@ -269,7 +269,7 @@ for amrtype in refinetypes:
             # is the whole-domain (not inactive-set-restricted) quantity its
             # pointwise theory bounds ||u-u_h||_infty by, in contrast to
             # BR78/BV00's energy-norm estimator below
-            errLinf = errornorm_Linf_deg4(amr, uexactUFL(r), uh)
+            errLinf = errornorm_Linf(amr, uexactUFL(r), uh)
             maxetainf = amr.scalarrange(etainf)[1]
             eff_nsv = maxetainf / errLinf if errLinf > 0 else np.nan
             print(f"  eff_NSV (sup norm) = {eff_nsv:.3f}")
@@ -307,7 +307,7 @@ for amrtype in refinetypes:
     print(f"done ... writing to {outfile} ...")
     gap = Function(V, name="gap = uh-lb").interpolate(uh - lb)
     uexact = Function(V, name="u_exact").interpolate(uexactUFL(r))
-    error = Function(V, name="error = |pi_h(uexact) - uh|").interpolate(
+    error = Function(V, name="error = |uexact - uh|").interpolate(
         abs(uexact - uh)
     )
     fields = [uh, lb, gap, uexact, error]
