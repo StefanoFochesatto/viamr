@@ -44,13 +44,25 @@ Here is a recommended run:
 ```
 python3 steady.py -bdata eastgr.nc -primal u -picard -refine 5 -udo_n 0 -theta 0.8
 ```
+The `s`-primal formulation (the one that generalizes to non-SIA models) now
+works directly on real data too, without `-picard`:  (FIXME: solver failures avoided but *significantly different outcome with thin (and thus very little) ice, presumably because epsMass is too dominant*)
+```
+python3 steady.py -bdata eastgr.nc -primal s -refine 5 -udo_n 0 -theta 0.8
+```
+
 The options `-udo_n 0 -theta 0.8` yield more-balanced marking, with significant effort in the inactive set, even though resolving the nearly-fractal free boundary needs elements too.
 
 Variations could add an initial uniform refinement (`-uniform 0`), or stop marking for refinement as one approaches data level (`-hmin 5000`).  A significantly-higher resolution run would probably only be justified if the bed topography data was made higher resolution.
 
 Also note `-elevdepend` seems to work.
 
-Currently `-primal s`, and not using `-picard`, seems to not work.  Consider adjusting `-pcount` when using `-picard`.
+TENTATIVE UPDATE:  `-primal s` on real bed data used to fail (`vinewtonrsls` diverging) without `-picard`.  This is now handled by `solve_s_continuation()` in `physics.py`,
+which combines `epsH`-continuation (for a bad cold-start thickness scale)
+with a small permanent zeroth-order term controlled by `-dtau` (the
+"recovery strategy" of Bueler 2016, explained by Appendix B of Bueler 2025 --
+see the docstrings in `physics.py` for the mechanism).  If a run still gets
+stuck, try a smaller `-dtau` (stronger regularization) before reaching for
+`-picard`.
 
 ### re-generating the NetCDF file
 

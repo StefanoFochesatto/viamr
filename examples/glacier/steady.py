@@ -16,6 +16,8 @@ assert args.m >= 1, "at least one cell in mesh"
 assert args.refine >= 0, "cannot refine a negative number of times"
 assert args.pcount >= 1, "at least one Picard iteration required"
 assert args.udo_n >= 0, "cannot use UDO with negative levels"
+assert args.epsH > 0.0, "-epsH must be positive"
+assert args.epsHstart >= 0.0, "-epsHstart must be non-negative (0.0 means auto)"
 assert args.picard or not args.elevdepend, "Picard iteration required for -elevdepend"
 
 import numpy as np
@@ -41,6 +43,7 @@ from physics import (
     residual_u_ufl,
     weakform_s,
     residual_s_ufl,
+    solve_s_continuation,
     surfacevelocity,
     glaciermeshreport,
     solve_params,
@@ -195,8 +198,11 @@ for i in range(args.refine + 1):
                 if args.elevdepend:
                     a = Function(V).interpolate(model_a_ufl(sold, sELA=args.sELA))
                     a.rename("a = accumulation")
-                F = weakform_s(s, a, b)
-                vinewtonsolve(F, s, bcs=bcs, lower=lb, upper=ub)
+                solve_s_continuation(
+                    s, a, b, bcs, lb, ub,
+                    epsH_final=args.epsH, epsH_start=args.epsHstart,
+                    dtau_years=args.dtau,
+                )
                 sold = Function(V).interpolate(s)
     else:
         # solve directly by Newton; not attempted if -elevdepend
@@ -204,8 +210,11 @@ for i in range(args.refine + 1):
             F = weakform_u(u, a, b)
             vinewtonsolve(F, u, bcs=bcs, lower=lb, upper=ub)
         else:
-            F = weakform_s(s, a, b)
-            vinewtonsolve(F, s, bcs=bcs, lower=lb, upper=ub)
+            solve_s_continuation(
+                s, a, b, bcs, lb, ub,
+                epsH_final=args.epsH, epsH_start=args.epsHstart,
+                dtau_years=args.dtau,
+            )
 
     # update geometry variables
     if args.primal == "u":

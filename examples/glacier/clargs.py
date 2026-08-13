@@ -52,6 +52,29 @@ parser.add_argument(
     help="compute surface mass balance from an elevation-dependent model",
 )
 parser.add_argument(
+    "-epsH",
+    type=float,
+    default=20.0,
+    metavar="X",
+    help="final (production) thickness regularization epsH, in meters, for -primal s [default=20.0]",
+)
+parser.add_argument(
+    "-epsHstart",
+    type=float,
+    default=0.0,
+    metavar="X",
+    help="starting epsH (m) for continuation on -primal s; 0.0 means auto-derive from the current thickness field [default=0.0]",
+)
+parser.add_argument(
+    "-dtau",
+    type=float,
+    default=20.0,
+    metavar="X",
+    help="pseudo-timestep (years) for a permanent zeroth-order Newton-robustness "
+    "term on -primal s -- the 'recovery strategy' of Bueler (2016), explained by "
+    "Appendix B of Bueler (2025); 0.0 disables it [default=20.0]",
+)
+parser.add_argument(
     "-hmin",
     type=float,
     default=-1,
