@@ -432,9 +432,12 @@ def test_safeactiveunmark_nonesafe():
 
 def test_safeactiveunmark_restricted_to_active():
     # sigma_psi > 0 everywhere, but only the left half of the domain is active;
-    # safe must never extend beyond the current active set
+    # safe must never extend beyond the current *thinned* active set (see
+    # VIAMR.thinelemactive()), i.e. it must exclude the border adjacent to
+    # the discrete free boundary.  Uses an 8x8 (not 4x4) mesh so the active
+    # region is wide enough to leave a nonempty thinned interior.
     amr = VIAMR(debug=True)
-    mesh = UnitSquareMesh(4, 4)
+    mesh = UnitSquareMesh(8, 8)
     CG1, _ = amr.spaces(mesh)
     x, y = SpatialCoordinate(mesh)
     psi_ufl = 0.1 - (x - 0.5) ** 2 - (y - 0.5) ** 2
@@ -448,8 +451,10 @@ def test_safeactiveunmark_restricted_to_active():
 
     safe = amr.safeactiveunmark(uh0, lb0, F_strong, psi_ufl, Constant(-0.5))
     active0 = amr.elemactive(uh0, lb0)
+    thinactive0 = amr.thinelemactive(uh0, lb0)
     assert amr.countmark(active0) < amr.countmark(amr.eleminactive(uh0, lb0))
-    assert amr.countmark(safe) == amr.countmark(active0)
+    assert 0 < amr.countmark(thinactive0) < amr.countmark(active0)
+    assert amr.countmark(safe) == amr.countmark(thinactive0)
 
 
 def test_safeactiveunmark_notimplemented():

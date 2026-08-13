@@ -1214,13 +1214,21 @@ class VIAMR(OptionsManager, AVMMixin):
         declaring an element safe only when it clears zero by a margin is
         the conservative choice.
 
+        The sigma_psi check is only applied on VIAMR.thinelemactive()'s
+        thinned active set, i.e. elements that are active *and* every
+        neighbor is active too, which excludes the one-element-thick border
+        adjacent to the discrete free boundary from ever being marked safe.
+        This is the same "neighborhood of the active set" idea NSV03 uses
+        (see nsvmark()'s tactive), applied here in the complementary
+        direction.
+
         This method is O(N) work if N represents current mesh complexity,
         e.g. element count, but with a decent constant because of the use of
         higher-order elements.
 
         Inputs uh0, lb0 are the current discrete solution and obstacle.
-        They are only used to determine the current active set
-        (self.elemactive(uh0, lb0)).
+        They are only used to determine the current thinned active set
+        (self.thinelemactive(uh0, lb0)).
 
         F_strong_fcn is a function returning a UFL expression for the
         strong-form residual:
@@ -1256,7 +1264,11 @@ class VIAMR(OptionsManager, AVMMixin):
             )
         mesh = uh0.function_space().mesh()
         _, DG0 = self.spaces(mesh)
-        active0 = self.elemactive(uh0, lb0)
+        # thinned active set: only elements that are active *and* whose
+        # neighbors are all active too, i.e. elements not adjacent to the
+        # current discrete free boundary; same NSV03 "neighborhood of the
+        # active set" concept nsvmark() itself uses (there called tactive).
+        thinactive0 = self.thinelemactive(uh0, lb0)
 
         # p-refined estimate of sigma_psi = L(psi) - f, sampled at higher resolution
         # than the current mesh; represented in the Bernstein basis so that its
@@ -1269,8 +1281,8 @@ class VIAMR(OptionsManager, AVMMixin):
         Bp = FunctionSpace(mesh, "Bernstein", pdegree)
         sigma = Function(Bp).interpolate(sigma_ufl)
 
-        # an active element is safe to unmark if sigma_psi stays strictly
-        # above stricttol everywhere within it
+        # a thinned-active element is safe to unmark if sigma_psi stays
+        # strictly above stricttol everywhere within it
         sigmamin = self._elemextreme(sigma, minimum=True, defaultval=PETSc.INFINITY)
-        safe_ufl = active0 * conditional(sigmamin > stricttol, 1.0, 0.0)
+        safe_ufl = thinactive0 * conditional(sigmamin > stricttol, 1.0, 0.0)
         return Function(DG0, name="mark (safeactiveunmark)").interpolate(safe_ufl)

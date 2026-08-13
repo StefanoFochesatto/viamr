@@ -1,20 +1,31 @@
-# This example attempts to do apples-to-apples comparisons of 4 algorithms
+# This example attempts to do apples-to-apples comparisons of 5 algorithms
 # on the "ball" problem:
 #   1. UDOBR = unstructured dilation operator plus Babuska & Rheinboldt (1989) in the inactive set
 #   2. NSV = Nochetto, Siebert, and Veeser (2003)
-#   3. UNI = uniform refinement
-#   4. AVM = averaged-metric mesh adaptation  <-- only runs if avm import succeeds
+#   3. NSVSAFE = a promising algorithm: NSV, with VIAMR.safeactiveunmark()
+#      excluding certified-safe active elements from nsvmark()'s marking
+#      threshold (not merely from its output mark; see viamr.py's
+#      nsvmark() docstring).  On this problem, the spherical-cap obstacle
+#      is superharmonic throughout the active set with f=0, so
+#      safeactiveunmark() is expected to certify the whole active set safe
+#      at every level; NSVSAFE should then track NSV's accuracy while
+#      avoiding its unbounded active-set refinement.
+#   4. UNI = uniform refinement
+#   5. AVM = averaged-metric mesh adaptation  <-- only runs if avm import succeeds
 #
-# We generate .pvd files: result_sphere_{udobr,nsv,uni,avm}.pvd
+# We generate .pvd files: result_sphere_{udobr,nsv,nsvsafe,uni,avm}.pvd
 #
 # The exact solution is known and so we can compute norm convergence rates.
-# We generate five .png convergence figures comparing all methods:
+# We generate seven .png convergence figures comparing all methods:
 #   sphere_convergence_unorm.png       ||u_exact - u_h||_2 vs DOFs
 #   sphere_convergence_preferred.png   ||u_exact - tilde u_h||_2 vs DOFs
 #   sphere_convergence_h1.png          |u_exact - u_h|_{H^1 seminorm} vs DOFs
+#   sphere_convergence_supnorm.png     ||u_exact - u_h||_infty vs DOFs, for all methods
+#   sphere_convergence_supnorm_preferred.png
+#                                       ||u_exact - tilde u_h||_infty vs DOFs, for all methods
 #   sphere_convergence_hausdorff.png   hausdorff2D(Gamma_u, Gamma_uh) vs DOFs
 #   sphere_effectivity.png             estimator/true-error effectivity index
-#                                       vs DOFs, for UDOBR and NSV only
+#                                       vs DOFs, for UDOBR, NSV, and NSVSAFE only
 #
 # Optionally we generate .csv files for norm and Jaccard convergence rates.
 
@@ -23,7 +34,7 @@
 # e.g. targetelements=1.0e6 & maxlevels=11 <--> uniformlevels=7
 m0 = 10  # for UDOBR,NSV,UNI initial mesh is m0 x m0; see below for AVM
 targetelements = 1.0e5  # all methods stop refining once this is met
-maxlevels = 11  # backstop target element complexity; set to 15 for more data?
+maxlevels = 15  # backstop target element complexity
 uniformlevels = 5  # generally uniform can't reach high levels ... which is the point
 writecsvs = False
 
@@ -47,7 +58,7 @@ except ImportError:
 from netgen.geom2d import SplineGeometry
 
 # what methods of adaptive refinement do we test
-refinetypes = ["udobr", "nsv", "uni"]
+refinetypes = ["udobr", "nsv", "nsvsafe", "uni"]
 try:
     import animate
 except:
@@ -89,6 +100,12 @@ def uexactUFL(r):
     afree = 0.697965148223374
     A, B = 0.680259411891719, 0.471519893402112
     return conditional(le(r, afree), psiUFL(r), -A * ln(r) + B)
+
+
+def F_strong(u, f):
+    """Strong form of the classical obstacle problem operator: L(u) - f.
+    Used by VIAMR.safeactiveunmark() for the NSVSAFE method."""
+    return -div(grad(u)) - f
 
 
 def activeexactUFL(r):
@@ -135,6 +152,22 @@ def errornorm_Linf(amr, u, uh, pdegree=4):
     return amr.scalarrange(err)[1]
 
 
+def errornorm_Linf_preferred(amr, r, uh, activeh, pdegree=4):
+    """Sup-norm (L^infty) error against the "preferred" form of the
+    numerical solution (see errornorm_preferred_deg), rather than against
+    the plain uh.  This is the right comparison for methods (e.g. UDOBR,
+    NSVSAFE) that deliberately leave the active-set interior coarse, since
+    u=psi there regardless of resolution: the plain sup norm is then
+    dominated by the (known, not-actually-erroneous) gap between the coarse
+    uh and the true psi, rather than by genuine solution error.  Uses the
+    same CG^p-interpolation + VIAMR.scalarrange() technique as
+    errornorm_Linf(); see its docstring re. non-polynomial data."""
+    tildeuh = conditional(eq(activeh, 1.0), psiUFL(r), uh)  # preferred
+    W = FunctionSpace(uh.function_space().mesh(), "CG", pdegree)
+    err = Function(W).interpolate(abs(uexactUFL(r) - tildeuh))
+    return amr.scalarrange(err)[1]
+
+
 # solver parameters for VI
 sp = {
     "snes_type": "vinewtonrsls",
@@ -151,17 +184,19 @@ sp = {
     "snes_converged_reason": None,
 }
 
-results = {}  # results[amrtype] = (dofs, errnorm, errnorm_pres, hausdorffs, errnorm_h1s),
-# for the four convergence figures generated at the end
-effs = {}  # effs[amrtype] = (eff_dofs, eff_vals), for udobr/nsv only; see
+results = {}  # results[amrtype] = (dofs, errnorm, errnorm_pres, hausdorffs, errnorm_h1s,
+# errnorm_Linfs, errnorm_Linf_pres), for the six convergence figures generated at the end
+effs = {}  # effs[amrtype] = (eff_dofs, eff_vals), for udobr/nsv/nsvsafe only; see
 # the effectivity-index figure generated at the end
 
 for amrtype in refinetypes:
     print(f"solving by VIAMR using {amrtype.upper()} method ...")
 
     amr = VIAMR()
-    dofs, errnorms, errnorm_pres, hausdorffs, errnorm_h1s = [], [], [], [], []
-    eff_dofs, eff_vals = [], []  # effectivity index vs DOFs; udobr/nsv only
+    dofs, errnorms, errnorm_pres, hausdorffs, errnorm_h1s, errnorm_Linfs, errnorm_Linf_pres = (
+        [], [], [], [], [], [], []
+    )
+    eff_dofs, eff_vals = [], []  # effectivity index vs DOFs; udobr/nsv/nsvsafe only
 
     # udomark() needs this overlap to give correct results in parallel
     dp = VIAMR.PARALLEL_OVERLAP
@@ -225,9 +260,13 @@ for amrtype in refinetypes:
         activeh = amr.elemactive(uh, lb)
         errnorm_pre = errornorm_preferred_deg(r, uh, activeh)
         errnorm_h1 = errornorm_H1semi_deg(uexactUFL(r), uh)
+        errnorm_Linf = errornorm_Linf(amr, uexactUFL(r), uh)
+        errnorm_Linf_pre = errornorm_Linf_preferred(amr, r, uh, activeh)
         print(f"  ||u_exact - u_h||_2 = {errnorm:.3e}")
         print(f"  ||u_exact - tilde u_h||_2 = {errnorm_pre:.3e}")
         print(f"  |u_exact - u_h|_{{H^1}} = {errnorm_h1:.3e}")
+        print(f"  ||u_exact - u_h||_infty = {errnorm_Linf:.3e}")
+        print(f"  ||u_exact - tilde u_h||_infty = {errnorm_Linf_pre:.3e}")
         jaccard = amr.jaccardUFL(activeexactUFL(r), activeh)
         print(f"  jaccard(A_u, A_uh) = {jaccard:.5f}")
         uexact = Function(V, name="u_exact").interpolate(uexactUFL(r))
@@ -246,6 +285,8 @@ for amrtype in refinetypes:
         errnorm_pres.append(errnorm_pre)
         hausdorffs.append(haus if haus is not None else np.nan)  # nan plots as a gap
         errnorm_h1s.append(errnorm_h1)
+        errnorm_Linfs.append(errnorm_Linf)
+        errnorm_Linf_pres.append(errnorm_Linf_pre)
         if writecsvs:
             csvfile.write(
                 f"{i},{Nv},{Ne},{hmin:.5f},{hmax:.5f},{errnorm:.3e},{errnorm_pre:.3e},{errnorm_h1:.3e},{jaccard:.5f},{hausstr},{refinetime:.3e}\n"
@@ -262,17 +303,27 @@ for amrtype in refinetypes:
                 target_complexity=targetsAVM[i + 1], h_min=1.0e-4, h_max=1.0
             )
             mesh = amr.adaptaveragedmetric(mesh, uh, lb)
-        elif amrtype == "nsv":
+        elif amrtype in ("nsv", "nsvsafe"):
             g = Function(V).interpolate(g_ufl)
-            (mark, etainf, _, _, _) = amr.nsvmark(uh, lb, g, Constant(0.0), g_ufl)
+            safe = None
+            if amrtype == "nsvsafe":
+                # compute safe *before* nsvmark(), so its eta values are
+                # excluded from the marking threshold itself, not merely
+                # filtered from the mark afterward (see nsvmark() docstring)
+                safe = amr.safeactiveunmark(uh, lb, F_strong, psiUFL(r), Constant(0.0))
+                print(f"  safeactiveunmark() excludes {amr.countmark(safe)} "
+                      "active elements from the nsvmark() threshold")
+            (mark, etainf, _, _, _) = amr.nsvmark(
+                uh, lb, g, Constant(0.0), g_ufl, safe=safe
+            )
             # effectivity index vs NSV03's own target norm: max_T eta_inf(T)
             # is the whole-domain (not inactive-set-restricted) quantity its
             # pointwise theory bounds ||u-u_h||_infty by, in contrast to
-            # BR78/BV00's energy-norm estimator below
-            errLinf = errornorm_Linf(amr, uexactUFL(r), uh)
+            # BR78/BV00's energy-norm estimator below; errnorm_Linf was
+            # already computed above, for this same uh
             maxetainf = amr.scalarrange(etainf)[1]
-            eff_nsv = maxetainf / errLinf if errLinf > 0 else np.nan
-            print(f"  eff_NSV (sup norm) = {eff_nsv:.3f}")
+            eff_nsv = maxetainf / errnorm_Linf if errnorm_Linf > 0 else np.nan
+            print(f"  eff_{amrtype.upper()} (sup norm) = {eff_nsv:.3f}")
             eff_dofs.append(Nv)
             eff_vals.append(eff_nsv)
             mesh = amr.refinemarkedelements(mesh, mark)
@@ -299,7 +350,9 @@ for amrtype in refinetypes:
     if writecsvs:
         csvfile.close()
 
-    results[amrtype] = (dofs, errnorms, errnorm_pres, hausdorffs, errnorm_h1s)
+    results[amrtype] = (
+        dofs, errnorms, errnorm_pres, hausdorffs, errnorm_h1s, errnorm_Linfs, errnorm_Linf_pres
+    )
     effs[amrtype] = (eff_dofs, eff_vals)
 
     # generate .pvd output file, with AMR fields for final mesh
@@ -318,11 +371,19 @@ for amrtype in refinetypes:
         imark.rename("imark (BR)")
         mark.rename("mark")
         fields += [mark, imark]
-    elif amrtype == "nsv":
+    elif amrtype in ("nsv", "nsvsafe"):
         g = Function(V).interpolate(g_ufl)
-        (mark, etainf, sigmah, _, etad) = amr.nsvmark(uh, lb, g, Constant(0.0), g_ufl)
+        safe = None
+        if amrtype == "nsvsafe":
+            safe = amr.safeactiveunmark(uh, lb, F_strong, psiUFL(r), Constant(0.0))
+            safe.rename("safe active unmarked")
+        (mark, etainf, sigmah, _, etad) = amr.nsvmark(
+            uh, lb, g, Constant(0.0), g_ufl, safe=safe
+        )
         mark.rename("mark")
         fields += [mark, sigmah, etainf, etad]
+        if amrtype == "nsvsafe":
+            fields.append(safe)
     VTKFile(outfile).write(*fields)
     print("")
 
@@ -332,7 +393,7 @@ if mesh.comm.rank == 0:
     import matplotlib.pyplot as plt
 
     d = 2  # spatial dimension
-    stylemap = {"udobr": "ko", "nsv": "bs", "uni": "rs", "avm": "g^"}
+    stylemap = {"udobr": "ko", "nsv": "bs", "nsvsafe": "md", "uni": "rs", "avm": "g^"}
 
     def _convergence_plot(index, ylabel, title, outfile, rateexp, ratelabel):
         plt.figure()
@@ -396,14 +457,47 @@ if mesh.comm.rank == 0:
         -1.0 / d,
         "DOFs^(-1/d)",
     )
+    # sup (L^infty) norm: this is the norm NSV03's pointwise a posteriori
+    # theory targets (see errornorm_Linf's docstring), so unlike the
+    # effectivity-index figure below (estimator/true-error ratio, NSV-family
+    # methods only) this figure gives an apples-to-apples true-error
+    # comparison, in that same norm, across *all* methods.  Reference rate
+    # DOFs^(-2/d) matches the L^2 rate above: for smooth solutions, CG1
+    # pointwise error is generically the same asymptotic order as L^2
+    # (up to log factors), and NSV03's own effectivity results (see
+    # sphere_effectivity.png) are consistent with that scaling here.
+    _convergence_plot(
+        5,
+        "||u_exact - u_h||_infty",
+        "sphere problem: sup-norm error vs DOFs",
+        "sphere_convergence_supnorm.png",
+        -2.0 / d,
+        "DOFs^(-2/d)",
+    )
+    # "preferred"-form companion to the plain sup-norm figure above (see
+    # errornorm_Linf_preferred()): the right comparison for UDOBR and
+    # NSVSAFE, which deliberately leave the active-set interior coarse, so
+    # their plain sup norm above is dominated by the known (not genuinely
+    # erroneous) gap between coarse uh and the true psi there.  Included for
+    # all methods, not just those two, as a consistency check: NSV/UNI/AVM
+    # already refine the active set, so their curves should barely move.
+    _convergence_plot(
+        6,
+        "||u_exact - tilde u_h||_infty",
+        "sphere problem: preferred-form sup-norm error vs DOFs",
+        "sphere_convergence_supnorm_preferred.png",
+        -2.0 / d,
+        "DOFs^(-2/d)",
+    )
 
     # effectivity index = estimator / true error, in whichever norm the
     # estimator targets (energy norm for BR78, sup norm for NSV03)
     # a reliable and efficient estimator should stay O(1) as DOFs grow
     plt.figure()
-    effstylemap = {"udobr": ("ko", "BR78 (inactive-set, energy norm)"),
-                    "nsv": ("bs", "NSV03 (sup norm)")}
-    for amrtype in ("udobr", "nsv"):
+    effstylemap = {"udobr": ("ko", "BR78 (inactive-set energy norm)"),
+                    "nsv": ("bs", "NSV03 (sup norm)"),
+                    "nsvsafe": ("md", "NSV03+safe (sup norm)")}
+    for amrtype in ("udobr", "nsv", "nsvsafe"):
         if amrtype not in effs or len(effs[amrtype][0]) == 0:
             continue
         edofs, evals = np.array(effs[amrtype][0]), np.array(effs[amrtype][1])
@@ -413,6 +507,6 @@ if mesh.comm.rank == 0:
     plt.legend()
     plt.grid(True)
     plt.xlabel("DOFs")
-    plt.ylabel("effectivity index")
-    plt.title("sphere problem: estimator/true-error effectivity index vs DOFs")
+    plt.ylabel("effectivity ratio (estimator / true-error)")
+    plt.title("sphere problem: effectivity index vs DOFs")
     plt.savefig("sphere_effectivity.png")
