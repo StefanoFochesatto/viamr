@@ -251,8 +251,7 @@ if mesh.comm.rank == 0:
     valid = np.isfinite(haus_a) & (haus_a > 0)
     plt.figure()
     if np.any(valid):
-        rate = np.polyfit(np.log(dofs_a[valid]), np.log(haus_a[valid]), 1)[0]
-        plt.loglog(dofs_a, haus_a, "ko", label=f"Hausdorff (rate={rate:.2f})")
+        plt.loglog(dofs_a, haus_a, "ko", label=f"Hausdorff distance")
         anchor = np.argmax(valid)  # index of first valid entry
         y = dofs_a.astype(float) ** (-1.0 / d)
         y = y * haus_a[anchor] / y[anchor]
