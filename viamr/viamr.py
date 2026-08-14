@@ -370,19 +370,21 @@ class VIAMR(OptionsManager, AVMMixin):
     def udomark(self, uh, lb, n=1, restrict=None):
         """Mark mesh using Unstructured Dilation Operator (UDO) algorithm.  The algorithm
         first computes an element-wise indicator for the free boundary.  Then the elements
-        which neighbor free-boundary elements are added, and so on iteratively.
-        The input n gives the number of levels to expand the initial element border.  The
-        output is an element-wise marking for those elements near the free boundary which
-        should be refined.
-        Tuning advice:  Increase n to mark more elements near the free boundary, but
-        on simple examples even n=1 may suffice."""
+        which neighbor free-boundary elements are added, and so on iteratively through n
+        levels.  Note that n=0 already minimally marks the free boundary.  Optionally the
+        marking can be restricted to the active side of the initially-marked elements
+        (restrict="active"), or to the inactive side (="inactive").
+
+        The output is an element-wise marking for those elements near the free boundary
+        which should be refined."""
 
         # get mesh and border mark; added flag for restriction
         if restrict is not None:
             meshInit = uh.function_space().mesh()
             dInit = meshInit.cell_dimension()
             dmInit = meshInit.topology_dm
-            if restrict == "active":  # restrict to active set plus border
+            if restrict == "active":
+                # restrict to active set plus border
                 indicator = Function(FunctionSpace(meshInit, "DG", 0)).interpolate(
                     self.elemactive(uh, lb)
                     + self._elemborder(self._nodalactive(uh, lb))
