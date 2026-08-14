@@ -367,7 +367,7 @@ class VIAMR(OptionsManager, AVMMixin):
         )
         return Function(DG0).interpolate(mark * large)
 
-    def udomark(self, uh, lb, n=2, restrict=None):
+    def udomark(self, uh, lb, n=1, restrict=None):
         """Mark mesh using Unstructured Dilation Operator (UDO) algorithm.  The algorithm
         first computes an element-wise indicator for the free boundary.  Then the elements
         which neighbor free-boundary elements are added, and so on iteratively.
