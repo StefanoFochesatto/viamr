@@ -197,7 +197,7 @@ if mesh.comm.rank == 0:
     import matplotlib.pyplot as plt
     import numpy as np
 
-    figfile = "porous_nsv.png"
+    figfile = "nsv_convergence.png"
     print(f"generating convergence figure {figfile} ...")
     markers = ["ko", "bs", "rs"]
     for j in range(len(methods)):
