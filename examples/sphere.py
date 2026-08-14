@@ -16,14 +16,17 @@
 # We generate .pvd files: result_sphere_{udobr,nsv,nsvsafe,uni,avm}.pvd
 #
 # The exact solution is known and so we can compute norm convergence rates.
-# We generate seven .png convergence figures comparing all methods:
+# We generate eight .png convergence figures comparing all methods:
 #   sphere_convergence_unorm.png       ||u_exact - u_h||_2 vs DOFs
-#   sphere_convergence_preferred.png   ||u_exact - tilde u_h||_2 vs DOFs
+#   sphere_convergence_reconstructed.png   ||u_exact - tilde u_h||_2 vs DOFs
 #   sphere_convergence_h1.png          |u_exact - u_h|_{H^1 seminorm} vs DOFs
 #   sphere_convergence_supnorm.png     ||u_exact - u_h||_infty vs DOFs, for all methods
-#   sphere_convergence_supnorm_preferred.png
+#   sphere_convergence_supnorm_reconstructed.png
 #                                       ||u_exact - tilde u_h||_infty vs DOFs, for all methods
 #   sphere_convergence_hausdorff.png   hausdorff2D(Gamma_u, Gamma_uh) vs DOFs
+#   sphere_convergence_amrtime.png     cumulative AMR (marking + refinement)
+#                                       wall time vs reconstructed-uh norm,
+#                                       for levels with at least 1s of AMR time
 #   sphere_effectivity.png             estimator/true-error effectivity index
 #                                       vs DOFs, for UDOBR, NSV, and NSVSAFE only
 #
@@ -45,6 +48,7 @@ methodBR = "total"  # VIAMR._fixedrate() uses a method; vs "max"; affects tradeo
 
 import time
 import numpy as np
+from mpi4py import MPI
 from firedrake import *
 from firedrake.petsc import PETSc
 from viamr import VIAMR
@@ -121,9 +125,9 @@ def errornorm_deg(u, uh, fixeddegree=6):
     return np.sqrt(normsq)
 
 
-def errornorm_preferred_deg(r, uh, activeh, fixeddegree=6):
-    """L^2 error norm against "preferred" form of numerical solution"""
-    tildeuh = conditional(eq(activeh, 1.0), psiUFL(r), uh)  # preferred
+def errornorm_reconstructed_deg(r, uh, activeh, fixeddegree=6):
+    """L^2 error norm against reconstructed-uh form of numerical solution"""
+    tildeuh = conditional(eq(activeh, 1.0), psiUFL(r), uh)  # reconstructed-uh
     # high degree quadrature important in next line; setting it avoids TSFC warning
     normsq = assemble((uexactUFL(r) - tildeuh) ** 2 * dx(degree=fixeddegree))
     return np.sqrt(normsq)
@@ -131,7 +135,7 @@ def errornorm_preferred_deg(r, uh, activeh, fixeddegree=6):
 
 def errornorm_H1semi_deg(u, uh, fixeddegree=6):
     """H^1 seminorm (i.e. Dirichlet-energy / grad-L^2) error norm of the plain
-    (not "preferred") numerical solution, avoiding the TSFC warning.  This is
+    (not reconstructed-uh) numerical solution, avoiding the TSFC warning.  This is
     the norm brinactivemark()'s unweighted BR78 estimator directly targets
     (see its docstring), so it's the natural check on whether that estimator
     is doing what it's designed to do, independent of L^2 behavior."""
@@ -152,9 +156,9 @@ def errornorm_Linf(amr, u, uh, pdegree=4):
     return amr.scalarrange(err)[1]
 
 
-def errornorm_Linf_preferred(amr, r, uh, activeh, pdegree=4):
-    """Sup-norm (L^infty) error against the "preferred" form of the
-    numerical solution (see errornorm_preferred_deg), rather than against
+def errornorm_Linf_reconstructed(amr, r, uh, activeh, pdegree=4):
+    """Sup-norm (L^infty) error against the reconstructed-uh form of the
+    numerical solution (see errornorm_reconstructed_deg), rather than against
     the plain uh.  This is the right comparison for methods (e.g. UDOBR,
     NSVSAFE) that deliberately leave the active-set interior coarse, since
     u=psi there regardless of resolution: the plain sup norm is then
@@ -162,7 +166,7 @@ def errornorm_Linf_preferred(amr, r, uh, activeh, pdegree=4):
     uh and the true psi, rather than by genuine solution error.  Uses the
     same CG^p-interpolation + VIAMR.scalarrange() technique as
     errornorm_Linf(); see its docstring re. non-polynomial data."""
-    tildeuh = conditional(eq(activeh, 1.0), psiUFL(r), uh)  # preferred
+    tildeuh = conditional(eq(activeh, 1.0), psiUFL(r), uh)  # reconstructed-uh
     W = FunctionSpace(uh.function_space().mesh(), "CG", pdegree)
     err = Function(W).interpolate(abs(uexactUFL(r) - tildeuh))
     return amr.scalarrange(err)[1]
@@ -184,8 +188,9 @@ sp = {
     "snes_converged_reason": None,
 }
 
-results = {}  # results[amrtype] = (dofs, errnorm, errnorm_pres, hausdorffs, errnorm_h1s,
-# errnorm_Linfs, errnorm_Linf_pres), for the six convergence figures generated at the end
+results = {}  # results[amrtype] = (dofs, errnorm, errnorm_recons, hausdorffs, errnorm_h1s,
+# errnorm_Linfs, errnorm_Linf_recons, amrtimes), for the seven convergence figures
+# generated at the end
 effs = {}  # effs[amrtype] = (eff_dofs, eff_vals), for udobr/nsv/nsvsafe only; see
 # the effectivity-index figure generated at the end
 
@@ -193,9 +198,11 @@ for amrtype in refinetypes:
     print(f"solving by VIAMR using {amrtype.upper()} method ...")
 
     amr = VIAMR()
-    dofs, errnorms, errnorm_pres, hausdorffs, errnorm_h1s, errnorm_Linfs, errnorm_Linf_pres = (
+    dofs, errnorms, errnorm_recons, hausdorffs, errnorm_h1s, errnorm_Linfs, errnorm_Linf_recons = (
         [], [], [], [], [], [], []
     )
+    amrtimes = []  # cumulative wall time spent in marking + mesh refinement
+    cumamrtime = 0.0
     eff_dofs, eff_vals = [], []  # effectivity index vs DOFs; udobr/nsv/nsvsafe only
 
     # udomark() needs this overlap to give correct results in parallel
@@ -224,12 +231,13 @@ for amrtype in refinetypes:
     if writecsvs:
         csvfile = open(f"sphere_{amrtype}.csv", "w")
         csvfile.write(
-            "I,NV,NE,HMIN,HMAX,ENORM,ENORMPREF,ENORMH1,JACCARD,HAUSDORFF,REFINETIME\n"
+            "I,NV,NE,HMIN,HMAX,ENORM,ENORMRECON,ENORMH1,JACCARD,HAUSDORFF,REFINETIME\n"
         )
 
     for i in range(maxlevels + 1):
         print(f"solving on mesh {i} ...")
         mesh = meshHist[i]
+        comm = mesh.comm  # fixed across this level, even once `mesh` is reassigned below
         amr.meshreport(mesh)
         V = FunctionSpace(mesh, "CG", 1)
         if i == 0:
@@ -258,15 +266,15 @@ for amrtype in refinetypes:
         # compute norms
         errnorm = errornorm_deg(uexactUFL(r), uh)
         activeh = amr.elemactive(uh, lb)
-        errnorm_pre = errornorm_preferred_deg(r, uh, activeh)
+        errnorm_recon = errornorm_reconstructed_deg(r, uh, activeh)
         errnorm_h1 = errornorm_H1semi_deg(uexactUFL(r), uh)
         errnorm_Linf = errornorm_Linf(amr, uexactUFL(r), uh)
-        errnorm_Linf_pre = errornorm_Linf_preferred(amr, r, uh, activeh)
+        errnorm_Linf_recon = errornorm_Linf_reconstructed(amr, r, uh, activeh)
         print(f"  ||u_exact - u_h||_2 = {errnorm:.3e}")
-        print(f"  ||u_exact - tilde u_h||_2 = {errnorm_pre:.3e}")
+        print(f"  ||u_exact - tilde u_h||_2 = {errnorm_recon:.3e}")
         print(f"  |u_exact - u_h|_{{H^1}} = {errnorm_h1:.3e}")
         print(f"  ||u_exact - u_h||_infty = {errnorm_Linf:.3e}")
-        print(f"  ||u_exact - tilde u_h||_infty = {errnorm_Linf_pre:.3e}")
+        print(f"  ||u_exact - tilde u_h||_infty = {errnorm_Linf_recon:.3e}")
         jaccard = amr.jaccardUFL(activeexactUFL(r), activeh)
         print(f"  jaccard(A_u, A_uh) = {jaccard:.5f}")
         uexact = Function(V, name="u_exact").interpolate(uexactUFL(r))
@@ -282,19 +290,24 @@ for amrtype in refinetypes:
         Nv, Ne, hmin, hmax = amr.meshsizes(mesh)
         dofs.append(Nv)
         errnorms.append(errnorm)
-        errnorm_pres.append(errnorm_pre)
+        errnorm_recons.append(errnorm_recon)
         hausdorffs.append(haus if haus is not None else np.nan)  # nan plots as a gap
         errnorm_h1s.append(errnorm_h1)
         errnorm_Linfs.append(errnorm_Linf)
-        errnorm_Linf_pres.append(errnorm_Linf_pre)
+        errnorm_Linf_recons.append(errnorm_Linf_recon)
+        # refinetime is the AMR cost (marking + refinement) that produced THIS
+        # mesh from the previous one (0.0 at i=0); accumulating it here
+        cumamrtime += refinetime
+        amrtimes.append(cumamrtime)
         if writecsvs:
             csvfile.write(
-                f"{i},{Nv},{Ne},{hmin:.5f},{hmax:.5f},{errnorm:.3e},{errnorm_pre:.3e},{errnorm_h1:.3e},{jaccard:.5f},{hausstr},{refinetime:.3e}\n"
+                f"{i},{Nv},{Ne},{hmin:.5f},{hmax:.5f},{errnorm:.3e},{errnorm_recon:.3e},{errnorm_h1:.3e},{jaccard:.5f},{hausstr},{refinetime:.3e}\n"
             )
         if Ne > targetelements:
             break
 
         # do an AMR level
+        comm.Barrier()  # sync ranks before timing a collective operation
         start_time = time.time()
         if amrtype == "uni":
             mesh = unimh[i + 1]
@@ -308,8 +321,7 @@ for amrtype in refinetypes:
             safe = None
             if amrtype == "nsvsafe":
                 # compute safe *before* nsvmark(), so its eta values are
-                # excluded from the marking threshold itself, not merely
-                # filtered from the mark afterward (see nsvmark() docstring)
+                # excluded from the marking threshold process
                 safe = amr.safeactiveunmark(uh, lb, F_strong, psiUFL(r), Constant(0.0))
                 print(f"  safeactiveunmark() excludes {amr.countmark(safe)} "
                       "active elements from the nsvmark() threshold")
@@ -319,8 +331,7 @@ for amrtype in refinetypes:
             # effectivity index vs NSV03's own target norm: max_T eta_inf(T)
             # is the whole-domain (not inactive-set-restricted) quantity its
             # pointwise theory bounds ||u-u_h||_infty by, in contrast to
-            # BR78/BV00's energy-norm estimator below; errnorm_Linf was
-            # already computed above, for this same uh
+            # BR78/BV00's energy-norm estimator below
             maxetainf = amr.scalarrange(etainf)[1]
             eff_nsv = maxetainf / errnorm_Linf if errnorm_Linf > 0 else np.nan
             print(f"  eff_{amrtype.upper()} (sup norm) = {eff_nsv:.3f}")
@@ -344,14 +355,16 @@ for amrtype in refinetypes:
             eff_vals.append(eff_br)
             mesh = amr.refinemarkedelements(mesh, mark)
         if amrtype != "uni":
-            refinetime = time.time() - start_time
+            # true cost of a collective AMR step is bounded by the slowest rank
+            refinetime = comm.allreduce(time.time() - start_time, op=MPI.MAX)
         meshHist.append(mesh)
 
     if writecsvs:
         csvfile.close()
 
     results[amrtype] = (
-        dofs, errnorms, errnorm_pres, hausdorffs, errnorm_h1s, errnorm_Linfs, errnorm_Linf_pres
+        dofs, errnorms, errnorm_recons, hausdorffs, errnorm_h1s, errnorm_Linfs,
+        errnorm_Linf_recons, amrtimes,
     )
     effs[amrtype] = (eff_dofs, eff_vals)
 
@@ -417,7 +430,7 @@ if mesh.comm.rank == 0:
         plt.savefig(outfile)
 
     # L^2 norms: DOFs^(-2/d) is the optimal rate for quasi-optimal 2D meshes,
-    # as in nsv.py.  The "preferred" reconstruction (see errornorm_preferred_deg20)
+    # as in nsv.py.  The reconstructed-uh form (see errornorm_reconstructed_deg)
     # is kept in the same L^2 norm as the plain error, rather than H^1, because
     # its patched-together tilde u_h is not H^1-conforming.
     _convergence_plot(
@@ -431,8 +444,8 @@ if mesh.comm.rank == 0:
     _convergence_plot(
         2,
         "||u_exact - tilde u_h||_2",
-        "sphere problem: preferred-form error norm vs DOFs",
-        "sphere_convergence_preferred.png",
+        "sphere problem: reconstructed-uh norm vs DOFs",
+        "sphere_convergence_reconstructed.png",
         -2.0 / d,
         "DOFs^(-2/d)",
     )
@@ -458,14 +471,10 @@ if mesh.comm.rank == 0:
         "DOFs^(-1/d)",
     )
     # sup (L^infty) norm: this is the norm NSV03's pointwise a posteriori
-    # theory targets (see errornorm_Linf's docstring), so unlike the
-    # effectivity-index figure below (estimator/true-error ratio, NSV-family
-    # methods only) this figure gives an apples-to-apples true-error
-    # comparison, in that same norm, across *all* methods.  Reference rate
+    # theory targets.  This figure gives an apples-to-apples true-error
+    # comparison in that norm across *all* methods.  Reference rate
     # DOFs^(-2/d) matches the L^2 rate above: for smooth solutions, CG1
-    # pointwise error is generically the same asymptotic order as L^2
-    # (up to log factors), and NSV03's own effectivity results (see
-    # sphere_effectivity.png) are consistent with that scaling here.
+    # pointwise error is generically the same asymptotic order as L^2,
     _convergence_plot(
         5,
         "||u_exact - u_h||_infty",
@@ -474,23 +483,40 @@ if mesh.comm.rank == 0:
         -2.0 / d,
         "DOFs^(-2/d)",
     )
-    # "preferred"-form companion to the plain sup-norm figure above (see
-    # errornorm_Linf_preferred()): the right comparison for UDOBR and
-    # NSVSAFE, which deliberately leave the active-set interior coarse, so
-    # their plain sup norm above is dominated by the known (not genuinely
-    # erroneous) gap between coarse uh and the true psi there.  Included for
-    # all methods, not just those two, as a consistency check: NSV/UNI/AVM
-    # already refine the active set, so their curves should barely move.
+    # reconstructed-uh companion to the plain sup-norm figure above (see
+    # errornorm_Linf_reconstructed()): the right comparison for UDOBR and
+    # NSVSAFE, which deliberately leave the active-set interior coarse.
+    # Included for all methods, not just those two, as a consistency check;
+    # NSV/UNI/AVM refine the active set, so their curves should barely move.
     _convergence_plot(
         6,
         "||u_exact - tilde u_h||_infty",
-        "sphere problem: preferred-form sup-norm error vs DOFs",
-        "sphere_convergence_supnorm_preferred.png",
+        "sphere problem: reconstructed-uh sup-norm error vs DOFs",
+        "sphere_convergence_supnorm_reconstructed.png",
         -2.0 / d,
         "DOFs^(-2/d)",
     )
 
-    # effectivity index = estimator / true error, in whichever norm the
+    # cumulative AMR time (marking + mesh refinement only, not the solve) vs
+    # reconstructed-uh error: shows the cost side of the accuracy/DOFs
+    # tradeoff above.  UNI is excluded: its time includes no
+    # marking/refinement step, thus uninformative here.  Levels with
+    # under 1s of cumulative AMR time are excluded as measurement noise.
+    plt.figure()
+    for amrtype in refinetypes:
+        if amrtype == "uni":
+            continue
+        rvals, rtimes = np.array(results[amrtype][2]), np.array(results[amrtype][7])
+        keep = rtimes >= 1.0
+        plt.loglog(rvals[keep], rtimes[keep], stylemap[amrtype], label=amrtype.upper())
+    plt.legend()
+    plt.grid(True)
+    plt.xlabel("||u_exact - tilde u_h||_2")
+    plt.ylabel("cumulative AMR time (s)")
+    plt.title("sphere problem: cumulative AMR time vs reconstructed-uh norm")
+    plt.savefig("sphere_convergence_amrtime.png")
+
+    # effectivity index = estimator / (true error), in whichever norm the
     # estimator targets (energy norm for BR78, sup norm for NSV03)
     # a reliable and efficient estimator should stay O(1) as DOFs grow
     plt.figure()
