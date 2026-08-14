@@ -789,11 +789,15 @@ class VIAMR(OptionsManager, AVMMixin):
         #             i.e. infinity norm along interior edges
         #    [[z]] is the jump in z along an edge
         v0 = TestFunction(DG0)
-        # jumpu is in DG0
-        with PETSc.Log.Event(
-            "nsvmark()_calls_assemble_term1"
-        ):  # FIXME riesz_rep..() expensive because solve()
-            jumpu = assemble(jump(grad(uh), n) * v0("-") * dS).riesz_representation()
+        # DG0 mass matrix is exactly diagonal (disjoint per-cell basis functions),
+        # so Riesz representation is just elementwise division by volT;
+        # avoids generic KSP solve inside riesz_representation()
+        volT = assemble(v0 * dx)
+        jumpu = Function(DG0)
+        jumpu.dat.data[:] = (
+            assemble(jump(grad(uh), n) * v0("-") * dS).dat.data_ro
+            / volT.dat.data_ro
+        )
         tactive = self.thinelemactive(uh, lb)
         X_ufl = abs(f_ufl + tactive * sigmah)
         # note pages 188-189 in NSV03 regarding use of DG7, to deal with the fact
@@ -822,10 +826,11 @@ class VIAMR(OptionsManager, AVMMixin):
         # using high-res delta g along boundary; noted integral along boundary (ds vs dS)
         CG4 = FunctionSpace(mesh, "CG", 4)  # CG4.dim() ~ 9*DG0.dim()
         adg = self._elemmaxabs(Function(CG4).interpolate(g_ufl - g))
-        with PETSc.Log.Event(
-            "nsvmark()_calls_assemble_term4"
-        ):  # FIXME riesz_rep..() expensive because solve()
-            bdryerr = assemble(adg * v0 * ds).riesz_representation()
+        # same Riesz representation pattern for DG0 as above for term 1
+        bdryerr = Function(DG0)
+        bdryerr.dat.data[:] = (
+            assemble(adg * v0 * ds).dat.data_ro / volT.dat.data_ro
+        )
 
         # finally compute eta_inf; see doc string above for formula
         etainf_ufl = C0 * hT ** 2 * Rinf + blockgap + bdryerr
