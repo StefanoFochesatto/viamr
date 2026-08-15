@@ -95,9 +95,9 @@ class VIAMR(OptionsManager, AVMMixin):
         "partition": True,
         "overlap_type": (DistributedMeshOverlapType.VERTEX, 1),
     }
-    """distribution_parameters value needed for udomark()/thinelemactive() (and
-    therefore nsvmark()) to give correct results in parallel; see
-    _checkparalleloverlap().  Usage:
+    """distribution_parameters value needed for thinelemactive(), and therefore
+    nsvmark(), to give correct results in parallel; see _checkparalleloverlap().
+    Usage:
       mesh = RectangleMesh(m, m, Lx, Ly, distribution_parameters=VIAMR.PARALLEL_OVERLAP)
     """
 
@@ -177,17 +177,16 @@ class VIAMR(OptionsManager, AVMMixin):
 
     def _checkparalleloverlap(self, mesh):
         """Raise ValueError if mesh is distributed across multiple processes
-        without sufficient vertex overlap.  udomark() and thinelemactive() walk
-        DMPlex vertex stars across partition boundaries (via getTransitiveClosure()),
-        which requires overlap_type=(DistributedMeshOverlapType.VERTEX, n) with
+        without sufficient vertex overlap.  thinelemactive() walks DMPlex vertex
+        stars across partition boundaries (via getTransitiveClosure()), which
+        requires overlap_type=(DistributedMeshOverlapType.VERTEX, n) with
         n >= 1 for correct results.  Build the mesh with
-        distribution_parameters=VIAMR.PARALLEL_OVERLAP to satisfy this; see
-        tests/test_parallel.py::test_parallel_udo."""
+        distribution_parameters=VIAMR.PARALLEL_OVERLAP to satisfy this."""
         if mesh.comm.size > 1:
             dp = mesh._distribution_parameters
             if dp["overlap_type"][0].name != "VERTEX" or dp["overlap_type"][1] < 1:
                 raise ValueError(
-                    "udomark()/thinelemactive() in parallel require mesh "
+                    "thinelemactive() in parallel requires mesh "
                     "distribution_parameters=VIAMR.PARALLEL_OVERLAP "
                     "on mesh initialization (or overlap_type=(VERTEX, n>=1))"
                 )
@@ -234,7 +233,9 @@ class VIAMR(OptionsManager, AVMMixin):
 
         The implementation is inspired by VIAMR.udomark().  The neighbor elements of *inactive* elements are found, and they are effectively removed from the active element indicator.
 
-        The note about constant arity at https://op2.github.io/PyOP2/concepts.html suggests that this operation, and presumably VIAMR.udomark() also, cannot be done with PyOP2.
+        FIXME This still walks DMPlex vertex stars directly rather than using PyOP2;
+        see VIAMR.udomark() and VIAMR._elemtonodemax() for a PyOP2-only approach
+        this function could adopt instead.
         """
         # get mesh
         mesh = uh.function_space().mesh()
@@ -336,6 +337,31 @@ class VIAMR(OptionsManager, AVMMixin):
     def _elemmaxabs(self, source):
         return self._elemextreme(source, minimum=False, absolute=True, defaultval=0.0)
 
+    def _elemtonodemax(self, elemfield, nodalspace):
+        """Scatter a DG0 element field into nodalspace (e.g. CG1), broadcasting
+        each cell's value to all of its local nodes and taking the max where
+        multiple cells share a node.  Applies a PyOP2 parallel loop; correct in
+        parallel via Firedrake's own halo exchange, with no DMPlex access needed."""
+        target = Function(nodalspace).assign(0.0)
+        kernel = op2.Kernel(
+            """
+        void elem_to_node_max(double *target, double const *source)
+        {
+        for (int i = 0; i < %(ndofs)s; i++) {
+            target[i] = source[0];
+        }
+        }"""
+            % {"ndofs": nodalspace.finat_element.space_dimension()},
+            "elem_to_node_max",
+        )
+        op2.par_loop(
+            kernel,
+            nodalspace.mesh().cell_set,
+            target.dat(op2.MAX, target.cell_node_map()),
+            elemfield.dat(op2.READ, elemfield.cell_node_map()),
+        )
+        return target
+
     def countmark(self, mark):
         """Return count of number of elements marked."""
         mesh = mark.function_space().mesh()
@@ -381,8 +407,6 @@ class VIAMR(OptionsManager, AVMMixin):
         # get mesh and border mark; added flag for restriction
         if restrict is not None:
             meshInit = uh.function_space().mesh()
-            dInit = meshInit.cell_dimension()
-            dmInit = meshInit.topology_dm
             if restrict == "active":
                 # restrict to active set plus border
                 indicator = Function(FunctionSpace(meshInit, "DG", 0)).interpolate(
@@ -397,7 +421,7 @@ class VIAMR(OptionsManager, AVMMixin):
                     f"unknown restrict='{restrict}'; must be 'active', 'inactive', or None"
                 )
             mesh = self._filtermesh(meshInit, indicator)
-            _, DG0 = self.spaces(mesh)
+            CG1, DG0 = self.spaces(mesh)
             # Use nodal active set indicator to make an initial DG0 element border
             # indicator. This is now on a restricted domain so allow_missing_dofs=True
             border = Function(DG0).interpolate(
@@ -405,55 +429,18 @@ class VIAMR(OptionsManager, AVMMixin):
             )
         else:
             mesh = uh.function_space().mesh()
-            _, DG0 = self.spaces(mesh)
+            CG1, DG0 = self.spaces(mesh)
             # Use nodal active set indicator to make an initial DG0 element border
             # indicator.
             border = self._elemborder(self._nodalactive(uh, lb))
 
-        # get DMPlex
-        self._checkparalleloverlap(mesh)
-        d = mesh.cell_dimension()
-        dm = mesh.topology_dm
-        # FIXME Experiment implementation in cython, DMLabel to mark accumulation, dmplex with only vertex and cell connectivity to save memory
-
-        # Find range of indices for element stratum
-        kmin, kmax = dm.getHeightStratum(0)[:2]
-
-        # need map from DMPlex to firedrake indices
-        # (Is there a better way to do this in dmcommon?)
-        plexelementlist = mesh.cell_closure[:, -1]
-        dm2fd = np.argsort(plexelementlist)
-
-        # main loop: expand element border out to n levels, using only DMPlex indices
-        #   (index convention:  i for levels, j for nodes/vertices, k for elements)
-        for i in range(n):
-            # Pull DMPlex border element indices using dmplex cell indices
-            borderindices = plexelementlist[
-                np.nonzero(border.dat.data_ro_with_halos)[0]
-            ]
-
-            # closure: Pull indices of all vertices which are incident
-            # to some border element, then flatten and remove duplicates.
-            incidentVertices = [
-                dm.getTransitiveClosure(k)[0][-d - 1 :] for k in borderindices
-            ]
-            incidentVertices = np.unique(np.ravel(incidentVertices))
-
-            # star: Pull indices of all elements which are incident to the
-            # incidentVertices.  Note that getTransitiveClosure() with useCone=False
-            # gives the star, and that the number of elements incident to a vertex
-            # is not predictable.  Then flatten and remove duplicates.
-            neighborindices = []
-            for j in incidentVertices:
-                star = dm.getTransitiveClosure(j, useCone=False)[0]
-                mark = np.where((star >= kmin) & (star < kmax))
-                neighborindices.extend(star[mark])
-            neighborindices = np.unique(np.array(neighborindices, dtype=IntType))
-
-            # re-generate DG0 element border indicator by adding neighbors
-            # (parallel communication *here*, via the halo-inclusive dat access)
-            border = Function(DG0)
-            border.dat.data_wo_with_halos[dm2fd[neighborindices]] = 1.0
+        # main loop: expand element border out to n levels, via two constant-arity
+        # PyOP2 kernels per level (cell->node max-scatter, then node->cell max-gather).
+        # No DMPlex access, and thus no special mesh overlap requirement.
+        for _ in range(n):
+            border = self._elemextreme(
+                self._elemtonodemax(border, CG1), minimum=False, defaultval=0.0
+            )
 
         return Function(DG0, name="mark (udomark)").interpolate(
             border, allow_missing_dofs=True
