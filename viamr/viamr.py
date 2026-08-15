@@ -428,10 +428,8 @@ class VIAMR(OptionsManager, AVMMixin):
         #   (index convention:  i for levels, j for nodes/vertices, k for elements)
         for i in range(n):
             # Pull DMPlex border element indices using dmplex cell indices
-            borderindices = [
-                plexelementlist[k]
-                for k, value in enumerate(border.dat.data_ro_with_halos)
-                if value != 0
+            borderindices = plexelementlist[
+                np.nonzero(border.dat.data_ro_with_halos)[0]
             ]
 
             # closure: Pull indices of all vertices which are incident
@@ -450,13 +448,12 @@ class VIAMR(OptionsManager, AVMMixin):
                 star = dm.getTransitiveClosure(j, useCone=False)[0]
                 mark = np.where((star >= kmin) & (star < kmax))
                 neighborindices.extend(star[mark])
-            neighborindices = np.unique(np.ravel(neighborindices))
+            neighborindices = np.unique(np.array(neighborindices, dtype=IntType))
 
             # re-generate DG0 element border indicator by adding neighbors
-            border = Function(DG0).interpolate(Constant(0.0))
-            for k in neighborindices:
-                # parallel communication *here*:
-                border.dat.data_wo_with_halos[dm2fd[k]] = 1
+            # (parallel communication *here*, via the halo-inclusive dat access)
+            border = Function(DG0)
+            border.dat.data_wo_with_halos[dm2fd[neighborindices]] = 1.0
 
         return Function(DG0, name="mark (udomark)").interpolate(
             border, allow_missing_dofs=True
