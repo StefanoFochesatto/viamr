@@ -16,10 +16,11 @@ from .avm import AVMMixin, haveanimate
 
 
 class VIAMR(OptionsManager, AVMMixin):
-    r"""A VIAMR object manages adaptive mesh refinement (AMR) for a Firedrake variational inequality (VI) solver.
+    r"""A VIAMR object manages adaptive mesh refinement (AMR) for a Firedrake
+    variational inequality (VI) solver.
 
     Central notions behind this class:
-      * Like a PDE AMR method, refinement in the inactive set should be guided by
+      * Like a PDE AMR method, refinement in the inactive set is guided by
         an a posteriori estimator.
       * For some problems, refinement in the active set is worthwhile, but for some
         it is wasted effort.
@@ -29,7 +30,7 @@ class VIAMR(OptionsManager, AVMMixin):
         reduce the norm error of the solution.  It does reduce the geometrical measures of set
         errors; see hausdorf() and jaccard() in this class.
 
-    The public API of the VIAMR class consists of:
+    The public mark-and-refine API of the VIAMR class consists of:
 
       udomark():  marking method targeting refinement of the computed free boundary, based on a purely-discrete unstructured-dilation operation
 
@@ -47,13 +48,13 @@ class VIAMR(OptionsManager, AVMMixin):
 
       refinesbr2D():  a method which calls PETSc for skeleton-based-refinement (SBR)
 
-      adaptaveragedmetric():  a method which does metric-based mesh adaptation by combining an anisotropic metric with a free-boundary targeted isotropic metric
-
       eleminactive():  element markings for the computed inactive set
 
       elemactive(), thinelemactive():  two versions of element markings for computed active sets
 
       lowerboundcelldiameter():  unmark elements with cell diameters below a minimum cell diameter
+
+    There are also diagnostic methods:
 
       jaccard(), jaccardUFL():  computation of the Jaccard similarity index for two active sets
 
@@ -61,7 +62,7 @@ class VIAMR(OptionsManager, AVMMixin):
 
       freeboundarygraph2D():  for 2D obstacle problems, return the computed free boundary
 
-    Some default calls to the major marking methods and refinement methods are:
+    Some default calls to the major marking-and-refine methods are:
 
     .. code-block:: python3
 
@@ -73,18 +74,25 @@ class VIAMR(OptionsManager, AVMMixin):
       imark, _, _ = amr.brinactivemark(uh, lb, res_ufl, Z=Z)   # weighted estimator (BV00) in inactive set
       mark, _, _, _, _ = amr.nsvmark(uh, lb, g, f_ufl, g_ufl)  # method from NSV03
       mark = amr.unionmarks(fbmark, imark)                     # mark if either is marked
-      rmesh = amr.refinesbr2D(mesh, mark)                       # PETSc DMPlexTransform for skeleton-based refinement
-      amesh = amr.adaptaveragedmetric(mesh, uh, lb)            # animate for metric-based adaptation
+      rmesh = amr.refinesbr2D(mesh, mark)                      # PETSc DMPlexTransform for skeleton-based refinement
 
     Regarding the arguments: uh is a computed VI solution, lb is the lower-bound obstacle, res_ufl is a UFL expression for the residual (applicable in the inactive set), Z is a weighting field (see examples), f_ufl is the source term in Poisson equation, and g_ufl are the boundary values.
 
     Regarding returned values: fbmark, imark, and mark are element markings in DG0 (Definition 4.2 in paper), rmesh is a refined mesh, and amesh is an adapted mesh.
 
+    There is also a mesh adaptation API which needs the animate library:
+
+    .. code-block:: python3
+
+      import animate
+      metric = amr.buildaveragedmetric(mesh, uh, lb)            # VIAMR builds the metric ...
+      amesh = animate.adapt(mesh, metric)                       # ... caller adapts the mesh with it
+
     There are also some utility methods, including: spaces(), meshsizes(), meshreport(), scalarrange(), checkadmissible(), and countmark().  Other methods starting with an underscore are (roughly) intended to be private to the VIAMR class.
 
     Known limitations:
       * Functions which do not work in parallel: 1. jaccard(..., submesh=False).
-      * Functions whose results depend on number of processes: 1. vcdmark(), 2. adaptaveragedmetric().
+      * Functions whose results depend on number of processes: 1. vcdmark(), 2. buildaveragedmetric() (via vcdmark()).
       * Functions which only work for 2D meshs: 1. freeboundarygraph2D(), 2. hausdorff2D(), 3. refinesbr2D()
       * Functions which only work for 2D triangular meshes: 1. refinesbr2D()
 
