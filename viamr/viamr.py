@@ -95,9 +95,8 @@ class VIAMR(OptionsManager, AVMMixin):
         "partition": True,
         "overlap_type": (DistributedMeshOverlapType.VERTEX, 1),
     }
-    """distribution_parameters value needed for thinelemactive(), and therefore
-    nsvmark(), to give correct results in parallel; see _checkparalleloverlap().
-    Usage:
+    """distribution_parameters value needed for freeboundarygraph2D() to give
+    correct results in parallel; see _checkparalleloverlap().  Usage:
       mesh = RectangleMesh(m, m, Lx, Ly, distribution_parameters=VIAMR.PARALLEL_OVERLAP)
     """
 
@@ -177,16 +176,16 @@ class VIAMR(OptionsManager, AVMMixin):
 
     def _checkparalleloverlap(self, mesh):
         """Raise ValueError if mesh is distributed across multiple processes
-        without sufficient vertex overlap.  thinelemactive() walks DMPlex vertex
-        stars across partition boundaries (via getTransitiveClosure()), which
-        requires overlap_type=(DistributedMeshOverlapType.VERTEX, n) with
+        without sufficient vertex overlap.  freeboundarygraph2D() walks DMPlex
+        vertex stars across partition boundaries (via getTransitiveClosure()),
+        which requires overlap_type=(DistributedMeshOverlapType.VERTEX, n) with
         n >= 1 for correct results.  Build the mesh with
         distribution_parameters=VIAMR.PARALLEL_OVERLAP to satisfy this."""
         if mesh.comm.size > 1:
             dp = mesh._distribution_parameters
             if dp["overlap_type"][0].name != "VERTEX" or dp["overlap_type"][1] < 1:
                 raise ValueError(
-                    "thinelemactive() in parallel requires mesh "
+                    "freeboundarygraph2D() in parallel requires mesh "
                     "distribution_parameters=VIAMR.PARALLEL_OVERLAP "
                     "on mesh initialization (or overlap_type=(VERTEX, n>=1))"
                 )
@@ -231,50 +230,19 @@ class VIAMR(OptionsManager, AVMMixin):
 
         In contrast to elemactive(), here a cell is marked as active only if it *and its neighboring cells* are active.  The test for active is based on testing at the DG0 degree of freedom, and according to activetol.  Returns a DG0 element-wise indicator, with thinned-active elements having value 1.
 
-        The implementation is inspired by VIAMR.udomark().  The neighbor elements of *inactive* elements are found, and they are effectively removed from the active element indicator.
-
-        FIXME This still walks DMPlex vertex stars directly rather than using PyOP2;
-        see VIAMR.udomark() and VIAMR._elemtonodemax() for a PyOP2-only approach
-        this function could adopt instead.
+        The implementation is inspired by VIAMR.udomark(): a thinned-active element
+        is exactly one which is *not* within one ring of an inactive element, i.e.
+        z = 1 - dilate1(inactive), computed via the same two constant-arity PyOP2
+        kernels udomark() uses (cell->node max-scatter, then node->cell max-gather),
+        with no DMPlex access.
         """
-        # get mesh
         mesh = uh.function_space().mesh()
-        self._checkparalleloverlap(mesh)
-
-        # map from firedrake mesh indices to DMPlex element indices, last column of cell_closure:
-        plexelementlist = mesh.cell_closure[:, -1]
-
-        # get DMPlex element indices of inactive cells using firedrake indices
+        CG1, DG0 = self.spaces(mesh)
         inactive = self.eleminactive(uh, lb)
-        inactivecells = [
-            plexelementlist[k]
-            for k, value in enumerate(inactive.dat.data_ro_with_halos)
-            if value == 1.0
-        ]
-
-        # inactive cell vertex closure: indices of vertices incident to an inactive element
-        d = mesh.cell_dimension()
-        dm = mesh.topology_dm
-        incvertices = [dm.getTransitiveClosure(j)[0][-d - 1 :] for j in inactivecells]
-        incvertices = np.unique(np.ravel(incvertices))  # flatten and de-duplicate
-
-        # star: indices of all elements which are incident to the incvertices
-        #   * getTransitiveClosure() with useCone=False gives the star
-        #   * the number of elements incident to a vertex, the degree, varies over the mesh
-        kmin, kmax = dm.getHeightStratum(0)[:2]  # range for element indices
-        neighborindices = []
-        for j in incvertices:
-            star = dm.getTransitiveClosure(j, useCone=False)[0]
-            neighborindices.extend(star[(star >= kmin) & (star < kmax)])
-        neighborindices = np.unique(np.ravel(neighborindices))  # flatten and de-duplicate
-
-        # generate DG0 thinned-active indicator by zeroing-out neighbors of inactive cells
-        _, DG0 = self.spaces(mesh)
-        z = Function(DG0).interpolate(Constant(1.0))  # mark *all* cells 1.0
-        dm2fd = np.argsort(plexelementlist)  # inverse map to plexelementlist
-        for j in neighborindices:
-            z.dat.data_wo_with_halos[dm2fd[j]] = 0.0  # remove inactive etc.
-        return z
+        grown = self._elemextreme(
+            self._elemtonodemax(inactive, CG1), minimum=False, defaultval=0.0
+        )
+        return Function(DG0, name="Thin Element Active").interpolate(1.0 - grown)
 
     def _elemborder(self, nodalactive):
         """From *nodal* active set indicator, computes bordering element indicator.  Uses the fact that the DG0 degree of freedom is strictly inside the element, so use with caution if z is not in CG1.  Returns 1.0 for elements with
@@ -1085,7 +1053,7 @@ class VIAMR(OptionsManager, AVMMixin):
 
         # Get lists of indices for active and border elements.  Include halo
         # (ghost) cells so free-boundary vertices/edges lying on a process boundaries
-        # are visible to every rank; same pattern as thinelemactive().
+        # are visible to every rank.
         elemactive = self.elemactive(uh, lb)
         elemborder = self._elemborder(self._nodalactive(uh, lb))
         ActiveSetElementsIndices = np.where(elemactive.dat.data_ro_with_halos)[0]
