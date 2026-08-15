@@ -402,6 +402,7 @@ for amrtype in refinetypes:
 
 # convergence figures comparing all methods; one figure per quantity, all
 # methods overlaid, following the convergence-figure convention in nsv.py
+print("generating .png convergence/effectivity plots to compare algorithms ...")
 if mesh.comm.rank == 0:
     import matplotlib.pyplot as plt
 
