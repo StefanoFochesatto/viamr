@@ -45,7 +45,7 @@ class VIAMR(OptionsManager, AVMMixin):
 
       safeactiveunmark():  a method which detects active-set elements where higher-order inspection gives evidence that refinement is wasted effort; this needs exact data for the obstacle and source term
 
-      refinemarkedelements():  a method which calls PETSc for skeleton-based-refinement (SBR)
+      refinesbr2D():  a method which calls PETSc for skeleton-based-refinement (SBR)
 
       adaptaveragedmetric():  a method which does metric-based mesh adaptation by combining an anisotropic metric with a free-boundary targeted isotropic metric
 
@@ -73,7 +73,7 @@ class VIAMR(OptionsManager, AVMMixin):
       imark, _, _ = amr.brinactivemark(uh, lb, res_ufl, Z=Z)   # weighted estimator (BV00) in inactive set
       mark, _, _, _, _ = amr.nsvmark(uh, lb, g, f_ufl, g_ufl)  # method from NSV03
       mark = amr.unionmarks(fbmark, imark)                     # mark if either is marked
-      rmesh = amr.refinemarkedelements(mesh, mark)             # PETSc DMPlexTransform for skeleton-based refinement
+      rmesh = amr.refinesbr2D(mesh, mark)                       # PETSc DMPlexTransform for skeleton-based refinement
       amesh = amr.adaptaveragedmetric(mesh, uh, lb)            # animate for metric-based adaptation
 
     Regarding the arguments: uh is a computed VI solution, lb is the lower-bound obstacle, res_ufl is a UFL expression for the residual (applicable in the inactive set), Z is a weighting field (see examples), f_ufl is the source term in Poisson equation, and g_ufl are the boundary values.
@@ -85,10 +85,10 @@ class VIAMR(OptionsManager, AVMMixin):
     Known limitations:
       * Functions which do not work in parallel: 1. jaccard(..., submesh=False).
       * Functions whose results depend on number of processes: 1. vcdmark(), 2. adaptaveragedmetric().
-      * Functions which only work for 2D meshs: 1. freeboundarygraph2D(), 2. hausdorff2D(), 3. refinemarkedelements()
-      * Functions which only work for 2D triangular meshes: 1. refinemarkedelements()
+      * Functions which only work for 2D meshs: 1. freeboundarygraph2D(), 2. hausdorff2D(), 3. refinesbr2D()
+      * Functions which only work for 2D triangular meshes: 1. refinesbr2D()
 
-    Regarding the last limitation, see the doc string of refinemarkedelements(), and compare to refine_marked_elements() from NetGen/ngspetsc.
+    Regarding the last limitation, see the doc string of refinesbr2D(), and compare to refine_marked_elements() from NetGen/ngspetsc.
     """
 
     PARALLEL_OVERLAP = {
@@ -824,7 +824,7 @@ class VIAMR(OptionsManager, AVMMixin):
 
     def _dmplextransform(self, mesh, transform_type, indicator=None):
         """Apply a PETSc DMPlexTransform of the given type to mesh's topology_dm,
-        returning the resulting Firedrake mesh.  Shared by refinemarkedelements()
+        returning the resulting Firedrake mesh.  Shared by refinesbr2D()
         (transform_type "refine_sbr" or "refine_regular") and _filtermesh()
         (transform_type "transform_filter").
 
@@ -901,7 +901,7 @@ class VIAMR(OptionsManager, AVMMixin):
 
         return newmesh
 
-    def refinemarkedelements(self, mesh, indicator):
+    def refinesbr2D(self, mesh, indicator):
         """Call PETSc DMPlex routines to do skeleton-based refinement (SBR; Plaza & Carey, 2000).
         This version works in parallel, but only in 2D.
 
@@ -913,6 +913,14 @@ class VIAMR(OptionsManager, AVMMixin):
 
         Compare this method to Netgen's refine_marked_elements() which also does SBR, in 2D or 3D,
         but which does not apply to Firedrake-native meshes.
+
+        Performance note: wall time scales with the *output* mesh size, not with
+        how few cells are marked -- most of the cost is in reconstructing a new
+        Firedrake Mesh (spaces, sections, halos) from the adapted DMPlex, which
+        happens regardless of marked fraction.  It also peaks at intermediate
+        (~50%) marked fractions rather than at 100%, from the extra conformity
+        handling needed at marked/unmarked boundaries.  So marking sparsely does
+        not buy a proportionally cheap call.
 
         Parameters
         ----------

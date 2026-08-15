@@ -191,7 +191,7 @@ for i in range(levels + 1):
 
     # actually refine if we will solve on next mesh
     if i < levels:
-        mesh = amr.refinemarkedelements(mesh, mark)
+        mesh = amr.refinesbr2D(mesh, mark)
 
 # generate Paraview-readable file
 outfile = "result_porous.pvd"

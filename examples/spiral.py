@@ -119,7 +119,7 @@ for amrtype in typelist:
                 dualtol=dualtol,
             )
 
-        mesh = amr.refinemarkedelements(mesh, mark)
+        mesh = amr.refinesbr2D(mesh, mark)
         meshHist.append(mesh)
 
     outfile = "result_spiral_" + amrtype + ".pvd"

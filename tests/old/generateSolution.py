@@ -49,7 +49,7 @@ for i in range(args.refinements):
 
     if i < args.refinements - 1:
         PETSc.Sys.Print("refining")
-        mesh = z.refinemarkedelements(mesh, mark)
+        mesh = z.refinesbr2D(mesh, mark)
         PETSc.Sys.Print("refined")
 
 if args.refinements > 0:

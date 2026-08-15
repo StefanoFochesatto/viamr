@@ -157,7 +157,7 @@ for primal in primals:
 
         wold = w
         if i < levels:
-            mesh = amr.refinemarkedelements(mesh, mark)
+            mesh = amr.refinesbr2D(mesh, mark)
 
     results[primal] = (dofs, uerrH1s, HerrL2s, drmaxes)
     effs[primal] = (dofs, eff_vals)

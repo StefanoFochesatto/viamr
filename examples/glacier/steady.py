@@ -265,7 +265,7 @@ for i in range(args.refine + 1):
     # refine (when proceeding to next mesh)
     if i < args.refine:
         pprint(f"  refining" + (" uniformly" if uni else "") + " ...")
-        mesh = amr.refinemarkedelements(mesh, "uniform" if uni else mark)
+        mesh = amr.refinesbr2D(mesh, "uniform" if uni else mark)
 
 if args.opvdsub:  # note boxind gets written into -opvd file
     x, y = SpatialCoordinate(mesh)

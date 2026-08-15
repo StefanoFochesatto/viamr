@@ -127,7 +127,7 @@ for i in range(levels + 1):
     residual = -div(grad(u)) - fsource
     imark, _, _ = amr.brinactivemark(u, lb, residual)
     mark = amr.unionmarks(mark, imark)
-    mesh = amr.refinemarkedelements(mesh, mark)
+    mesh = amr.refinesbr2D(mesh, mark)
     meshhierarchy.append(mesh)
 
 print(f"done ... writing solution u(x,y) and f(x,y) to {outfile} ...")

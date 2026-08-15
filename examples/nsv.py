@@ -159,7 +159,7 @@ for method in methods:
 
         # get next mesh by refinement
         if d == 2:
-            mesh = amr.refinemarkedelements(mesh, mark)  # PETSc DM refinement
+            mesh = amr.refinesbr2D(mesh, mark)  # PETSc DM refinement
         else:
             mesh = mesh.refine_marked_elements(mark)  # Netgen refinement
 

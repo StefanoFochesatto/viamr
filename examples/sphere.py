@@ -337,7 +337,7 @@ for amrtype in refinetypes:
             print(f"  eff_{amrtype.upper()} (sup norm) = {eff_nsv:.3f}")
             eff_dofs.append(Nv)
             eff_vals.append(eff_nsv)
-            mesh = amr.refinemarkedelements(mesh, mark)
+            mesh = amr.refinesbr2D(mesh, mark)
         else:
             mark = amr.udomark(uh, lb, n=1)
             residual = -div(grad(uh))
@@ -353,7 +353,7 @@ for amrtype in refinetypes:
             print(f"  eff_BR (inactive-set, energy norm) = {eff_br:.3f}")
             eff_dofs.append(Nv)
             eff_vals.append(eff_br)
-            mesh = amr.refinemarkedelements(mesh, mark)
+            mesh = amr.refinesbr2D(mesh, mark)
         if amrtype != "uni":
             # true cost of a collective AMR step is bounded by the slowest rank
             refinetime = comm.allreduce(time.time() - start_time, op=MPI.MAX)

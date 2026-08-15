@@ -22,5 +22,5 @@ amr = VIAMR()
 mark = amr.udomark(uh, psih, n=1)
 VTKFile("mesh.pvd").write(uh, mark)
 
-refinedmesh = amr.refinemarkedelements(mesh, mark)
+refinedmesh = amr.refinesbr2D(mesh, mark)
 VTKFile("refinedmesh.pvd").write(refinedmesh)

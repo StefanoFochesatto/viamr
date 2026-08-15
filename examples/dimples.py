@@ -166,7 +166,7 @@ for amrtype in amrtypes:
             imark, _, _ = amr.brinactivemark(uh, lb, residual, theta=thetaBR, method=methodBR)
             mark = amr.unionmarks(fbmark, imark)
 
-        mesh = amr.refinemarkedelements(mesh, mark)
+        mesh = amr.refinesbr2D(mesh, mark)
 
     # write output files
     outfile = f"result_dimples_{amrtype}.pvd"

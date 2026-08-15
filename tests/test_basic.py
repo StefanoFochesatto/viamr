@@ -163,7 +163,7 @@ def test_jaccard_submesh_uniform():
     _, DG0 = amr.spaces(mesh)
     x, _ = SpatialCoordinate(mesh)
     mark = Function(DG0).interpolate(conditional(x < 0.5, 1.0, 0.0))
-    rmesh = amr.refinemarkedelements(mesh, "uniform")
+    rmesh = amr.refinesbr2D(mesh, "uniform")
     rx, _ = SpatialCoordinate(mesh)
     rmark = Function(DG0).interpolate(conditional(x < 0.7, 1.0, 0.0))
     assert amr.jaccard(mark, rmark, submesh=True) == amr.jaccard(mark, rmark)
