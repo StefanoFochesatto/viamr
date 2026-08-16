@@ -1,16 +1,14 @@
 # Solve the classical obstacle problem from Graeser & Kornhuber (2009) which
 # generates a spiral-shaped coincidence (active) set.
-#
-# This example generates two .pvd files, result_spiral_{udo,nsv}.pvd.
+# This example generates 3 .pvd files, result_spiral_{udobr,vcdbr,nsv}.pvd.
 # Notes:
 #   1) For simplicity we just use an initial Firedrake mesh, so AVM is not applied.
-#   2) Because of thin active set, Jaccard similarity is zero until a few levels in.
+#   2) Because of thin and highly-nontrivial active set, Jaccard similarity
+#      is zero until a few levels in.
 
 m0 = 10  # initial mesh is m0 x m0
 targetnodes = 50000  # stop on first mesh to reach this many nodes
-maxlevels = 12  # backstop
-useVCD = False  # add VCD+BR results if this is True
-dualtol = 1.0e-6  # used in NSV
+maxlevels = 12  # backstop the targetnodes
 
 from firedrake import *
 from firedrake.petsc import PETSc
@@ -54,16 +52,14 @@ sp = {
     "snes_converged_reason": None,
 }
 
-if useVCD:
-    typelist = ["udobr", "vcdbr", "nsv"]
-else:
-    typelist = ["udobr", "nsv"]
+typelist = ["udobr", "vcdbr", "nsv"]
 
 for amrtype in typelist:
+    print(f"solving spiral problem using {amrtype.upper()} ...")
     meshHist = [mesh0]
 
     for i in range(maxlevels + 1):
-        print(f"solving spiral problem using {amrtype.upper()} on mesh {i} ...")
+        print(f"mesh {i}:")
         mesh = meshHist[i]
         V = FunctionSpace(mesh, "CG", 1)
         gbdry = Constant(0.0)
@@ -116,7 +112,7 @@ for amrtype in typelist:
                 Constant(0.0),
                 Constant(0.0),
                 method="total",
-                dualtol=dualtol,
+                dualtol=1.0e-6,
             )
 
         mesh = amr.refinesbr2D(mesh, mark)
@@ -131,13 +127,14 @@ for amrtype in typelist:
         residual = -div(grad(uh))
         imark, _, _ = amr.brinactivemark(uh, lb, residual, method="total")
         if amrtype == "udobr":
-            mark = amr.udomark(uh, lb, n=1)
+            fbmark = amr.udomark(uh, lb, n=1)
         elif amrtype == "vcdbr":
-            mark = amr.vcdmark(uh, lb, bracket=[0.1, 0.9])
-        mark = amr.unionmarks(mark, imark)
+            fbmark = amr.vcdmark(uh, lb, bracket=[0.1, 0.9])
+        mark = amr.unionmarks(fbmark, imark)
         imark.rename("imark (BR)")
+        fbmark.rename(f"fbmark ({amrtype})")
         mark.rename("mark")
-        fields += [mark, imark]
+        fields += [mark, fbmark, imark]
     else:
         # for output file, compute fields on final mesh
         (mark, etainf, sigmah, _, etad) = amr.nsvmark(
@@ -147,11 +144,9 @@ for amrtype in typelist:
             Constant(0.0),
             Constant(0.0),
             method="total",
-            dualtol=dualtol,
+            dualtol=1.0e-6,
         )
         mark.rename("mark")
-        lnsigmah = Function(V, name="ln(sigma_h)").interpolate(ln(sigmah + dualtol))
-        lnetainf = Function(V, name="ln(eta_inf)").interpolate(ln(etainf))
-        fields += [mark, sigmah, lnsigmah, etainf, lnetainf, etad]
+        fields += [mark, sigmah, etainf, etad]
     VTKFile(outfile).write(*fields)
     print("")
