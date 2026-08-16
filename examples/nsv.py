@@ -235,6 +235,6 @@ if mesh.comm.rank == 0:
     plt.legend()
     plt.grid(True)
     plt.xlabel("DOFs")
-    plt.ylabel("effectivity index")
-    plt.title(f"{d}D NSV03 example: estimator/true-error effectivity index vs DOFs")
+    plt.ylabel("effectivity ratio (estimator / true-error)")
+    plt.title("effectivity index vs DOFs")
     plt.savefig(efffile)

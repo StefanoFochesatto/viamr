@@ -92,7 +92,7 @@ mesh = RectangleMesh(
     distribution_parameters=VIAMR.PARALLEL_OVERLAP,
 )
 amr = VIAMR()
-dof, errL2, errH1semi, errqn, hausdorff = [], [], [], [], []  # for convergence figure
+dof, errL2, errH1semi, errqn, hausdorff, eff = [], [], [], [], [], []  # for convergence figures
 for i in range(levels + 1):
     # initialize on this mesh
     V = FunctionSpace(mesh, "CG", 1)
@@ -152,23 +152,17 @@ for i in range(levels + 1):
     tmp = assemble(Zqn * dus * dx(degree=6)) ** (1 / 2)
     errqn.append(float(tmp))
 
-    # active set agreement by jaccard
-    neweactive = amr.elemactive(uh, lb)
-    if i > 0:
-        jac = amr.jaccard(neweactive, eactive, submesh=True)
-    eactive = neweactive
-
     # free-boundary Hausdorff distance vs exact; hausdorff2D() returns None
     # for an empty free-boundary edge set (e.g. a coarse initial mesh)
     uexact = Function(V, name="u_exact").interpolate(uUFL)
     _, fbexact = amr.freeboundarygraph2D(uexact, lb)
     _, fb = amr.freeboundarygraph2D(uh, lb)
     tmp = amr.hausdorff2D(fbexact, fb)
-    hausstr = f"{tmp:.5f}" if tmp is not None else "n/a"
+    hausstr = f"{tmp:.3e}" if tmp is not None else "n/a"
     hausdorff.append(tmp if tmp is not None else np.nan)  # nan plots as a gap
 
-    # mark and refine by UDO+BR; tot_eta from this is used in reported effectivity index
-    # note: regularize by eps_final, not bare abs(uh), because div()
+    # mark and refine by UDO+BV00; tot_eta from this is used in reported effectivity index
+    # note: regularize by eps_final because div()
     # differentiates symbolically, producing gamma-2 as power; for gamma<2 that is
     # negative and uh==0 throughout the active set, giving 0**(negative) = inf/nan
     Zunreg = abs(uh + eps_final) ** (gamma - 1.0)
@@ -176,14 +170,13 @@ for i in range(levels + 1):
     if not useweightedBR:
         Zqn = None
     imark, eta, tot_eta = amr.brinactivemark(uh, Constant(0.0), res, alpha=Zqn, theta=0.5, method="total")
-    eff = tot_eta / (errqn[i] if useweightedBR else errH1semi[i])
     fbmark = amr.udomark(uh, lb, n=1)
     mark = amr.unionmarks(fbmark, imark)
 
     # report errors, effectivity index, Jaccard agreement
+    eff.append(tot_eta / errqn[i])  # effectivity index vs quasi-norm error
     print(f"  ||u-u_h||_L2={errL2[i]:.3e};  |u-u_h|_H1={errH1semi[i]:.3e};  |u-u_h|_qn={errqn[i]:.3e}")
-    print(f"  eff={eff:.2f}" + (f";  Jaccard({i-1},{i})={100*jac:.2f}%" if i > 0 else ""))
-    print(f"  hausdorff2D(Gamma_u, Gamma_uh) = {hausstr}")
+    print(f"  eff_qn={eff[i]:.2f};  hausdorff2D(Gamma_u, Gamma_uh) = {hausstr}")
 
     # actually refine if we will solve on next mesh
     if i < levels:
@@ -258,3 +251,19 @@ if mesh.comm.rank == 0:
     plt.ylabel("hausdorff2D(Gamma_u, Gamma_uh)")
     plt.title(f"free-boundary Hausdorff distance")
     plt.savefig(hausfile)
+
+    # effectivity index = estimator / true error, in the quasi-norm the
+    # weighted BV00 estimator targets; as in nsv.py, use a linear
+    # y-axis with a semilogx x-axis and a horizontal reference at eff=1
+    efffile = "porous_effectivity.png"
+    print(f"generating effectivity figure {efffile} ...")
+    eff_a = np.array(eff)
+    plt.figure()
+    plt.semilogx(dof_a, eff_a, "g^", label="BV00 in quasi-norm")
+    plt.axhline(1.0, color="k", linestyle=":", label="ideal eff=1")
+    plt.legend()
+    plt.grid(True)
+    plt.xlabel("DOFs")
+    plt.ylabel("effectivity ratio (estimator / true-error)")
+    plt.title("effectivity index vs DOFs")
+    plt.savefig(efffile)
