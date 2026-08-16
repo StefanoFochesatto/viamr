@@ -1,12 +1,12 @@
 # Solve a porous-media nonlinear obstacle problem, with strong form
 #   - div(u^{gamma-1} grad(u)) = f,  u >= 0
-# The domain is a square, and u=g on boundary.  The source term f(r)
-# is a negative constant in a center disc, and linear outside of that.
-# Defaults to gamma=2.  The exact solution is known for any gamma.
+# The domain is a square, and u=g on its boundary.  The source term
+# f = f(r) is a negative constant in a center disc, and linear outside
+# of that.  Defaults to gamma=2.  The exact solution is known for any gamma.
 #
 # The solver must handle the degeneracy of the coefficient at
 # the free boundary.  Thus the coefficient is regularized:
-#   F(u)[v] = (u + eps)^{gamma-1} grad(u) . grad (v) - f * v
+#   F(u)[v] = \int_\Omega (u + eps)^{gamma-1} grad(u) . grad (v) - f * v dx
 #
 # For a given mesh, an eps-continuation loop is used: eps is stepped down
 # geometrically from a mild eps_start to a small eps_final, re-solving
@@ -18,9 +18,9 @@
 # and simple backtracking line search is used for the Newton solver.
 #
 # The AMR method is UDO+BV00.  That is, we use the (heuristic) weighted-norm
-# Bernardi & Verfurth (2000) version of the BR78 estimator.  We report the
-# weighted quasi-norm error.  Without the weighting, large BR inactive
-# set estimator (=eta) values occur near the free boundary.
+# Bernardi & Verfurth (2000; "BV00") version of the BR78 estimator.
+# We report the weighted quasi-norm error.  Without the weighting,
+# large BR inactive set estimator (=eta) values occur near the free boundary.
 #
 # We generate a .png convergence figure of the norms vs DOFs.  Because
 # the porous-media operator is degenerate, not uniformly elliptic like
@@ -40,9 +40,7 @@ from pyop2.mpi import MPI  # for MPI reduce in parallel
 # major parameters
 m0 = 6  # initial mesh is m0 x m0
 levels = 7  # number of AMR levels; converges to 9, at least, for gamma=2
-gamma = 2.0  # solves porous-media as VI:  - div(u^{gamma-1} grad(u)) = f
-             # note that exact solution has infinite H^1 norm if gamma >= 4
-a, b = 1.2, 1.0  # parameters in building exact solution
+gamma = 2.0  # note that exact solution has infinite H^1 norm if gamma >= 4
 useweightedBR = True  # apply brinactivemark() using BV00 weighting
 
 # eps-continuation: on each mesh, step eps down geometrically, by _shrink, from
@@ -70,21 +68,19 @@ sp = {
 }
 
 
-def get_uexact_ufl(x, y):
+def get_exact_ufl(x, y):
     """Exact radial solution to  - Div(grad(gamma^-1 u^gamma)) = f.
-    Note that this exact solution has infinite H^1 norm at gamma>=4."""
+    Returns u, f.  This solution has infinite H^1 norm at gamma>=4."""
+    a, b = 1.2, 1.0  # parameters in building exact solution
     r = sqrt(x * x + y * y)
+    f = conditional(r <= 1.0, -b, -b + a * (r - 1.0))
     tmp = ((a + b) / 2.0) * (0.5 * (r ** 2 - 1.0) - ln(r))
     tmp -= (a / 3.0) * ((r ** 3 - 1.0) / 3 - ln(r))
-    return conditional(r <= 1.0, 0.0, (gamma * tmp) ** (1.0 / gamma))
+    u = conditional(r <= 1.0, 0.0, (gamma * tmp) ** (1.0 / gamma))
+    return u, f
 
 
-def maxeta(mesh, eta):  # maximum of BR estimator, even in parallel
-    mine = max(eta.dat.data_ro)
-    return float(eta.function_space().mesh().comm.allreduce(mine, op=MPI.MAX))
-
-
-print(f"solving gamma={gamma} porous-media obstacle problem using UDO+BV00 ...")
+print(f"solving gamma={gamma} porous-media obstacle problem using continuation and UDO+BV00 ...")
 mesh = RectangleMesh(
     m0,
     m0,
@@ -96,10 +92,11 @@ mesh = RectangleMesh(
     distribution_parameters=VIAMR.PARALLEL_OVERLAP,
 )
 amr = VIAMR()
-dofs, errL2s, errH1s, errqns, hausdorffs = [], [], [], [], []  # for convergence figure
+dof, errL2, errH1semi, errqn, hausdorff = [], [], [], [], []  # for convergence figure
 for i in range(levels + 1):
     # initialize on this mesh
     V = FunctionSpace(mesh, "CG", 1)
+    dof.append(V.dim())
     print(f"mesh {i}:")
     amr.meshreport(mesh)
 
@@ -112,8 +109,7 @@ for i in range(levels + 1):
 
     # radial source term which is constant then linear
     x, y = SpatialCoordinate(mesh)
-    r = sqrt(x * x + y * y)
-    fUFL = conditional(r <= 1.0, -b, -b + a * (r - 1.0))
+    uUFL, fUFL = get_exact_ufl(x, y)
     fsource = Function(V, name="f_source").interpolate(fUFL)
 
     # weak form for porous media, with epsilon regularization; epsC is
@@ -123,8 +119,7 @@ for i in range(levels + 1):
     Z = abs(uh + epsC) ** (gamma - 1.0)
     F = Z * inner(grad(uh), grad(v)) * dx - fsource * v * dx
 
-    # boundary condition u=g needs exact solution
-    uUFL = get_uexact_ufl(x, y)
+    # boundary condition u=g, from exact solution
     g = Function(V, name="g_bdry").interpolate(uUFL)
     bcs = DirichletBC(V, g, "on_boundary")
 
@@ -132,7 +127,7 @@ for i in range(levels + 1):
     # from eps_start to eps_final, warm-starting uh from the previous step
     prob = NonlinearVariationalProblem(F, uh, bcs)
     solver = NonlinearVariationalSolver(prob, solver_parameters=sp, options_prefix="s")
-    lb = Function(V, name="psi").interpolate(Constant(0.0))
+    lb = Function(V).interpolate(Constant(0.0))
     ub = Function(V).interpolate(Constant(PETSc.INFINITY))
     epsval = eps_start
     while True:
@@ -142,19 +137,20 @@ for i in range(levels + 1):
             break
         epsval = max(eps_final, epsval * eps_shrink)
 
-    # errors relative to exact; we re-implement errornorm() with fixed
-    # quadrature degree; also get weighted quasi-norm
-    errL2 = assemble(inner(uUFL - uh, uUFL - uh) * dx(degree=6)) ** (1 / 2)
+    # errors relative to exact; re-implement errornorm() with fixed
+    # quadrature degree
+    tmp = assemble(inner(uUFL - uh, uUFL - uh) * dx(degree=6)) ** (1 / 2)
+    errL2.append(float(tmp))
     dus = inner(grad(uUFL - uh), grad(uUFL - uh))
-    errH1 = assemble(dus * dx(degree=6)) ** (1 / 2)
+    tmp = assemble(dus * dx(degree=6)) ** (1 / 2)
+    errH1semi.append(float(tmp))
+
+    # quasi-norm error, with coefficient from numerical solution
     hT = CellDiameter(mesh)
     CQN = 1.0
-    Zqn = abs(uh + CQN * hT) ** (gamma - 1.0)  # well-behaved mesh-native version of Z
-    errqn = assemble(Zqn * dus * dx(degree=6)) ** (1 / 2)
-    dofs.append(V.dim())
-    errL2s.append(float(errL2))
-    errH1s.append(float(errH1))
-    errqns.append(float(errqn))
+    Zqn = abs(uh + CQN * hT) ** (gamma - 1.0)  # mesh-native version of Z in solver
+    tmp = assemble(Zqn * dus * dx(degree=6)) ** (1 / 2)
+    errqn.append(float(tmp))
 
     # active set agreement by jaccard
     neweactive = amr.elemactive(uh, lb)
@@ -167,9 +163,9 @@ for i in range(levels + 1):
     uexact = Function(V, name="u_exact").interpolate(uUFL)
     _, fbexact = amr.freeboundarygraph2D(uexact, lb)
     _, fb = amr.freeboundarygraph2D(uh, lb)
-    haus = amr.hausdorff2D(fbexact, fb)
-    hausstr = f"{haus:.5f}" if haus is not None else "n/a"
-    hausdorffs.append(haus if haus is not None else np.nan)  # nan plots as a gap
+    tmp = amr.hausdorff2D(fbexact, fb)
+    hausstr = f"{tmp:.5f}" if tmp is not None else "n/a"
+    hausdorff.append(tmp if tmp is not None else np.nan)  # nan plots as a gap
 
     # mark and refine by UDO+BR; tot_eta from this is used in reported effectivity index
     # note: regularize by eps_final, not bare abs(uh), because div()
@@ -180,12 +176,12 @@ for i in range(levels + 1):
     if not useweightedBR:
         Zqn = None
     imark, eta, tot_eta = amr.brinactivemark(uh, Constant(0.0), res, alpha=Zqn, theta=0.5, method="total")
-    eff = tot_eta / (errqn if useweightedBR else errH1)
+    eff = tot_eta / (errqn[i] if useweightedBR else errH1semi[i])
     fbmark = amr.udomark(uh, lb, n=1)
     mark = amr.unionmarks(fbmark, imark)
 
     # report errors, effectivity index, Jaccard agreement
-    print(f"  ||u-u_h||_L2={errL2:.3e};  |u-u_h|_H1={errH1:.3e};  |u-u_h|_qn={errqn:.3e}")
+    print(f"  ||u-u_h||_L2={errL2[i]:.3e};  |u-u_h|_H1={errH1semi[i]:.3e};  |u-u_h|_qn={errqn[i]:.3e}")
     print(f"  eff={eff:.2f}" + (f";  Jaccard({i-1},{i})={100*jac:.2f}%" if i > 0 else ""))
     print(f"  hausdorff2D(Gamma_u, Gamma_uh) = {hausstr}")
 
@@ -199,7 +195,7 @@ print(f"done ... writing solution to {outfile} ...")
 err = Function(V, name="uerr = u-u_exact").interpolate(uh - uUFL)
 imark.rename("inactive mark")
 fbmark.rename("free-boundary mark")
-mark.rename("UDO+BR mark")
+mark.rename("mark")
 eta.rename("eta " + "(BV00)" if useweightedBR else "(BR78)")
 fields = [uh, fsource, err, imark, fbmark, mark, eta]
 if mesh.comm.size > 1:
@@ -218,47 +214,47 @@ if mesh.comm.rank == 0:
     import matplotlib.pyplot as plt
 
     d = 2  # spatial dimension
-    dofs_a = np.array(dofs)
+    dof_a = np.array(dof)
 
-    figfile = "porous_convergence.png"
+    figfile = "porous_norms.png"
     print(f"generating convergence figure {figfile} ...")
     series = [
-        ("$L^2$", errL2s, "ko"),
-        ("$H^1$", errH1s, "bs"),
-        ("quasi-norm", errqns, "g^"),
+        ("$L^2$ norm", errL2, "ko"),
+        ("$H^1$ semi-norm", errH1semi, "bs"),
+        ("quasi-norm", errqn, "g^"),
     ]
     plt.figure()
     for label, vals, style in series:
         vals_a = np.array(vals)
-        rate = np.polyfit(np.log(dofs_a), np.log(vals_a), 1)[0]
-        plt.loglog(dofs_a, vals_a, style, label=f"{label} (rate={rate:.2f})")
-    y = dofs_a.astype(float) ** (-2.0 / d)
-    y *= errL2s[0] / y[0]  # anchor to first L^2 data point
-    plt.loglog(dofs_a, y, "k:", label="DOFs^(-2/d)")
+        rate = np.polyfit(np.log(dof_a), np.log(vals_a), 1)[0]
+        plt.loglog(dof_a, vals_a, style, label=f"{label} (rate={rate:.2f})")
+    y = dof_a.astype(float) ** (-2.0 / d)
+    y *= errL2[0] / y[0]  # anchor to first L^2 data point
+    plt.loglog(dof_a, y, "k:", label="DOFs^(-2/d)")
     plt.legend()
     plt.grid(True)
     plt.xlabel("DOFs")
     plt.ylabel("error norm")
-    plt.title(f"porous-media problem (gamma={gamma}): UDO+BV00 convergence")
+    plt.title(f"error norms $|u-u_h|_*$")
     plt.savefig(figfile)
 
     # Hausdorff distance is a geometric (not squared-error) quantity, so the
     # natural reference is mesh-resolution scaling h ~ DOFs^(-1/d), not the
     # L^2/H^1 rates above; as in sphere.py
-    hausfile = "porous_convergence_hausdorff.png"
+    hausfile = "porous_hausdorff.png"
     print(f"generating convergence figure {hausfile} ...")
-    haus_a = np.array(hausdorffs)
+    haus_a = np.array(hausdorff)
     valid = np.isfinite(haus_a) & (haus_a > 0)
     plt.figure()
     if np.any(valid):
-        plt.loglog(dofs_a, haus_a, "ko", label=f"Hausdorff distance")
+        plt.loglog(dof_a, haus_a, "ko", label=f"Hausdorff distance")
         anchor = np.argmax(valid)  # index of first valid entry
-        y = dofs_a.astype(float) ** (-1.0 / d)
+        y = dof_a.astype(float) ** (-1.0 / d)
         y = y * haus_a[anchor] / y[anchor]
-        plt.loglog(dofs_a, y, "k:", label="DOFs^(-1/d)")
+        plt.loglog(dof_a, y, "k:", label="DOFs^(-1/d)")
         plt.legend()
     plt.grid(True)
     plt.xlabel("DOFs")
     plt.ylabel("hausdorff2D(Gamma_u, Gamma_uh)")
-    plt.title(f"porous-media problem (gamma={gamma}): free-boundary Hausdorff distance")
+    plt.title(f"free-boundary Hausdorff distance")
     plt.savefig(hausfile)
