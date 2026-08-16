@@ -1,14 +1,16 @@
 # VIAMR
 
-This repository contains [Firedrake](https://www.firedrakeproject.org) algorithms for adaptive mesh refinement (AMR) for variational inequalities (VIs).  The constraint set must be defined by a lower- and upper-bound inequalities.
+This repository contains Python [Firedrake](https://www.firedrakeproject.org) algorithms for adaptive mesh refinement (AMR) and mesh adaptation for variational inequalities (VIs).  The constraint set for these problems must be defined by a lower- and upper-bound inequalities.
 
-In describing algorithms we use the language of _active_ and _inactive_ sets.  In an _active set_, also known as a _coincidence set_, one of the bound inequalities holds as an equality.  By contrast, in the _inactive set_ the constraints are strict and the solution satisfies a partial differential equation (PDE).  The primary goals of AMR in this context are to generate rapid convergence in solution norm, to generated accurate computed free boundaries, and to be able to measure location errors in free boundaries and active sets.
+In describing algorithms we use the language of _active_ and _inactive_ sets.  In an _active set_, also known as a _coincidence set_, one of the bound inequalities holds as an equality.  In the _inactive set_ the constraints are strict inequalities, so the solution satisfies a partial differential equation (PDE).
 
-The class `VIAMR`, defined in `viamr/viamr.py`, is the primary object in the library.  It bundles interchangeable strategies for deciding _where_ to refine: free-boundary-proximity heuristics, classical estimators applied only in inactive sets (residual estimators and gradient recovery), and a whole-domain estimator designed for VIs.  These methods produce DG0 indicators (markings), with $\{0,1\}$ values, which can be combined by unioning as desired.  Markings can be fed to one of two tag-and-refine mesh refinement methods: PETSc's skeleton-based-refinement transform or Netgen's mesh refinement methods.
+Our primary AMR goals in this context are to generate rapid convergence in solution norm, to generated accurate computed free boundaries, and to be able to measure geometrical errors in free boundaries and active sets.
 
-Metric-based re-meshing, i.e. mesh adaptation, using the [animate](https://github.com/mesh-adaptation/animate) is also supported.  This is a different class than "AMR" per se, but it seems to work well.
+Our library defines the class `VIAMR` in `viamr/viamr.py`.  It bundles 3 kinds of strategies for deciding _where_ to refine: free-boundary-proximity heuristics, classical residual/jump estimators applied only in inactive sets, and a whole-domain estimator designed for VIs.  These methods produce DG0 indicators (markings), with $\{0,1\}$ values, which can be combined by unioning if desired.  Markings can be fed to 2 tag-and-refine skeleton-based mesh refinement methods, [PETSc's](https://petsc.org/release/) (limited to 2D) or [Netgen's](https://ngsolve.org/).  All of these algorithms are parallel, with excellent weak scaling.
 
-As a [Firedrake](https://www.firedrakeproject.org) library, solution-norm error is a standard way to evaluate quality, but the library supports a diagnostic layer which measures active-set and free-boundary location accuracy (Jaccard distances and Hausdorff metrics).  Free-boundary accuracy is often a goal for computations using variational inequalities.
+Metric-based mesh adaptation, i.e. re-meshing, is also supported, via the [animate](https://github.com/mesh-adaptation/animate).
+
+Solution-norm error is a standard way to evaluate quality, but the library supports a diagnostic layer which measures active-set geometrical error (Jaccard distances) and free-boundary location accuracy (Hausdorff metric).  Free-boundary accuracy is often a goal for computations using variational inequalities.
 
 These codes extend S. Fochesatto (2024). _Adaptive mesh refinement for variational inequalities_, Master of Science project, UAF.  They are the subject of a paper in progress.
 
@@ -22,13 +24,13 @@ Now activate the virtual environment (venv). Typically something like:
 source ~/venv-firedrake/bin/activate
 ```
 
-Now pip install [shapely](https://pypi.org/project/shapely/), siphash24, vtk, and [ngspetsc](https://github.com/NGSolve/ngsPETSc) in the venv:
+Now pip install [shapely](https://pypi.org/project/shapely/), vtk, and [ngspetsc](https://github.com/NGSolve/ngsPETSc) in the venv:
 
 ```
-pip install vtk ngspetsc shapely siphash24
+pip install vtk ngspetsc shapely
 ```
 
-To use metric-based refinement, the [animate](https://github.com/mesh-adaptation/animate) adaptive mesh refinement library is used.  To install this follow the instructions at the [meshadaptation installation wiki page](https://github.com/mesh-adaptation/docs/wiki/Installation-Instructions).
+To use metric-based mesh adaptation, the [animate](https://github.com/mesh-adaptation/animate) library is used.  To install this follow the instructions at the [installation wiki page](https://github.com/mesh-adaptation/docs/wiki/Installation-Instructions).
 
 ## Installation
 

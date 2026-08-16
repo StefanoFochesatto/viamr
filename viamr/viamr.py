@@ -678,9 +678,11 @@ class VIAMR(OptionsManager, AVMMixin):
         etadratio=1.0,
         safe=None,
     ):
-        """Compute marking on entire domain according to the local 'practical estimator' from NSV03:
-            Nochetto, R. H., Siebert, K. G., & Veeser, A. (2003). Pointwise a posteriori error control for elliptic obstacle problems. Numerische Mathematik, 95(1), 163-195.
-        This function applies only to the classical obstacle problem, with the Laplacian as the operator.
+        """For classical obstacle problems, with the Laplacian as the operator, compute marking on entire domain according to the local 'practical estimator' from NSV03:
+
+            Nochetto, R. H., Siebert, K. G., & Veeser, A. (2003). Pointwise
+            a posteriori error control for elliptic obstacle problems.
+            Numerische Mathematik, 95(1), 163-195.
 
         The main formula (7.1) in NSV03 is
             eta_infty =
