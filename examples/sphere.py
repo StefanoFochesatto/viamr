@@ -16,19 +16,17 @@
 # We generate .pvd files: result_sphere_{udobr,nsv,nsvsafe,uni,avm}.pvd
 #
 # The exact solution is known and so we can compute norm convergence rates.
-# We generate eight .png convergence figures comparing all methods:
-#   sphere_convergence_unorm.png       ||u_exact - u_h||_2 vs DOFs
-#   sphere_convergence_reconstructed.png   ||u_exact - tilde u_h||_2 vs DOFs
-#   sphere_convergence_h1.png          |u_exact - u_h|_{H^1 seminorm} vs DOFs
-#   sphere_convergence_supnorm.png     ||u_exact - u_h||_infty vs DOFs, for all methods
-#   sphere_convergence_supnorm_reconstructed.png
-#                                       ||u_exact - tilde u_h||_infty vs DOFs, for all methods
-#   sphere_convergence_hausdorff.png   hausdorff2D(Gamma_u, Gamma_uh) vs DOFs
-#   sphere_convergence_amrtime.png     cumulative AMR (marking + refinement)
-#                                       wall time vs reconstructed-uh norm,
-#                                       for levels with at least 1s of AMR time
-#   sphere_effectivity.png             estimator/true-error effectivity index
-#                                       vs DOFs, for UDOBR, NSV, and NSVSAFE only
+# We generate ten .png convergence figures comparing all methods:
+#   sphere_unorm.png                  ||u_exact - u_h||_2 vs DOFs
+#   sphere_unorm_reconstructed.png    ||u_exact - tilde u_h||_2 vs DOFs
+#   sphere_h1.png                     |u_exact - u_h|_{H^1 seminorm} vs DOFs
+#   sphere_supnorm.png                ||u_exact - u_h||_infty vs DOFs, for all methods
+#   sphere_supnorm_reconstructed.png  ||u_exact - tilde u_h||_infty vs DOFs, for all methods
+#   sphere_hausdorff.png              hausdorff2D(Gamma_u, Gamma_uh) vs DOFs
+#   sphere_amrtime.png                cumulative AMR wall time vs norm
+#   sphere_marktime.png               same, but only marking / metric-building cost
+#   sphere_meshbuildtime.png          same, but mesh-construction cost (PETSc or Pragmatic)
+#   sphere_effectivity.png            estimator/true-error effectivity index vs DOFs
 #
 # Optionally we generate .csv files for norm and Jaccard convergence rates.
 
@@ -189,8 +187,8 @@ sp = {
 }
 
 results = {}  # results[amrtype] = (dofs, errnorm, errnorm_recons, hausdorffs, errnorm_h1s,
-# errnorm_Linfs, errnorm_Linf_recons, amrtimes), for the seven convergence figures
-# generated at the end
+# errnorm_Linfs, errnorm_Linf_recons, amrtimes, marktimes, meshbuildtimes), for the
+# nine convergence/timing figures generated at the end
 effs = {}  # effs[amrtype] = (eff_dofs, eff_vals), for udobr/nsv/nsvsafe only; see
 # the effectivity-index figure generated at the end
 
@@ -203,6 +201,10 @@ for amrtype in refinetypes:
     )
     amrtimes = []  # cumulative wall time spent in marking + mesh refinement
     cumamrtime = 0.0
+    marktimes = []  # cumulative wall time spent in VIAMR's own marking/metric-building
+    cummarktime = 0.0
+    meshbuildtimes = []  # cumulative wall time spent in the external mesh-construction backend
+    cummeshbuildtime = 0.0
     eff_dofs, eff_vals = [], []  # effectivity index vs DOFs; udobr/nsv/nsvsafe only
 
     # udomark() needs this overlap to give correct results in parallel
@@ -231,7 +233,8 @@ for amrtype in refinetypes:
     if writecsvs:
         csvfile = open(f"sphere_{amrtype}.csv", "w")
         csvfile.write(
-            "I,NV,NE,HMIN,HMAX,ENORM,ENORMRECON,ENORMH1,JACCARD,HAUSDORFF,REFINETIME\n"
+            "I,NV,NE,HMIN,HMAX,ENORM,ENORMRECON,ENORMH1,JACCARD,HAUSDORFF,"
+            "REFINETIME,MARKTIME,MESHBUILDTIME\n"
         )
 
     for i in range(maxlevels + 1):
@@ -243,6 +246,8 @@ for amrtype in refinetypes:
         if i == 0:
             uh = Function(V, name="u_h")
             refinetime = 0.0
+            marktime = 0.0
+            meshbuildtime = 0.0
         else:
             # initialize by cross-mesh interpolation to fine mesh
             uUFL = conditional(uh < lb, lb, uh)  # use old data
@@ -296,17 +301,32 @@ for amrtype in refinetypes:
         errnorm_Linfs.append(errnorm_Linf)
         errnorm_Linf_recons.append(errnorm_Linf_recon)
         # refinetime is the AMR cost (marking + refinement) that produced THIS
-        # mesh from the previous one (0.0 at i=0); accumulating it here
+        # mesh from the previous one (0.0 at i=0); accumulating it here.
+        # marktime/meshbuildtime split it into VIAMR-controlled cost (marking,
+        # or AVM's metric-building) vs the external backend's mesh-construction
+        # cost (PETSc SBR / Pragmatic).  marktime + meshbuildtime <= refinetime;
+        # see the AMR-step comment below for why they need not sum exactly.
         cumamrtime += refinetime
         amrtimes.append(cumamrtime)
+        cummarktime += marktime
+        marktimes.append(cummarktime)
+        cummeshbuildtime += meshbuildtime
+        meshbuildtimes.append(cummeshbuildtime)
         if writecsvs:
             csvfile.write(
-                f"{i},{Nv},{Ne},{hmin:.5f},{hmax:.5f},{errnorm:.3e},{errnorm_recon:.3e},{errnorm_h1:.3e},{jaccard:.5f},{hausstr},{refinetime:.3e}\n"
+                f"{i},{Nv},{Ne},{hmin:.5f},{hmax:.5f},{errnorm:.3e},{errnorm_recon:.3e},{errnorm_h1:.3e},{jaccard:.5f},{hausstr},"
+                f"{refinetime:.3e},{marktime:.3e},{meshbuildtime:.3e}\n"
             )
         if Ne > targetelements:
             break
 
-        # do an AMR level
+        # do an AMR level.  Each non-uni branch times two phases separately:
+        #   "mark" = whatever VIAMR itself computes (marking fields, or AVM's
+        #            metric construction including vcdmark())
+        #   "meshbuild" = the external backend call that actually builds the
+        #            new mesh (PETSc SBR via refinesbr2D(), or Pragmatic via
+        #            animate.adapt()) -- see refinesbr2D()'s docstring for why
+        #            that cost doesn't scale down with a sparser marking.
         comm.Barrier()  # sync ranks before timing a collective operation
         start_time = time.time()
         if amrtype == "uni":
@@ -315,8 +335,18 @@ for amrtype in refinetypes:
             amr.setmetricparameters(
                 target_complexity=targetsAVM[i + 1], h_min=1.0e-4, h_max=1.0
             )
-            mesh = amr.adaptaveragedmetric(mesh, uh, lb)
+            t_mark0 = time.time()
+            # buildaveragedmetric() only builds the (averaged) metric; it never
+            # calls animate.adapt() itself, so we call that separately here and
+            # time each step on its own
+            metric = amr.buildaveragedmetric(mesh, uh, lb)
+            t_mark1 = time.time()
+            mesh = animate.adapt(mesh, metric)
+            t_meshbuild1 = time.time()
+            marktime_local = t_mark1 - t_mark0
+            meshbuildtime_local = t_meshbuild1 - t_mark1
         elif amrtype in ("nsv", "nsvsafe"):
+            t_mark0 = time.time()
             g = Function(V).interpolate(g_ufl)
             safe = None
             if amrtype == "nsvsafe":
@@ -328,6 +358,7 @@ for amrtype in refinetypes:
             (mark, etainf, _, _, _) = amr.nsvmark(
                 uh, lb, g, Constant(0.0), g_ufl, safe=safe
             )
+            t_mark1 = time.time()
             # effectivity index vs NSV03's own target norm: max_T eta_inf(T)
             # is the whole-domain (not inactive-set-restricted) quantity its
             # pointwise theory bounds ||u-u_h||_infty by, in contrast to
@@ -338,11 +369,16 @@ for amrtype in refinetypes:
             eff_dofs.append(Nv)
             eff_vals.append(eff_nsv)
             mesh = amr.refinesbr2D(mesh, mark)
+            t_meshbuild1 = time.time()
+            marktime_local = t_mark1 - t_mark0
+            meshbuildtime_local = t_meshbuild1 - t_mark1
         else:
+            t_mark0 = time.time()
             mark = amr.udomark(uh, lb, n=1)
             residual = -div(grad(uh))
             (imark, _, tot_eta) = amr.brinactivemark(uh, lb, residual, theta=thetaBR, method=methodBR)
             mark = amr.unionmarks(mark, imark)
+            t_mark1 = time.time()
             # effectivity index vs the SAME inactive set brinactivemark()
             # restricts its estimator to; matches the H^1 seminorm BR78's
             # unweighted estimator targets (see errornorm_H1semi_deg20)
@@ -354,9 +390,22 @@ for amrtype in refinetypes:
             eff_dofs.append(Nv)
             eff_vals.append(eff_br)
             mesh = amr.refinesbr2D(mesh, mark)
+            t_meshbuild1 = time.time()
+            marktime_local = t_mark1 - t_mark0
+            meshbuildtime_local = t_meshbuild1 - t_mark1
         if amrtype != "uni":
-            # true cost of a collective AMR step is bounded by the slowest rank
+            # true cost of a collective AMR step is bounded by the slowest rank.
+            # marktime + meshbuildtime is generally < refinetime: refinetime
+            # times the whole step, but the NSV/NSVSAFE/UDOBR branches also do
+            # effectivity-index bookkeeping (scalarrange(), assemble()) between
+            # the mark and meshbuild calls, which isn't counted in either timer
+            # (it's diagnostic-only, not part of what actually produces the
+            # refined mesh) -- plus the usual load-imbalance slop from
+            # allreducing marktime/meshbuildtime separately from refinetime.
             refinetime = comm.allreduce(time.time() - start_time, op=MPI.MAX)
+            marktime = comm.allreduce(marktime_local, op=MPI.MAX)
+            meshbuildtime = comm.allreduce(meshbuildtime_local, op=MPI.MAX)
+            print(f"  AMR step: mark {marktime:.3f}s + meshbuild {meshbuildtime:.3f}s = {refinetime:.3f}s")
         meshHist.append(mesh)
 
     if writecsvs:
@@ -364,7 +413,7 @@ for amrtype in refinetypes:
 
     results[amrtype] = (
         dofs, errnorms, errnorm_recons, hausdorffs, errnorm_h1s, errnorm_Linfs,
-        errnorm_Linf_recons, amrtimes,
+        errnorm_Linf_recons, amrtimes, marktimes, meshbuildtimes,
     )
     effs[amrtype] = (eff_dofs, eff_vals)
 
@@ -437,16 +486,16 @@ if mesh.comm.rank == 0:
     _convergence_plot(
         1,
         "||u_exact - u_h||_2",
-        "sphere problem: solution norm vs DOFs",
-        "sphere_convergence_unorm.png",
+        "solution norm vs DOFs",
+        "sphere_unorm.png",
         -2.0 / d,
         "DOFs^(-2/d)",
     )
     _convergence_plot(
         2,
         "||u_exact - tilde u_h||_2",
-        "sphere problem: reconstructed-uh norm vs DOFs",
-        "sphere_convergence_reconstructed.png",
+        "reconstructed-uh norm vs DOFs",
+        "sphere_unorm_reconstructed.png",
         -2.0 / d,
         "DOFs^(-2/d)",
     )
@@ -456,8 +505,8 @@ if mesh.comm.rank == 0:
     _convergence_plot(
         3,
         "hausdorff2D(Gamma_u, Gamma_uh)",
-        "sphere problem: free-boundary Hausdorff distance vs DOFs",
-        "sphere_convergence_hausdorff.png",
+        "free-boundary Hausdorff distance vs DOFs",
+        "sphere_hausdorff.png",
         -1.0 / d,
         "DOFs^(-1/d)",
     )
@@ -466,8 +515,8 @@ if mesh.comm.rank == 0:
     _convergence_plot(
         4,
         "|u_exact - u_h|_{H^1}",
-        "sphere problem: H^1 seminorm error vs DOFs",
-        "sphere_convergence_h1.png",
+        "H^1 seminorm error vs DOFs",
+        "sphere_h1.png",
         -1.0 / d,
         "DOFs^(-1/d)",
     )
@@ -479,8 +528,8 @@ if mesh.comm.rank == 0:
     _convergence_plot(
         5,
         "||u_exact - u_h||_infty",
-        "sphere problem: sup-norm error vs DOFs",
-        "sphere_convergence_supnorm.png",
+        "sup-norm error vs DOFs",
+        "sphere_supnorm.png",
         -2.0 / d,
         "DOFs^(-2/d)",
     )
@@ -492,30 +541,60 @@ if mesh.comm.rank == 0:
     _convergence_plot(
         6,
         "||u_exact - tilde u_h||_infty",
-        "sphere problem: reconstructed-uh sup-norm error vs DOFs",
-        "sphere_convergence_supnorm_reconstructed.png",
+        "reconstructed-uh sup-norm error vs DOFs",
+        "sphere_supnorm_reconstructed.png",
         -2.0 / d,
         "DOFs^(-2/d)",
     )
 
-    # cumulative AMR time (marking + mesh refinement only, not the solve) vs
-    # reconstructed-uh error: shows the cost side of the accuracy/DOFs
-    # tradeoff above.  UNI is excluded: its time includes no
-    # marking/refinement step, thus uninformative here.  Levels with
-    # under 1s of cumulative AMR time are excluded as measurement noise.
-    plt.figure()
+    # amrtime = cumulative AMR time (marking + mesh refinement only) vs
+    #   reconstructed-uh error.  UNI is excluded: its time includes no
+    #   marking/refinement step, thus uninformative here.  Levels with
+    #   under 1s of cumulative AMR time are excluded as measurement noise.
+    # marktime = VIAMR's own cost (marking fields, or AVM's metric-building
+    #   via buildaveragedmetric())
+    # meshbuildtime = the external backend's mesh-construction cost
+    #   (PETSc SBR via refinesbr2D(), or Pragmatic via animate.adapt()).
+    keepmasks = {}
     for amrtype in refinetypes:
         if amrtype == "uni":
             continue
-        rvals, rtimes = np.array(results[amrtype][2]), np.array(results[amrtype][7])
-        keep = rtimes >= 1.0
-        plt.loglog(rvals[keep], rtimes[keep], stylemap[amrtype], label=amrtype.upper())
-    plt.legend()
-    plt.grid(True)
-    plt.xlabel("||u_exact - tilde u_h||_2")
-    plt.ylabel("cumulative AMR time (s)")
-    plt.title("sphere problem: cumulative AMR time vs reconstructed-uh norm")
-    plt.savefig("sphere_convergence_amrtime.png")
+        keepmasks[amrtype] = np.array(results[amrtype][7]) >= 1.0
+
+    def _amrtime_plot(index, ylabel, title, outfile):
+        plt.figure()
+        for amrtype in refinetypes:
+            if amrtype == "uni":
+                continue
+            rvals = np.array(results[amrtype][2])
+            rtimes = np.array(results[amrtype][index])
+            keep = keepmasks[amrtype]
+            plt.loglog(rvals[keep], rtimes[keep], stylemap[amrtype], label=amrtype.upper())
+        plt.legend()
+        plt.grid(True)
+        plt.xlabel("||u_exact - tilde u_h||_2")
+        plt.ylabel(ylabel)
+        plt.title(title)
+        plt.savefig(outfile)
+
+    _amrtime_plot(
+        7,
+        "cumulative AMR time (s)",
+        "cumulative AMR time vs reconstructed-uh norm",
+        "sphere_amrtime.png",
+    )
+    _amrtime_plot(
+        8,
+        "cumulative mark time (s)",
+        "cumulative marking/metric-building time vs reconstructed-uh norm",
+        "sphere_marktime.png",
+    )
+    _amrtime_plot(
+        9,
+        "cumulative meshbuild time (s)",
+        "cumulative mesh-build time vs reconstructed-uh norm",
+        "sphere_meshbuildtime.png",
+    )
 
     # effectivity index = estimator / (true error), in whichever norm the
     # estimator targets (energy norm for BR78, sup norm for NSV03)
@@ -535,5 +614,5 @@ if mesh.comm.rank == 0:
     plt.grid(True)
     plt.xlabel("DOFs")
     plt.ylabel("effectivity ratio (estimator / true-error)")
-    plt.title("sphere problem: effectivity index vs DOFs")
+    plt.title("effectivity index vs DOFs")
     plt.savefig("sphere_effectivity.png")
