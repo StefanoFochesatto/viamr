@@ -10,16 +10,29 @@ except ImportError:
 
 
 class AVMMixin:
-    r"""Mixed into VIAMR (see viamr.py): metric-based mesh adaptation via the
-    Animate library (AVM = "averaged metric"), as an alternative to the
-    marking + skeleton-based-refinement methods that are the rest of the
-    class.  Not usable on its own -- _isotropicfbmetric() calls VIAMR's own
-    vcdmark(), and self.metricparameters/self.debug are set by
-    VIAMR.__init__().
+    r"""Mixed into VIAMR (see viamr.py): construct metrics for metric-based
+    mesh adaptation via the Animate library.  Note AVM = "averaged metric".
+    This approach is an alternative to the marking + skeleton-based-refinement
+    methods that are the rest of the class.
 
-    Public API: setmetricparameters(), buildaveragedmetric().  Adapting the mesh
-    with the built metric is the caller's job -- see buildaveragedmetric()'s
-    docstring."""
+    AVMMixin is not usable separately from VIAMR.  Specifically,
+    _isotropicfbmetric() calls VIAMR.vcdmark().  Also, self.metricparameters
+    and self.debug are set by VIAMR.__init__().
+
+    Public API: setmetricparameters(), buildaveragedmetric().
+
+    Adapting the mesh with the built metric is the caller's job.  Here is how
+    to do that:
+        metric = amr.buildaveragedmetric(mesh, uh, lb)
+        newmesh = animate.adapt(mesh, metric)
+
+    Keeping the two steps separate lets a caller time or otherwise inspect
+    VIAMR's metric-construction work independently of the Mmg/ParMmg (see
+    https://www.mmgtools.org/) remesh that animate.adapt() performs.
+
+    Note that animate.adapt() is a thin wrapper on PETSc's DMAdaptMetric().
+    That method defaults to Mmg in serial and ParMmg in parallel, unless
+    -dm_adaptor is set."""
 
     def setmetricparameters(self, **kwargs):
         """Set self.metricparameters, used by buildaveragedmetric(), from keyword
@@ -74,16 +87,11 @@ class AVMMixin:
         (linearly-combined) using gamma:
           M(x) = gamma (isotropic) + (1-gamma) (anisotropic)
         The result M(x) is an anisotropic metric which is free-boundary aware.
-        If intersect=True then does Animate intersect (instead of gamma average).
+
+        If intersect=True then does Animate intersect, instead of gamma average.
 
         Returns the animate.RiemannianMetric itself; this method does not call
-        animate.adapt().  That's the caller's job:
-          metric = amr.buildaveragedmetric(mesh, uh, lb)
-          newmesh = animate.adapt(mesh, metric)
-        Keeping the two steps separate (rather than this method calling
-        animate.adapt() itself) lets a caller time or otherwise inspect
-        VIAMR's own metric-construction work independently of the Pragmatic
-        remesh that animate.adapt() performs; see examples/sphere.py."""
+        animate.adapt().  That's the caller's job; see the AVMMixin doc string above."""
 
         assert haveanimate, "animate import failed, method unavailable"
         assert (
