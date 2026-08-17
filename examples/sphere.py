@@ -35,57 +35,89 @@
 # See obstacleUFL() and dimple_centers().
 
 
-# note: use higher targetelements and/or maxlevels for serious convergence
-# e.g. targetelements=1.0e6 & maxlevels=11 <--> uniformlevels=7
-m0 = 10  # for UDOBR,NSV,UNI initial mesh is m0 x m0; see below for AVM
-targetelements = 1.0e5  # all methods stop refining once this is met
-maxlevels = 15  # backstop target element complexity
-uniformlevels = 5  # generally uniform can't reach high levels ... which is the point
-writecsvs = False
-
-# method parameters
-thetaBR = 0.5  # controls BR resolution in inactive set, and convergence rate
-methodBR = "total"  # VIAMR._fixedrate() uses a method; vs "max"; affects tradeoffs
-
-
 from argparse import ArgumentParser
 
 parser = ArgumentParser(
-    description="sphere obstacle-problem AMR comparison, optionally with a "
-    "dimpled obstacle and a constant source term"
+    description="Apples-to-apples AMR comparison on a sphere obstacle problem with a known exact solution.  Optional form has a dimpled obstacle and allows a constant source term."
 )
 parser.add_argument(
     "-dimpleamp",
     type=float,
     default=0.08,
     metavar="X",
-    help="gaussian dimple depth, subtracted from the obstacle height [default=0.08]",
+    help="gaussian dimple depth [default=0.08]",
 )
 parser.add_argument(
     "-dimples",
     action="store_true",
     default=False,
-    help="add scattered gaussian dimples (buckyball-vertex centers) to the "
-    "upper-hemisphere obstacle",
+    help="add gaussian dimples (buckyball vertices) to the obstacle",
 )
 parser.add_argument(
     "-dimplesigma",
     type=float,
     default=0.07,
     metavar="X",
-    help="gaussian dimple width, standard deviation [default=0.07]",
+    help="gaussian dimple width [default=0.07]",
 )
 parser.add_argument(
     "-fconst",
     type=float,
     default=0.0,
     metavar="X",
-    help="constant source term f; use a negative value with -dimples (too "
-    "negative removes the dimple-induced inactive holes) [default=0.0]",
+    help="constant source term f, e.g. in strong form -div(grad(u))=f [default=0.0]",
+)
+parser.add_argument(
+    "-m0",
+    type=int,
+    default=10,
+    metavar="N",
+    help="initial mesh is m0 x m0, except AVM [default=10]",
+)
+parser.add_argument(
+    "-maxlevels",
+    type=int,
+    default=15,
+    metavar="N",
+    help="backstop on AMR levels [default=15]",
+)
+parser.add_argument(
+    "-methodBR",
+    type=str,
+    default="total",
+    metavar="X",
+    choices=["total", "max"],
+    help="fixedratemark() method, for BR in inactive set [default=total]",
+)
+parser.add_argument(
+    "-targetelements",
+    type=float,
+    default=1.0e5,
+    metavar="X",
+    help="stop refining once this many elements is met [default=1.0e5]",
+)
+parser.add_argument(
+    "-thetaBR",
+    type=float,
+    default=0.5,
+    metavar="X",
+    help="fixedratemark() threshold, for BR in inactive set [default=0.5]",
+)
+parser.add_argument(
+    "-uniformlevels",
+    type=int,
+    default=5,
+    metavar="N",
+    help="levels of uniform refinement for UNI [default=5]",
+)
+parser.add_argument(
+    "-writecsvs",
+    action="store_true",
+    default=False,
+    help="generate .csv files of convergence rates [default=False]",
 )
 args, passthroughoptions = parser.parse_known_args()
-fconst = args.fconst
-exact_known = (not args.dimples) and (fconst == 0.0)  # only then is uexactUFL exact
+exact_known = (not args.dimples) and (args.fconst == 0.0)  # only then is uexactUFL exact
 
 import time
 import numpy as np
@@ -118,7 +150,7 @@ else:
     refinetypes.append("avm")  # if import succeeded
 
 # AVM parameters; attempts to do apples-to-apples vs UDOBR
-initialhAVM = 4.0 / m0
+initialhAVM = 4.0 / args.m0
 targetsAVM = [
     100,
     300,
@@ -317,7 +349,7 @@ dimples = dimple_centers(2.0 * args.dimplesigma) if args.dimples else None
 if args.dimples:
     print(
         f"dimpled obstacle: {len(dimples)} gaussian dimples (buckyball vertices), "
-        f"amp={args.dimpleamp}, sigma={args.dimplesigma} rad, f={fconst}"
+        f"amp={args.dimpleamp}, sigma={args.dimplesigma} rad, f={args.fconst}"
     )
 
 results = {}  # results[amrtype] = (dofs, errnorm, errnorm_recons, hausdorffs, errnorm_h1s,
@@ -355,8 +387,8 @@ for amrtype in refinetypes:
         mesh0 = Mesh(ngmsh, distribution_parameters=dp)
     else:
         mesh0 = RectangleMesh(
-            m0,
-            m0,
+            args.m0,
+            args.m0,
             Lx=2.0,
             Ly=2.0,
             originX=-2.0,
@@ -367,16 +399,16 @@ for amrtype in refinetypes:
     meshHist = [mesh0]
 
     if amrtype == "uni":
-        unimh = MeshHierarchy(mesh0, uniformlevels)
+        unimh = MeshHierarchy(mesh0, args.uniformlevels)
 
-    if writecsvs:
+    if args.writecsvs:
         csvfile = open(f"sphere_{amrtype}.csv", "w")
         csvfile.write(
             "I,NV,NE,HMIN,HMAX,ENORM,ENORMRECON,ENORMH1,JACCARD,HAUSDORFF,"
             "REFINETIME,MARKTIME,MESHBUILDTIME\n"
         )
 
-    for i in range(maxlevels + 1):
+    for i in range(args.maxlevels + 1):
         print(f"solving on mesh {i} ...")
         mesh = meshHist[i]
         comm = mesh.comm  # fixed across this level, even once `mesh` is reassigned below
@@ -394,7 +426,7 @@ for amrtype in refinetypes:
 
         # set up and solve problem
         v = TestFunction(V)
-        F = (inner(grad(uh), grad(v)) - Constant(fconst) * v) * dx
+        F = (inner(grad(uh), grad(v)) - Constant(args.fconst) * v) * dx
         x, y = SpatialCoordinate(mesh)
         r = sqrt(x * x + y * y)
         g_ufl = uexactUFL(r)
@@ -428,7 +460,7 @@ for amrtype in refinetypes:
             print(f"  ||u_exact - u_h||_infty = {errnorm_Linf:.3e}")
             print(f"  ||u_exact - tilde u_h||_infty = {errnorm_Linf_recon:.3e}")
             jaccard = amr.jaccardUFL(activeexactUFL(r), activeh)
-            print(f"  jaccard(A_u, A_uh) = {jaccard:.5f}")
+            print(f"  jaccard(A_uexact, A_uh) = {jaccard:.5f}")
             uexact = Function(V, name="u_exact").interpolate(uexactUFL(r))
             _, fbexact = amr.freeboundarygraph2D(uexact, lb)
             _, fb = amr.freeboundarygraph2D(uh, lb)
@@ -471,12 +503,12 @@ for amrtype in refinetypes:
         marktimes.append(cummarktime)
         cummeshbuildtime += meshbuildtime
         meshbuildtimes.append(cummeshbuildtime)
-        if writecsvs and exact_known:
+        if args.writecsvs and exact_known:
             csvfile.write(
                 f"{i},{Nv},{Ne},{hmin:.5f},{hmax:.5f},{errnorm:.3e},{errnorm_recon:.3e},{errnorm_h1:.3e},{jaccard:.5f},{hausstr},"
                 f"{refinetime:.3e},{marktime:.3e},{meshbuildtime:.3e}\n"
             )
-        if Ne > targetelements:
+        if Ne > args.targetelements:
             break
 
         # do an AMR level.  Each non-uni branch times two phases separately:
@@ -511,11 +543,11 @@ for amrtype in refinetypes:
             if amrtype == "nsvsafe":
                 # compute safe *before* nsvmark(), so its eta values are
                 # excluded from the marking threshold process
-                safe = amr.safeactiveunmark(uh, lb, F_strong, psi_expr, Constant(fconst))
+                safe = amr.safeactiveunmark(uh, lb, F_strong, psi_expr, Constant(args.fconst))
                 print(f"  safeactiveunmark() excludes {amr.countmark(safe)} "
                       "active elements from the nsvmark() threshold")
             (mark, etainf, _, _, _) = amr.nsvmark(
-                uh, lb, g, Constant(fconst), g_ufl, safe=safe
+                uh, lb, g, Constant(args.fconst), g_ufl, safe=safe
             )
             t_mark1 = time.time()
             if exact_known:
@@ -535,8 +567,10 @@ for amrtype in refinetypes:
         else:
             t_mark0 = time.time()
             mark = amr.udomark(uh, lb, n=1)
-            residual = -div(grad(uh)) - Constant(fconst)
-            (imark, _, tot_eta) = amr.brinactivemark(uh, lb, residual, theta=thetaBR, method=methodBR)
+            residual = -div(grad(uh)) - Constant(args.fconst)
+            (imark, _, tot_eta) = amr.brinactivemark(
+                uh, lb, residual, theta=args.thetaBR, method=args.methodBR
+            )
             mark = amr.unionmarks(mark, imark)
             t_mark1 = time.time()
             if exact_known:
@@ -569,7 +603,7 @@ for amrtype in refinetypes:
             print(f"  AMR step: mark {marktime:.3f}s + meshbuild {meshbuildtime:.3f}s = {refinetime:.3f}s")
         meshHist.append(mesh)
 
-    if writecsvs:
+    if args.writecsvs:
         csvfile.close()
 
     if exact_known:
@@ -595,8 +629,10 @@ for amrtype in refinetypes:
         )
         fields += [uexact, error]
     if amrtype == "udobr":
-        residual = -div(grad(uh)) - Constant(fconst)
-        imark, _, _ = amr.brinactivemark(uh, lb, residual, theta=thetaBR, method=methodBR)
+        residual = -div(grad(uh)) - Constant(args.fconst)
+        imark, _, _ = amr.brinactivemark(
+            uh, lb, residual, theta=args.thetaBR, method=args.methodBR
+        )
         mark = amr.unionmarks(amr.udomark(uh, lb, n=1), imark)
         imark.rename("imark (BR)")
         mark.rename("mark")
@@ -605,10 +641,10 @@ for amrtype in refinetypes:
         g = Function(V).interpolate(g_ufl)
         safe = None
         if amrtype == "nsvsafe":
-            safe = amr.safeactiveunmark(uh, lb, F_strong, psi_expr, Constant(fconst))
+            safe = amr.safeactiveunmark(uh, lb, F_strong, psi_expr, Constant(args.fconst))
             safe.rename("safe active unmarked")
         (mark, etainf, sigmah, _, etad) = amr.nsvmark(
-            uh, lb, g, Constant(fconst), g_ufl, safe=safe
+            uh, lb, g, Constant(args.fconst), g_ufl, safe=safe
         )
         mark.rename("mark")
         fields += [mark, sigmah, etainf, etad]
