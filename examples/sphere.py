@@ -2,21 +2,16 @@
 # on the "ball" problem:
 #   1. UDOBR = unstructured dilation operator plus Babuska & Rheinboldt (1989) in the inactive set
 #   2. NSV = Nochetto, Siebert, and Veeser (2003)
-#   3. NSVSAFE = a promising algorithm: NSV, with VIAMR.safeactiveunmark()
-#      excluding certified-safe active elements from nsvmark()'s marking
-#      threshold (not merely from its output mark; see viamr.py's
-#      nsvmark() docstring).  On this problem, the spherical-cap obstacle
-#      is superharmonic throughout the active set with f=0, so
-#      safeactiveunmark() is expected to certify the whole active set safe
-#      at every level; NSVSAFE should then track NSV's accuracy while
-#      avoiding its unbounded active-set refinement.
+#   3. NSVSAFE = NSV plus VIAMR.safeactiveunmark(), excluding
+#      certified-safe active elements from nsvmark()'s marking threshold
 #   4. UNI = uniform refinement
 #   5. AVM = averaged-metric mesh adaptation  <-- only runs if avm import succeeds
 #
 # We generate .pvd files: result_sphere_{udobr,nsv,nsvsafe,uni,avm}.pvd
 #
-# The exact solution is known and so we can compute norm convergence rates.
-# We generate ten .png convergence figures comparing all methods:
+# For the default mode the exact solution is known and so we can compute
+# norm convergence rates.  We generate ten .png convergence figures comparing
+# all methods:
 #   sphere_unorm.png                  ||u_exact - u_h||_2 vs DOFs
 #   sphere_unorm_reconstructed.png    ||u_exact - tilde u_h||_2 vs DOFs
 #   sphere_h1.png                     |u_exact - u_h|_{H^1 seminorm} vs DOFs
