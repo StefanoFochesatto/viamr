@@ -42,6 +42,8 @@ class VIAMR(OptionsManager, AVMMixin):
 
       nsvmark():  mark using the "practical estimator" from Nochetto, Siebert, & Veeser (2003) = NSV03
 
+      fixedratemark():  general-purpose thresholding of an elementwise DG0 estimator field by a fixed-rate ('max' or 'total'/bulk/Doerfler) criterion; used internally by gradrecinactivemark(), brinactivemark(), and nsvmark(), but also usable directly
+
       unionmark():  a method for combining existing marks
 
       safeactiveunmark():  a method which detects active-set elements where higher-order inspection gives evidence that refinement is wasted effort; this needs exact data for the obstacle and source term
@@ -73,6 +75,7 @@ class VIAMR(OptionsManager, AVMMixin):
       imark, _, _ = amr.brinactivemark(uh, lb, res_ufl)        # classical BR78 estimator in inactive set
       imark, _, _ = amr.brinactivemark(uh, lb, res_ufl, Z=Z)   # weighted estimator (BV00) in inactive set
       mark, _, _, _, _ = amr.nsvmark(uh, lb, g, f_ufl, g_ufl)  # method from NSV03
+      mark, ethresh, _ = amr.fixedratemark(eta, theta=0.5, method="total")  # threshold a DG0 estimator eta
       mark = amr.unionmarks(fbmark, imark)                     # mark if either is marked
       rmesh = amr.refinesbr2D(mesh, mark)                      # PETSc DMPlexTransform for skeleton-based refinement
 
@@ -477,7 +480,7 @@ class VIAMR(OptionsManager, AVMMixin):
         middleUFL = conditional(u > bracket[0], conditional(u < bracket[1], 1, 0), 0)
         return Function(DG0, name="mark (vcdmark)").interpolate(middleUFL)
 
-    def _fixedrate(self, eta, theta, method):
+    def fixedratemark(self, eta, theta, method):
         """Marks elements according to the values of estimator eta in DG0 and a threshold which depends on the scalar theta.
 
         The default 'max' strategy marks all elements with eta greater than
@@ -508,11 +511,11 @@ class VIAMR(OptionsManager, AVMMixin):
                     idx = np.argmax(cumsum >= target)
                     ethresh = sorted_values[idx]
             else:
-                raise ValueError("unknown method for VIAMR._fixedrate()")
+                raise ValueError("unknown method for VIAMR.fixedratemark()")
             total_error_est = sqrt(eta_.dot(eta_))  # l^2 norm of eta as Vec
 
         DG0 = eta.function_space()
-        mark = Function(DG0, name="mark (_fixedrate)").interpolate(
+        mark = Function(DG0, name="mark (fixedratemark)").interpolate(
             conditional(gt(eta, ethresh), 1.0, 0.0)
         )
         return mark, ethresh, total_error_est
@@ -520,7 +523,7 @@ class VIAMR(OptionsManager, AVMMixin):
     def _maskexclude(self, eta, mask):
         """Return eta zeroed outside of mask (a DG0 {0,1} indicator), or eta
         unchanged if mask is None.  Always apply this to eta *before*
-        VIAMR._fixedrate(), if elements must be kept out of
+        VIAMR.fixedratemark(), if elements must be kept out of
         consideration for marking (e.g. VIAMR.safeactiveunmark())."""
         if mask is None:
             return eta
@@ -558,7 +561,7 @@ class VIAMR(OptionsManager, AVMMixin):
         mask = imark if safe is None else Function(DG0).interpolate(imark * (1.0 - safe))
         ieta = self._maskexclude(eta, mask)
         # compute mark in inactive set
-        mark, _, total_error_est = self._fixedrate(ieta, theta, method)
+        mark, _, total_error_est = self.fixedratemark(ieta, theta, method)
         return (mark, ieta, total_error_est)
 
     def brinactivemark(self, uh, lb, res, theta=0.5, method="max", alpha=None, safe=None):
@@ -574,7 +577,7 @@ class VIAMR(OptionsManager, AVMMixin):
         consideration; see VIAMR._maskexclude().
 
         The output BR indicator eta is computed as a function in DG0.  We call
-        VIAMR._fixedrate() to mark using eta and a threshold theta.
+        VIAMR.fixedratemark() to mark using eta and a threshold theta.
         Then we return the marking mark, estimator eta, and a scalar estimate for
         the total error in energy norm.
 
@@ -659,7 +662,7 @@ class VIAMR(OptionsManager, AVMMixin):
         imark = self.eleminactive(uh, lb, strong=True)
         mask = imark if safe is None else Function(DG0).interpolate(imark * (1.0 - safe))
         ieta = self._maskexclude(eta, mask)
-        mark, _, total_error_est = self._fixedrate(ieta, theta, method)
+        mark, _, total_error_est = self.fixedratemark(ieta, theta, method)
         return (mark, ieta, total_error_est)
 
     def nsvmark(
@@ -710,7 +713,7 @@ class VIAMR(OptionsManager, AVMMixin):
         The optional input safe is a DG0 {0,1} indicator, e.g. the output of
         safeactiveunmark(), of active-set elements certified safe to leave
         unmarked.  When given, eta_infty and eta_d are masked to zero on
-        those elements *before* VIAMR._fixedrate() applies its threshold
+        those elements *before* VIAMR.fixedratemark() applies its threshold
         strategy.  (Thus the eta_... fields are not merely filtered from
         the resulting mark afterward.)
         """
@@ -801,12 +804,12 @@ class VIAMR(OptionsManager, AVMMixin):
         etainf = Function(DG0, name="eta_inf").interpolate(etainf_ufl)
 
         # mask out any certified-safe elements *before* thresholding, so they
-        # cannot set (or dilute) the _fixedrate() threshold; see VIAMR._maskexclude()
+        # cannot set (or dilute) the fixedratemark() threshold; see VIAMR._maskexclude()
         notsafe = None if safe is None else Function(DG0).interpolate(1.0 - safe)
         etainf_eff = self._maskexclude(etainf, notsafe)
 
         # first marking pass: eta_infty over the whole domain
-        mark, _, total_error_inf = self._fixedrate(etainf_eff, theta, method)
+        mark, _, total_error_inf = self.fixedratemark(etainf_eff, theta, method)
 
         # term eta_d
         d = mesh.cell_dimension()
@@ -825,7 +828,7 @@ class VIAMR(OptionsManager, AVMMixin):
         etainf_max = self._globalextreme(etainf_eff, minimum=False)
         etad_max = self._globalextreme(etad_eff, minimum=False)
         if etad_max > etadratio * etainf_max:
-            markd, _, total_error_d = self._fixedrate(etad_eff, theta, method)
+            markd, _, total_error_d = self.fixedratemark(etad_eff, theta, method)
             mark = self.unionmarks(mark, markd)
 
         # total error estimate, and return

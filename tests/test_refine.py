@@ -210,7 +210,7 @@ def test_nsvmark_allinactive():
     assert 0 <= amr.countmark(mark) <= DG0.dim()
     assert total_err > 0.0
 
-    # also exercises _fixedrate()'s "total" branch
+    # also exercises fixedratemark()'s "total" branch
     tmark, ieta, tot2 = amr.gradrecinactivemark(u, lb, theta=0.5, method="total")
     assert tmark.function_space().ufl_element() == DG0.ufl_element()
     assert tot2 >= 0.0
@@ -314,7 +314,7 @@ def _fixedrate_total_case(amr):
     assert DG0.dim() == 8
     x, y = SpatialCoordinate(mesh)
     eta = Function(DG0).interpolate(x + 2 * y)
-    mark, ethresh, total_error_est = amr._fixedrate(eta, theta=0.5, method="total")
+    mark, ethresh, total_error_est = amr.fixedratemark(eta, theta=0.5, method="total")
     assert abs(ethresh - 1.75) < 1.0e-10
     assert amr.countmark(mark) == 2
     assert abs(total_error_est - 4.444097208657794) < 1.0e-10
