@@ -24,6 +24,15 @@
 #   sphere_effectivity.png            estimator/true-error effectivity index vs DOFs
 #
 # Optionally we generate .csv files for norm and Jaccard convergence rates.
+#
+# Optional -dimples mode (with -fconst) replaces the plain spherical cap
+# by that cap with scattered downward gaussian dimples subtracted at
+# buckyball-vertex centers, and/or turns on a nonzero constant source f.  In this
+# mode there is no closed-form exact solution inside r<=r0, so norm/effectivity figures
+# are skipped; only produces:
+#   sphere_dimple_activefraction.png  active-element fraction vs DOFs
+#   sphere_dimple_inactivecount.png   inactive elements found inside dimples vs DOFs
+# See obstacleUFL() and dimple_centers().
 
 
 # note: use higher targetelements and/or maxlevels for serious convergence
@@ -39,8 +48,50 @@ thetaBR = 0.5  # controls BR resolution in inactive set, and convergence rate
 methodBR = "total"  # VIAMR._fixedrate() uses a method; vs "max"; affects tradeoffs
 
 
+from argparse import ArgumentParser
+
+parser = ArgumentParser(
+    description="sphere obstacle-problem AMR comparison, optionally with a "
+    "dimpled obstacle and a constant source term"
+)
+parser.add_argument(
+    "-dimpleamp",
+    type=float,
+    default=0.08,
+    metavar="X",
+    help="gaussian dimple depth, subtracted from the obstacle height [default=0.08]",
+)
+parser.add_argument(
+    "-dimples",
+    action="store_true",
+    default=False,
+    help="add scattered gaussian dimples (buckyball-vertex centers) to the "
+    "upper-hemisphere obstacle",
+)
+parser.add_argument(
+    "-dimplesigma",
+    type=float,
+    default=0.07,
+    metavar="X",
+    help="gaussian dimple width, standard deviation [default=0.07]",
+)
+parser.add_argument(
+    "-fconst",
+    type=float,
+    default=0.0,
+    metavar="X",
+    help="constant source term f; use a negative value with -dimples (too "
+    "negative removes the dimple-induced inactive holes) [default=0.0]",
+)
+args, passthroughoptions = parser.parse_known_args()
+fconst = args.fconst
+exact_known = (not args.dimples) and (fconst == 0.0)  # only then is uexactUFL exact
+
 import time
 import numpy as np
+import petsc4py
+
+petsc4py.init(passthroughoptions)
 from mpi4py import MPI
 from firedrake import *
 from firedrake.petsc import PETSc
@@ -84,12 +135,93 @@ targetsAVM = [
 ]
 
 
+r0 = 0.9  # cap radius: psi is a spherical cap for r<=r0, glued to a linear far-field beyond
+
+
 def psiUFL(r):
     """obstacle as UFL, from UFL expression for r"""
-    r0 = 0.9
     psi0 = np.sqrt(1.0 - r0 * r0)
     dpsi0 = -r0 / psi0
     return conditional(le(r, r0), sqrt(1.0 - r * r), psi0 + dpsi0 * (r - r0))
+
+
+def buckyball_vertices():
+    """The 60 vertices of a truncated icosahedron (buckyball), projected onto
+    the unit sphere.  Standard construction: all vertices generated from the
+    three base triples (0,1,3phi), (1,2+phi,2phi), (phi,2,2phi+1), phi the
+    golden ratio, by cyclic permutation and all sign choices on nonzero entries."""
+    phi = (1.0 + np.sqrt(5.0)) / 2.0
+    base = [(0.0, 1.0, 3.0 * phi), (1.0, 2.0 + phi, 2.0 * phi), (phi, 2.0, 2.0 * phi + 1.0)]
+    verts = []
+    for a, b, c in base:
+        for p, q, s in [(a, b, c), (b, c, a), (c, a, b)]:
+            for sp in ([1.0] if p == 0.0 else [1.0, -1.0]):
+                for sq in ([1.0] if q == 0.0 else [1.0, -1.0]):
+                    for ss in ([1.0] if s == 0.0 else [1.0, -1.0]):
+                        verts.append((sp * p, sq * q, ss * s))
+    verts = np.array(verts)
+    return verts / np.linalg.norm(verts, axis=1, keepdims=True)
+
+
+def dimple_centers(zmargin):
+    """(x,y,z) unit-sphere centers for gaussian dimples: buckyball vertices
+    lying well inside the spherical-cap region r<=r0, i.e. with z >= z0 +
+    zmargin where z0 = sqrt(1-r0^2), keeping dimples clear of the C^1 gluing
+    radius r0."""
+    verts = buckyball_vertices()
+    z0 = np.sqrt(1.0 - r0 * r0)
+    return verts[verts[:, 2] >= z0 + zmargin]
+
+
+def chordal2_ufl(x, y, vk):
+    """Squared chordal distance, on the unit sphere, between the surface
+    point above planar (x,y) -- i.e. (x, y, sqrt(1-r^2)) -- and vertex vk =
+    (xk,yk,zk).  Equals 2*(1-cos(angular distance)), so it agrees with
+    (angular distance)^2 for small separations, but -- unlike arccos-based
+    angular distance -- stays smooth (no derivative singularity) all the way
+    down to zero separation, which matters since obstacleUFL() is
+    differentiated symbolically by safeactiveunmark().  The mesh domain
+    extends well outside the unit disk (r up to 2*sqrt(2)), where 1-x^2-y^2
+    is negative; clamped to 0 there since obstacleUFL() only ever uses this
+    inside r<=r0<1, to avoid a NaN from sqrt(negative) contaminating the rest
+    of the (otherwise unrelated) UFL expression."""
+    xk, yk, zk = vk
+    r2 = x * x + y * y
+    z = sqrt(conditional(le(r2, 1.0), 1.0 - r2, 0.0))
+    dot = x * xk + y * yk + z * zk
+    return 2.0 - 2.0 * dot
+
+
+def obstacleUFL(x, y, r, dimples=None):
+    """Obstacle as UFL: the spherical cap from psiUFL(), optionally with
+    round "golf ball" gaussian dimples subtracted at buckyball-vertex
+    centers.  Dimples are isotropic *on the sphere* (via chordal2_ufl, not
+    planar Euclidean distance in x,y), so they stay circular near the cap
+    edge instead of stretching into ellipses.  A deep enough dimple makes the
+    cap locally subharmonic (-div(grad(psi))<0) at its center, which --
+    since complementarity requires -div(grad(psi))>=f on the active set --
+    forces a small inactive island there whenever f is not negative enough
+    to compensate; see the module docstring.  The dimple correction is
+    gated to r<=r0, matching where psiUFL()'s spherical formula applies."""
+    psi = psiUFL(r)
+    if dimples is not None:
+        dimplesum = Constant(0.0)
+        for vk in dimples:
+            dimplesum = dimplesum + args.dimpleamp * exp(
+                -chordal2_ufl(x, y, vk) / (2.0 * args.dimplesigma**2)
+            )
+        psi = psi - conditional(le(r, r0), dimplesum, Constant(0.0))
+    return psi
+
+
+def dimple_region_ufl(x, y, dimples, radius):
+    """Indicator (as UFL) of the union of geodesic disks of the given
+    angular radius around each dimple center.  Diagnostic only, for counting
+    inactive elements discovered inside dimples; not used in the obstacle."""
+    ind = Constant(0.0)
+    for vk in dimples:
+        ind = conditional(le(chordal2_ufl(x, y, vk), radius**2), Constant(1.0), ind)
+    return ind
 
 
 def uexactUFL(r):
@@ -181,11 +313,21 @@ sp = {
     "snes_converged_reason": None,
 }
 
+dimples = dimple_centers(2.0 * args.dimplesigma) if args.dimples else None
+if args.dimples:
+    print(
+        f"dimpled obstacle: {len(dimples)} gaussian dimples (buckyball vertices), "
+        f"amp={args.dimpleamp}, sigma={args.dimplesigma} rad, f={fconst}"
+    )
+
 results = {}  # results[amrtype] = (dofs, errnorm, errnorm_recons, hausdorffs, errnorm_h1s,
 # errnorm_Linfs, errnorm_Linf_recons, amrtimes, marktimes, meshbuildtimes), for the
-# nine convergence/timing figures generated at the end
+# nine convergence/timing figures generated at the end; only filled if exact_known
 effs = {}  # effs[amrtype] = (eff_dofs, eff_vals), for udobr/nsv/nsvsafe only; see
-# the effectivity-index figure generated at the end
+# the effectivity-index figure generated at the end; only filled if exact_known
+diagresults = {}  # diagresults[amrtype] = (dofs, activefracs, dimpleinactivecounts,
+# amrtimes, marktimes, meshbuildtimes); only filled if NOT exact_known (see
+# sphere_dimple_*.png figures generated at the end)
 
 for amrtype in refinetypes:
     print(f"solving by VIAMR using {amrtype.upper()} method ...")
@@ -201,6 +343,8 @@ for amrtype in refinetypes:
     meshbuildtimes = []  # cumulative wall time spent in the external mesh-construction backend
     cummeshbuildtime = 0.0
     eff_dofs, eff_vals = [], []  # effectivity index vs DOFs; udobr/nsv/nsvsafe only
+    activefracs = []  # active-element fraction vs level; used only if not exact_known
+    dimpleinactivecounts = []  # inactive elements found inside dimples; -dimples & not exact_known only
 
     # udomark() needs this overlap to give correct results in parallel
     dp = VIAMR.PARALLEL_OVERLAP
@@ -250,7 +394,7 @@ for amrtype in refinetypes:
 
         # set up and solve problem
         v = TestFunction(V)
-        F = inner(grad(uh), grad(v)) * dx
+        F = (inner(grad(uh), grad(v)) - Constant(fconst) * v) * dx
         x, y = SpatialCoordinate(mesh)
         r = sqrt(x * x + y * y)
         g_ufl = uexactUFL(r)
@@ -259,42 +403,62 @@ for amrtype in refinetypes:
         solver = NonlinearVariationalSolver(
             problem, solver_parameters=sp, options_prefix="s"
         )
-        lb = Function(V, name="psi").interpolate(psiUFL(r))
+        psi_expr = obstacleUFL(x, y, r, dimples=dimples)
+        lb = Function(V, name="psi").interpolate(psi_expr)
         ub = Function(V).interpolate(Constant(PETSc.INFINITY))
         solver.solve(bounds=(lb, ub))
-
-        # compute norms
-        errnorm = errornorm_deg(uexactUFL(r), uh)
-        activeh = amr.elemactive(uh, lb)
-        errnorm_recon = errornorm_reconstructed_deg(r, uh, activeh)
-        errnorm_h1 = errornorm_H1semi_deg(uexactUFL(r), uh)
-        errnorm_Linf = errornorm_Linf(amr, uexactUFL(r), uh)
-        errnorm_Linf_recon = errornorm_Linf_reconstructed(amr, r, uh, activeh)
-        print(f"  ||u_exact - u_h||_2 = {errnorm:.3e}")
-        print(f"  ||u_exact - tilde u_h||_2 = {errnorm_recon:.3e}")
-        print(f"  |u_exact - u_h|_{{H^1}} = {errnorm_h1:.3e}")
-        print(f"  ||u_exact - u_h||_infty = {errnorm_Linf:.3e}")
-        print(f"  ||u_exact - tilde u_h||_infty = {errnorm_Linf_recon:.3e}")
-        jaccard = amr.jaccardUFL(activeexactUFL(r), activeh)
-        print(f"  jaccard(A_u, A_uh) = {jaccard:.5f}")
-        uexact = Function(V, name="u_exact").interpolate(uexactUFL(r))
-        _, fbexact = amr.freeboundarygraph2D(uexact, lb)
-        _, fb = amr.freeboundarygraph2D(uh, lb)
-        # hausdorff2D() returns None for an empty free boundary (e.g. a coarse
-        # initial mesh); format accordingly
-        haus = amr.hausdorff2D(fbexact, fb)
-        hausstr = f"{haus:.5f}" if haus is not None else "n/a"
-        print(f"  hausdorff2D(Gamma_u, Gamma_uh) = {hausstr}")
 
         # report, and break if target complexity met
         Nv, Ne, hmin, hmax = amr.meshsizes(mesh)
         dofs.append(Nv)
-        errnorms.append(errnorm)
-        errnorm_recons.append(errnorm_recon)
-        hausdorffs.append(haus if haus is not None else np.nan)  # nan plots as a gap
-        errnorm_h1s.append(errnorm_h1)
-        errnorm_Linfs.append(errnorm_Linf)
-        errnorm_Linf_recons.append(errnorm_Linf_recon)
+        activeh = amr.elemactive(uh, lb)
+        Na = amr.countmark(activeh)
+        print(f"  active elements: {Na} ({100.0 * Na / Ne:.2f} %)")
+
+        if exact_known:
+            # compute norms
+            errnorm = errornorm_deg(uexactUFL(r), uh)
+            errnorm_recon = errornorm_reconstructed_deg(r, uh, activeh)
+            errnorm_h1 = errornorm_H1semi_deg(uexactUFL(r), uh)
+            errnorm_Linf = errornorm_Linf(amr, uexactUFL(r), uh)
+            errnorm_Linf_recon = errornorm_Linf_reconstructed(amr, r, uh, activeh)
+            print(f"  ||u_exact - u_h||_2 = {errnorm:.3e}")
+            print(f"  ||u_exact - tilde u_h||_2 = {errnorm_recon:.3e}")
+            print(f"  |u_exact - u_h|_{{H^1}} = {errnorm_h1:.3e}")
+            print(f"  ||u_exact - u_h||_infty = {errnorm_Linf:.3e}")
+            print(f"  ||u_exact - tilde u_h||_infty = {errnorm_Linf_recon:.3e}")
+            jaccard = amr.jaccardUFL(activeexactUFL(r), activeh)
+            print(f"  jaccard(A_u, A_uh) = {jaccard:.5f}")
+            uexact = Function(V, name="u_exact").interpolate(uexactUFL(r))
+            _, fbexact = amr.freeboundarygraph2D(uexact, lb)
+            _, fb = amr.freeboundarygraph2D(uh, lb)
+            # hausdorff2D() returns None for an empty free boundary (e.g. a coarse
+            # initial mesh); format accordingly
+            haus = amr.hausdorff2D(fbexact, fb)
+            hausstr = f"{haus:.5f}" if haus is not None else "n/a"
+            print(f"  hausdorff2D(Gamma_u, Gamma_uh) = {hausstr}")
+            errnorms.append(errnorm)
+            errnorm_recons.append(errnorm_recon)
+            hausdorffs.append(haus if haus is not None else np.nan)  # nan plots as a gap
+            errnorm_h1s.append(errnorm_h1)
+            errnorm_Linfs.append(errnorm_Linf)
+            errnorm_Linf_recons.append(errnorm_Linf_recon)
+        else:
+            activefracs.append(Na / Ne)
+            if args.dimples:
+                iamark = amr.eleminactive(uh, lb, strong=True)
+                W0 = iamark.function_space()
+                # angular radius for the "inside a dimple" diagnostic region:
+                # 3 sigma captures each dimple's meaningful footprint
+                dimregion = Function(W0).interpolate(
+                    dimple_region_ufl(x, y, dimples, 3.0 * args.dimplesigma)
+                )
+                n_dimple_inactive = amr.countmark(
+                    Function(W0).interpolate(iamark * dimregion)
+                )
+                dimpleinactivecounts.append(n_dimple_inactive)
+                print(f"  inactive elements inside dimples: {n_dimple_inactive}")
+
         # refinetime is the AMR cost (marking + refinement) that produced THIS
         # mesh from the previous one (0.0 at i=0); accumulating it here.
         # marktime/meshbuildtime split it into VIAMR-controlled cost (marking,
@@ -307,7 +471,7 @@ for amrtype in refinetypes:
         marktimes.append(cummarktime)
         cummeshbuildtime += meshbuildtime
         meshbuildtimes.append(cummeshbuildtime)
-        if writecsvs:
+        if writecsvs and exact_known:
             csvfile.write(
                 f"{i},{Nv},{Ne},{hmin:.5f},{hmax:.5f},{errnorm:.3e},{errnorm_recon:.3e},{errnorm_h1:.3e},{jaccard:.5f},{hausstr},"
                 f"{refinetime:.3e},{marktime:.3e},{meshbuildtime:.3e}\n"
@@ -347,22 +511,23 @@ for amrtype in refinetypes:
             if amrtype == "nsvsafe":
                 # compute safe *before* nsvmark(), so its eta values are
                 # excluded from the marking threshold process
-                safe = amr.safeactiveunmark(uh, lb, F_strong, psiUFL(r), Constant(0.0))
+                safe = amr.safeactiveunmark(uh, lb, F_strong, psi_expr, Constant(fconst))
                 print(f"  safeactiveunmark() excludes {amr.countmark(safe)} "
                       "active elements from the nsvmark() threshold")
             (mark, etainf, _, _, _) = amr.nsvmark(
-                uh, lb, g, Constant(0.0), g_ufl, safe=safe
+                uh, lb, g, Constant(fconst), g_ufl, safe=safe
             )
             t_mark1 = time.time()
-            # effectivity index vs NSV03's own target norm: max_T eta_inf(T)
-            # is the whole-domain (not inactive-set-restricted) quantity its
-            # pointwise theory bounds ||u-u_h||_infty by, in contrast to
-            # BR78/BV00's energy-norm estimator below
-            maxetainf = amr.scalarrange(etainf)[1]
-            eff_nsv = maxetainf / errnorm_Linf if errnorm_Linf > 0 else np.nan
-            print(f"  eff_{amrtype.upper()} (sup norm) = {eff_nsv:.3f}")
-            eff_dofs.append(Nv)
-            eff_vals.append(eff_nsv)
+            if exact_known:
+                # effectivity index vs NSV03's own target norm: max_T eta_inf(T)
+                # is the whole-domain (not inactive-set-restricted) quantity its
+                # pointwise theory bounds ||u-u_h||_infty by, in contrast to
+                # BR78/BV00's energy-norm estimator below
+                maxetainf = amr.scalarrange(etainf)[1]
+                eff_nsv = maxetainf / errnorm_Linf if errnorm_Linf > 0 else np.nan
+                print(f"  eff_{amrtype.upper()} (sup norm) = {eff_nsv:.3f}")
+                eff_dofs.append(Nv)
+                eff_vals.append(eff_nsv)
             mesh = amr.refinesbr2D(mesh, mark)
             t_meshbuild1 = time.time()
             marktime_local = t_mark1 - t_mark0
@@ -370,20 +535,21 @@ for amrtype in refinetypes:
         else:
             t_mark0 = time.time()
             mark = amr.udomark(uh, lb, n=1)
-            residual = -div(grad(uh))
+            residual = -div(grad(uh)) - Constant(fconst)
             (imark, _, tot_eta) = amr.brinactivemark(uh, lb, residual, theta=thetaBR, method=methodBR)
             mark = amr.unionmarks(mark, imark)
             t_mark1 = time.time()
-            # effectivity index vs the SAME inactive set brinactivemark()
-            # restricts its estimator to; matches the H^1 seminorm BR78's
-            # unweighted estimator targets (see errornorm_H1semi_deg20)
-            iamark = amr.eleminactive(uh, lb, strong=True)
-            dus = inner(grad(uexactUFL(r) - uh), grad(uexactUFL(r) - uh))
-            errH1_inactive = np.sqrt(assemble(dus * iamark * dx(degree=20)))
-            eff_br = tot_eta / errH1_inactive if errH1_inactive > 0 else np.nan
-            print(f"  eff_BR (inactive-set, energy norm) = {eff_br:.3f}")
-            eff_dofs.append(Nv)
-            eff_vals.append(eff_br)
+            if exact_known:
+                # effectivity index vs the SAME inactive set brinactivemark()
+                # restricts its estimator to; matches the H^1 seminorm BR78's
+                # unweighted estimator targets (see errornorm_H1semi_deg20)
+                iamark = amr.eleminactive(uh, lb, strong=True)
+                dus = inner(grad(uexactUFL(r) - uh), grad(uexactUFL(r) - uh))
+                errH1_inactive = np.sqrt(assemble(dus * iamark * dx(degree=20)))
+                eff_br = tot_eta / errH1_inactive if errH1_inactive > 0 else np.nan
+                print(f"  eff_BR (inactive-set, energy norm) = {eff_br:.3f}")
+                eff_dofs.append(Nv)
+                eff_vals.append(eff_br)
             mesh = amr.refinesbr2D(mesh, mark)
             t_meshbuild1 = time.time()
             marktime_local = t_mark1 - t_mark0
@@ -406,23 +572,30 @@ for amrtype in refinetypes:
     if writecsvs:
         csvfile.close()
 
-    results[amrtype] = (
-        dofs, errnorms, errnorm_recons, hausdorffs, errnorm_h1s, errnorm_Linfs,
-        errnorm_Linf_recons, amrtimes, marktimes, meshbuildtimes,
-    )
-    effs[amrtype] = (eff_dofs, eff_vals)
+    if exact_known:
+        results[amrtype] = (
+            dofs, errnorms, errnorm_recons, hausdorffs, errnorm_h1s, errnorm_Linfs,
+            errnorm_Linf_recons, amrtimes, marktimes, meshbuildtimes,
+        )
+        effs[amrtype] = (eff_dofs, eff_vals)
+    else:
+        diagresults[amrtype] = (
+            dofs, activefracs, dimpleinactivecounts, amrtimes, marktimes, meshbuildtimes,
+        )
 
     # generate .pvd output file, with AMR fields for final mesh
     outfile = "result_sphere_" + amrtype + ".pvd"
     print(f"done ... writing to {outfile} ...")
     gap = Function(V, name="gap = uh-lb").interpolate(uh - lb)
-    uexact = Function(V, name="u_exact").interpolate(uexactUFL(r))
-    error = Function(V, name="error = |uexact - uh|").interpolate(
-        abs(uexact - uh)
-    )
-    fields = [uh, lb, gap, uexact, error]
+    fields = [uh, lb, gap]
+    if exact_known:
+        uexact = Function(V, name="u_exact").interpolate(uexactUFL(r))
+        error = Function(V, name="error = |uexact - uh|").interpolate(
+            abs(uexact - uh)
+        )
+        fields += [uexact, error]
     if amrtype == "udobr":
-        residual = -div(grad(uh))
+        residual = -div(grad(uh)) - Constant(fconst)
         imark, _, _ = amr.brinactivemark(uh, lb, residual, theta=thetaBR, method=methodBR)
         mark = amr.unionmarks(amr.udomark(uh, lb, n=1), imark)
         imark.rename("imark (BR)")
@@ -432,10 +605,10 @@ for amrtype in refinetypes:
         g = Function(V).interpolate(g_ufl)
         safe = None
         if amrtype == "nsvsafe":
-            safe = amr.safeactiveunmark(uh, lb, F_strong, psiUFL(r), Constant(0.0))
+            safe = amr.safeactiveunmark(uh, lb, F_strong, psi_expr, Constant(fconst))
             safe.rename("safe active unmarked")
         (mark, etainf, sigmah, _, etad) = amr.nsvmark(
-            uh, lb, g, Constant(0.0), g_ufl, safe=safe
+            uh, lb, g, Constant(fconst), g_ufl, safe=safe
         )
         mark.rename("mark")
         fields += [mark, sigmah, etainf, etad]
@@ -444,170 +617,215 @@ for amrtype in refinetypes:
     VTKFile(outfile).write(*fields)
     print("")
 
-# convergence figures comparing all methods; one figure per quantity, all
-# methods overlaid, following the convergence-figure convention in nsv.py
-print("generating .png convergence/effectivity plots to compare algorithms ...")
+# convergence/diagnostic figures comparing all methods; one figure per
+# quantity, all methods overlaid, following the convergence-figure
+# convention in nsv.py.  The accuracy figures below need the closed-form
+# exact solution (exact_known); with -dimples or a nonzero -fconst there
+# isn't one, so we generate lightweight diagnostic figures instead (see
+# module docstring).
+print("generating .png plots to compare algorithms ...")
 if mesh.comm.rank == 0:
     import matplotlib.pyplot as plt
 
     d = 2  # spatial dimension
     stylemap = {"udobr": "ko", "nsv": "bs", "nsvsafe": "md", "uni": "rs", "avm": "g^"}
 
-    def _convergence_plot(index, ylabel, title, outfile, rateexp, ratelabel):
-        plt.figure()
-        for amrtype in refinetypes:
-            rdofs, rvals = np.array(results[amrtype][0]), np.array(results[amrtype][index])
-            plt.loglog(rdofs, rvals, stylemap[amrtype], label=amrtype.upper())
-        rdofs, rvals = np.array(results["uni"][0]), np.array(results["uni"][index])
-        # anchor to the first finite, positive UNI value, not just index 0;
-        #    relevant to coarse initial mesh
-        valid = np.isfinite(rvals) & (rvals > 0)
-        if np.any(valid):
-            anchor = np.argmax(valid)  # index of first valid entry
-            y = rdofs.astype(float) ** rateexp
-            y = y * rvals[anchor] / y[anchor]
-            plt.loglog(rdofs, y, "k:", label=ratelabel)
-        plt.legend()
-        plt.grid(True)
-        plt.xlabel("DOFs")
-        plt.ylabel(ylabel)
-        plt.title(title)
-        plt.savefig(outfile)
+    if exact_known:
 
-    # L^2 norms: DOFs^(-2/d) is the optimal rate for quasi-optimal 2D meshes,
-    # as in nsv.py.  The reconstructed-uh form (see errornorm_reconstructed_deg)
-    # is kept in the same L^2 norm as the plain error, rather than H^1, because
-    # its patched-together tilde u_h is not H^1-conforming.
-    _convergence_plot(
-        1,
-        "||u_exact - u_h||_2",
-        "solution norm vs DOFs",
-        "sphere_unorm.png",
-        -2.0 / d,
-        "DOFs^(-2/d)",
-    )
-    _convergence_plot(
-        2,
-        "||u_exact - tilde u_h||_2",
-        "reconstructed-uh norm vs DOFs",
-        "sphere_unorm_reconstructed.png",
-        -2.0 / d,
-        "DOFs^(-2/d)",
-    )
-    # Hausdorff distance is a geometric (not squared-error) quantity, so the
-    # natural reference is mesh-resolution scaling h ~ DOFs^(-1/d), not the
-    # L^2 rate above.
-    _convergence_plot(
-        3,
-        "hausdorff2D(Gamma_u, Gamma_uh)",
-        "free-boundary Hausdorff distance vs DOFs",
-        "sphere_hausdorff.png",
-        -1.0 / d,
-        "DOFs^(-1/d)",
-    )
-    # H^1 seminorm = energy norm: a priori theory for obstacle problem gives
-    # first-order convergence, DOFs^(-1/d), BR78 estimator targets this norm
-    _convergence_plot(
-        4,
-        "|u_exact - u_h|_{H^1}",
-        "H^1 seminorm error vs DOFs",
-        "sphere_h1.png",
-        -1.0 / d,
-        "DOFs^(-1/d)",
-    )
-    # sup (L^infty) norm: this is the norm NSV03's pointwise a posteriori
-    # theory targets.  This figure gives an apples-to-apples true-error
-    # comparison in that norm across *all* methods.  Reference rate
-    # DOFs^(-2/d) matches the L^2 rate above: for smooth solutions, CG1
-    # pointwise error is generically the same asymptotic order as L^2,
-    _convergence_plot(
-        5,
-        "||u_exact - u_h||_infty",
-        "sup-norm error vs DOFs",
-        "sphere_supnorm.png",
-        -2.0 / d,
-        "DOFs^(-2/d)",
-    )
-    # reconstructed-uh companion to the plain sup-norm figure above (see
-    # errornorm_Linf_reconstructed()): the right comparison for UDOBR and
-    # NSVSAFE, which deliberately leave the active-set interior coarse.
-    # Included for all methods, not just those two, as a consistency check;
-    # NSV/UNI/AVM refine the active set, so their curves should barely move.
-    _convergence_plot(
-        6,
-        "||u_exact - tilde u_h||_infty",
-        "reconstructed-uh sup-norm error vs DOFs",
-        "sphere_supnorm_reconstructed.png",
-        -2.0 / d,
-        "DOFs^(-2/d)",
-    )
+        def _convergence_plot(index, ylabel, title, outfile, rateexp, ratelabel):
+            plt.figure()
+            for amrtype in refinetypes:
+                rdofs, rvals = np.array(results[amrtype][0]), np.array(results[amrtype][index])
+                plt.loglog(rdofs, rvals, stylemap[amrtype], label=amrtype.upper())
+            rdofs, rvals = np.array(results["uni"][0]), np.array(results["uni"][index])
+            # anchor to the first finite, positive UNI value, not just index 0;
+            #    relevant to coarse initial mesh
+            valid = np.isfinite(rvals) & (rvals > 0)
+            if np.any(valid):
+                anchor = np.argmax(valid)  # index of first valid entry
+                y = rdofs.astype(float) ** rateexp
+                y = y * rvals[anchor] / y[anchor]
+                plt.loglog(rdofs, y, "k:", label=ratelabel)
+            plt.legend()
+            plt.grid(True)
+            plt.xlabel("DOFs")
+            plt.ylabel(ylabel)
+            plt.title(title)
+            plt.savefig(outfile)
 
-    # amrtime = cumulative AMR time (marking + mesh refinement only) vs
-    #   reconstructed-uh error.  UNI is excluded: its time includes no
-    #   marking/refinement step, thus uninformative here.  Levels with
-    #   under 1s of cumulative AMR time are excluded as measurement noise.
-    # marktime = VIAMR's own cost (marking fields, or AVM's metric-building
-    #   via buildaveragedmetric())
-    # meshbuildtime = the external backend's mesh-construction cost
-    #   (PETSc SBR via refinesbr2D(), or Pragmatic via animate.adapt()).
-    keepmasks = {}
-    for amrtype in refinetypes:
-        if amrtype == "uni":
-            continue
-        keepmasks[amrtype] = np.array(results[amrtype][7]) >= 1.0
+        # L^2 norms: DOFs^(-2/d) is the optimal rate for quasi-optimal 2D meshes,
+        # as in nsv.py.  The reconstructed-uh form (see errornorm_reconstructed_deg)
+        # is kept in the same L^2 norm as the plain error, rather than H^1, because
+        # its patched-together tilde u_h is not H^1-conforming.
+        _convergence_plot(
+            1,
+            "||u_exact - u_h||_2",
+            "solution norm vs DOFs",
+            "sphere_unorm.png",
+            -2.0 / d,
+            "DOFs^(-2/d)",
+        )
+        _convergence_plot(
+            2,
+            "||u_exact - tilde u_h||_2",
+            "reconstructed-uh norm vs DOFs",
+            "sphere_unorm_reconstructed.png",
+            -2.0 / d,
+            "DOFs^(-2/d)",
+        )
+        # Hausdorff distance is a geometric (not squared-error) quantity, so the
+        # natural reference is mesh-resolution scaling h ~ DOFs^(-1/d), not the
+        # L^2 rate above.
+        _convergence_plot(
+            3,
+            "hausdorff2D(Gamma_u, Gamma_uh)",
+            "free-boundary Hausdorff distance vs DOFs",
+            "sphere_hausdorff.png",
+            -1.0 / d,
+            "DOFs^(-1/d)",
+        )
+        # H^1 seminorm = energy norm: a priori theory for obstacle problem gives
+        # first-order convergence, DOFs^(-1/d), BR78 estimator targets this norm
+        _convergence_plot(
+            4,
+            "|u_exact - u_h|_{H^1}",
+            "H^1 seminorm error vs DOFs",
+            "sphere_h1.png",
+            -1.0 / d,
+            "DOFs^(-1/d)",
+        )
+        # sup (L^infty) norm: this is the norm NSV03's pointwise a posteriori
+        # theory targets.  This figure gives an apples-to-apples true-error
+        # comparison in that norm across *all* methods.  Reference rate
+        # DOFs^(-2/d) matches the L^2 rate above: for smooth solutions, CG1
+        # pointwise error is generically the same asymptotic order as L^2,
+        _convergence_plot(
+            5,
+            "||u_exact - u_h||_infty",
+            "sup-norm error vs DOFs",
+            "sphere_supnorm.png",
+            -2.0 / d,
+            "DOFs^(-2/d)",
+        )
+        # reconstructed-uh companion to the plain sup-norm figure above (see
+        # errornorm_Linf_reconstructed()): the right comparison for UDOBR and
+        # NSVSAFE, which deliberately leave the active-set interior coarse.
+        # Included for all methods, not just those two, as a consistency check;
+        # NSV/UNI/AVM refine the active set, so their curves should barely move.
+        _convergence_plot(
+            6,
+            "||u_exact - tilde u_h||_infty",
+            "reconstructed-uh sup-norm error vs DOFs",
+            "sphere_supnorm_reconstructed.png",
+            -2.0 / d,
+            "DOFs^(-2/d)",
+        )
 
-    def _amrtime_plot(index, ylabel, title, outfile):
-        plt.figure()
+        # amrtime = cumulative AMR time (marking + mesh refinement only) vs
+        #   reconstructed-uh error.  UNI is excluded: its time includes no
+        #   marking/refinement step, thus uninformative here.  Levels with
+        #   under 1s of cumulative AMR time are excluded as measurement noise.
+        # marktime = VIAMR's own cost (marking fields, or AVM's metric-building
+        #   via buildaveragedmetric())
+        # meshbuildtime = the external backend's mesh-construction cost
+        #   (PETSc SBR via refinesbr2D(), or Pragmatic via animate.adapt()).
+        keepmasks = {}
         for amrtype in refinetypes:
             if amrtype == "uni":
                 continue
-            rvals = np.array(results[amrtype][2])
-            rtimes = np.array(results[amrtype][index])
-            keep = keepmasks[amrtype]
-            plt.loglog(rvals[keep], rtimes[keep], stylemap[amrtype], label=amrtype.upper())
+            keepmasks[amrtype] = np.array(results[amrtype][7]) >= 1.0
+
+        def _amrtime_plot(index, ylabel, title, outfile):
+            plt.figure()
+            for amrtype in refinetypes:
+                if amrtype == "uni":
+                    continue
+                rvals = np.array(results[amrtype][2])
+                rtimes = np.array(results[amrtype][index])
+                keep = keepmasks[amrtype]
+                plt.loglog(rvals[keep], rtimes[keep], stylemap[amrtype], label=amrtype.upper())
+            plt.legend()
+            plt.grid(True)
+            plt.xlabel("||u_exact - tilde u_h||_2")
+            plt.ylabel(ylabel)
+            plt.title(title)
+            plt.savefig(outfile)
+
+        _amrtime_plot(
+            7,
+            "cumulative AMR time (s)",
+            "cumulative AMR time vs reconstructed-uh norm",
+            "sphere_amrtime.png",
+        )
+        _amrtime_plot(
+            8,
+            "cumulative mark time (s)",
+            "cumulative marking/metric-building time vs reconstructed-uh norm",
+            "sphere_marktime.png",
+        )
+        _amrtime_plot(
+            9,
+            "cumulative meshbuild time (s)",
+            "cumulative mesh-build time vs reconstructed-uh norm",
+            "sphere_meshbuildtime.png",
+        )
+
+        # effectivity index = estimator / (true error), in whichever norm the
+        # estimator targets (energy norm for BR78, sup norm for NSV03)
+        # a reliable and efficient estimator should stay O(1) as DOFs grow
+        plt.figure()
+        effstylemap = {"udobr": ("ko", "BR78 (inactive-set energy norm)"),
+                        "nsv": ("bs", "NSV03 (sup norm)"),
+                        "nsvsafe": ("md", "NSV03+safe (sup norm)")}
+        for amrtype in ("udobr", "nsv", "nsvsafe"):
+            if amrtype not in effs or len(effs[amrtype][0]) == 0:
+                continue
+            edofs, evals = np.array(effs[amrtype][0]), np.array(effs[amrtype][1])
+            style, label = effstylemap[amrtype]
+            plt.semilogx(edofs, evals, style, label=label)
+        plt.axhline(1.0, color="k", linestyle=":", label="ideal eff=1")
         plt.legend()
         plt.grid(True)
-        plt.xlabel("||u_exact - tilde u_h||_2")
-        plt.ylabel(ylabel)
-        plt.title(title)
-        plt.savefig(outfile)
+        plt.xlabel("DOFs")
+        plt.ylabel("effectivity ratio (estimator / true-error)")
+        plt.title("effectivity index vs DOFs")
+        plt.savefig("sphere_effectivity.png")
 
-    _amrtime_plot(
-        7,
-        "cumulative AMR time (s)",
-        "cumulative AMR time vs reconstructed-uh norm",
-        "sphere_amrtime.png",
-    )
-    _amrtime_plot(
-        8,
-        "cumulative mark time (s)",
-        "cumulative marking/metric-building time vs reconstructed-uh norm",
-        "sphere_marktime.png",
-    )
-    _amrtime_plot(
-        9,
-        "cumulative meshbuild time (s)",
-        "cumulative mesh-build time vs reconstructed-uh norm",
-        "sphere_meshbuildtime.png",
-    )
+    else:
+        print("  no closed-form exact solution (-dimples and/or -fconst != 0)")
+        print("  generating diagnostic figures for center area ...")
+        plt.figure()
+        for amrtype in refinetypes:
+            rdofs = np.array(diagresults[amrtype][0])
+            rfrac = 100.0 * np.array(diagresults[amrtype][1])
+            plt.semilogx(rdofs, rfrac, stylemap[amrtype], label=amrtype.upper())
+        plt.legend()
+        plt.grid(True)
+        plt.xlabel("DOFs")
+        plt.ylabel("active elements (%)")
+        plt.title("active-set fraction vs DOFs")
+        plt.savefig("sphere_dimple_activefraction.png")
 
-    # effectivity index = estimator / (true error), in whichever norm the
-    # estimator targets (energy norm for BR78, sup norm for NSV03)
-    # a reliable and efficient estimator should stay O(1) as DOFs grow
-    plt.figure()
-    effstylemap = {"udobr": ("ko", "BR78 (inactive-set energy norm)"),
-                    "nsv": ("bs", "NSV03 (sup norm)"),
-                    "nsvsafe": ("md", "NSV03+safe (sup norm)")}
-    for amrtype in ("udobr", "nsv", "nsvsafe"):
-        if amrtype not in effs or len(effs[amrtype][0]) == 0:
-            continue
-        edofs, evals = np.array(effs[amrtype][0]), np.array(effs[amrtype][1])
-        style, label = effstylemap[amrtype]
-        plt.semilogx(edofs, evals, style, label=label)
-    plt.axhline(1.0, color="k", linestyle=":", label="ideal eff=1")
-    plt.legend()
-    plt.grid(True)
-    plt.xlabel("DOFs")
-    plt.ylabel("effectivity ratio (estimator / true-error)")
-    plt.title("effectivity index vs DOFs")
-    plt.savefig("sphere_effectivity.png")
+        if args.dimples:
+            plt.figure()
+            for amrtype in refinetypes:
+                rdofs = np.array(diagresults[amrtype][0])
+                rcount = np.array(diagresults[amrtype][2])
+                plt.semilogx(rdofs, rcount, stylemap[amrtype], label=amrtype.upper())
+            plt.legend()
+            plt.grid(True)
+            plt.xlabel("DOFs")
+            plt.ylabel("inactive elements found inside dimples")
+            plt.title("dimple-hole discovery vs DOFs")
+            plt.savefig("sphere_dimple_inactivecount.png")
+
+# FIXME (stub, not yet implemented): a second, porous-like operator
+#   -div((u-psi)^{gamma-1} grad(u)) - f
+# alongside the classical -div(grad(u)) - f used above (see porous.py).  The
+# point of comparison: for the classical operator (above), the dimple-hole
+# test in -dimples mode shows that you *need* to refine in the nominally
+# active set to find the small inactive islands the dimples create.  For the
+# porous-like operator, the state-degenerate coefficient (u-psi)^{gamma-1}
+# means it is safe to skip marking/refinement in the active set as long as
+# f<0, even with the same dimpled obstacle -- so UDOBR-style methods should
+# be at no disadvantage there, unlike in the classical case.
