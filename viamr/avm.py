@@ -56,12 +56,12 @@ class AVMMixin:
         self.metricparameters = {"dm_plex_metric": mp}
         return None
 
-    def _isotropicfbmetric(self, mesh, uh, lb, CG1, P1tensor):
+    def _isotropicfbmetric(self, mesh, uh, bound, CG1, P1tensor, boxside="lower"):
         """Construct a normalized free-boundary isotropic metric from abs(grad(s)),
         where s is the (smooth) output of vcdmark().  Compare "L2" option in
         animate.compute_isotropic_metric(); here we already have a P1 indicator.)"""
         assert haveanimate, "animate import failed, method unavailable"
-        s = self.vcdmark(uh, lb, returnSmooth=True)
+        s = self.vcdmark(uh, bound, boxside=boxside, returnSmooth=True)
         maggrads = Function(CG1).interpolate(sqrt(dot(grad(s), grad(s))))
         VIMetric = animate.RiemannianMetric(P1tensor)
         VIMetric.set_parameters(self.metricparameters)
@@ -80,8 +80,9 @@ class AVMMixin:
         hessmetric.normalise()  # normalize *before* averaging
         return hessmetric
 
-    def buildaveragedmetric(self, mesh, uh, lb, gamma=0.50, intersect=False):
-        """From the solution uh, of an obstacle problem with obstacle lb, constructs both
+    def buildaveragedmetric(self, mesh, uh, bound, boxside="lower", gamma=0.50, intersect=False):
+        """From the solution uh, of a unilateral obstacle problem with the given
+        bound (boxside="lower" or "upper"; see VIAMR._nodalactive()), constructs both
         an anisotropic Hessian-based metric and an isotropic metric computed from the
         magnitude of the gradient of the smoothed VCD indicator.  These metrics are averaged
         (linearly-combined) using gamma:
@@ -104,14 +105,14 @@ class AVMMixin:
 
         # Branch on gamma to avoid unecesarry computation of both metrics
         if gamma == 1:  # isotropic metric only case
-            return self._isotropicfbmetric(mesh, uh, lb, CG1, P1tensor)
+            return self._isotropicfbmetric(mesh, uh, bound, CG1, P1tensor, boxside=boxside)
 
         elif gamma == 0:  # hessian metric only case
             return self._hessianmetric(mesh, uh, P1tensor)
 
         else:
             # Default case where both metrics are computed
-            VIMetric = self._isotropicfbmetric(mesh, uh, lb, CG1, P1tensor)
+            VIMetric = self._isotropicfbmetric(mesh, uh, bound, CG1, P1tensor, boxside=boxside)
             hessmetric = self._hessianmetric(mesh, uh, P1tensor)
             # average or intersect
             if intersect:

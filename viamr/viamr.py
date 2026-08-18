@@ -17,7 +17,8 @@ from .avm import AVMMixin, haveanimate
 
 class VIAMR(OptionsManager, AVMMixin):
     r"""A VIAMR object manages adaptive mesh refinement (AMR) for a Firedrake
-    variational inequality (VI) solver.
+    variational inequality (VI) solver, where the VI constraint set is defined by
+    box bounds (lb <= u <= ub).
 
     Central notions behind this class:
       * Like a PDE AMR method, refinement in the inactive set is guided by
@@ -79,7 +80,11 @@ class VIAMR(OptionsManager, AVMMixin):
       mark = amr.unionmarks(fbmark, imark)                     # mark if either is marked
       rmesh = amr.refinesbr2D(mesh, mark)                      # PETSc DMPlexTransform for skeleton-based refinement
 
-    Regarding the arguments: uh is a computed VI solution, lb is the lower-bound obstacle, res_ufl is a UFL expression for the residual (applicable in the inactive set), Z is a weighting field (see examples), f_ufl is the source term in Poisson equation, and g_ufl are the boundary values.
+    Regarding the arguments: uh is a computed VI solution, lb is a lower-bound obstacle, res_ufl is a UFL expression for the residual (applicable in the inactive set), Z is a weighting field (see examples), f_ufl is the source term in Poisson equation, and g_ufl are the boundary values.
+
+    The methods above generalize to upper-bound obstacles by passing ub in the same position as lb and adding the boxside="upper" kwarg; see each method's own docstring.  Note that unionmarks() can be used to apply both lower and upper bounds.
+
+    TODO: nsvmark() and safeactiveunmark() are not yet generalized this way.
 
     Regarding returned values: fbmark, imark, and mark are element markings in DG0 (Definition 4.2 in paper), rmesh is a refined mesh, and amesh is an adapted mesh.
 
@@ -161,8 +166,13 @@ class VIAMR(OptionsManager, AVMMixin):
             w, minimum=False
         )
 
-    def checkadmissible(self, uh, bound, strict=False, upper=False):
-        """Utility function to check admissibility or strict admissibility of uh.  Returns True if uh >= bound (upper=False) or uh <= bound (upper=True)."""
+    def checkadmissible(self, uh, bound, strict=False, boxside="lower"):
+        """Utility function to check admissibility or strict admissibility of uh
+        with respect to a single obstacle bound.  Returns True if uh >= bound
+        (boxside="lower") or uh <= bound (boxside="upper")."""
+        if self.debug:
+            assert boxside in ("lower", "upper"), "boxside must be 'lower' or 'upper'"
+        upper = boxside == "upper"
         if strict:
             if upper:
                 bad = assemble(conditional(uh > bound, 1.0, 0.0) * dx)
@@ -174,16 +184,16 @@ class VIAMR(OptionsManager, AVMMixin):
             delta = Function(V).interpolate(bound - uh if upper else uh - bound)
             return self._globalextreme(delta, minimum=True) >= 0.0
 
-    def _checkuhlb(self, uh, lb):
-        """Debug-mode validation shared by the unilateral (lower bound) obstacle
-        problem indicator methods: checks that uh is a Function, lb is a Function
-        or Constant, and uh is admissible with respect to lb.  No-op unless
-        self.debug is True."""
+    def _checkuhbound(self, uh, bound, boxside="lower"):
+        """Debug-mode validation shared by the unilateral obstacle problem
+        indicator methods: checks that uh is a Function, bound is a Function
+        or Constant, and uh is admissible with respect to bound on the given
+        boxside ("lower" or "upper").  No-op unless self.debug is True."""
         if self.debug:
             assert isinstance(uh, Function), "input uh must be of class Function"
-            islb = isinstance(lb, Function) or isinstance(lb, Constant)
-            assert islb, "input lb must be of class Function or Constant"
-            assert self.checkadmissible(uh, lb)
+            isbound = isinstance(bound, Function) or isinstance(bound, Constant)
+            assert isbound, "input bound must be of class Function or Constant"
+            assert self.checkadmissible(uh, bound, boxside=boxside)
 
     def _checkparalleloverlap(self, mesh):
         """Raise ValueError if mesh is distributed across multiple processes
@@ -201,31 +211,46 @@ class VIAMR(OptionsManager, AVMMixin):
                     "on mesh initialization (or overlap_type=(VERTEX, n>=1))"
                 )
 
-    def _nodalactive(self, uh, lb):
-        """Compute nodal active set indicator in same function space as uh.  Only implemented for unilateral (lower bound) obstacle problems.  The nodal active set is
-          {x in N(V): |u(x) - lb(x)| < activetol}
+    def _nodalactive(self, uh, bound, boxside="lower"):
+        """Compute nodal active set indicator in same function space as uh, for a
+        unilateral obstacle problem with the given bound.  boxside="lower" treats
+        bound as a floor (uh >= bound); boxside="upper" treats it as a ceiling
+        (uh <= bound).  The nodal active set is
+          {x in N(V): |u(x) - bound(x)| < activetol}
         where N(V) is the nodal set for V = uh.function_space().  Active nodes get value 1.0."""
-        self._checkuhlb(uh, lb)
+        self._checkuhbound(uh, bound, boxside=boxside)
         z = Function(uh.function_space(), name="Nodal Active")
-        z.interpolate(conditional(abs(uh - lb) < self.activetol, 1.0, 0.0))
+        z.interpolate(conditional(abs(uh - bound) < self.activetol, 1.0, 0.0))
         return z
 
-    def elemactive(self, uh, lb):
-        """Compute an element active set indicator in DG0.  Active elements get value 1.0.  Only implemented for unilateral (lower bound) obstacle problems.  Elements are marked active if the DG0 degree of freedom for that element is active, within activetol, so use with caution if z is not in CG1."""
-        self._checkuhlb(uh, lb)
+    def elemactive(self, uh, bound, boxside="lower"):
+        """Compute an element active set indicator in DG0, for a unilateral
+        obstacle problem with the given bound (boxside="lower" or "upper";
+        see _nodalactive()).  Active elements get value 1.0.  Elements are
+        marked active if the DG0 degree of freedom for that element is
+        active, within activetol, so use with caution if z is not in CG1."""
+        self._checkuhbound(uh, bound, boxside=boxside)
         _, DG0 = self.spaces(uh.function_space().mesh())
         z = Function(DG0, name="Element Active")
-        z.interpolate(conditional(abs(uh - lb) < self.activetol, 1.0, 0.0))
+        z.interpolate(conditional(abs(uh - bound) < self.activetol, 1.0, 0.0))
         return z
 
-    def eleminactive(self, uh, lb, strong=False):
-        """Compute an element inactive set indicator in DG0.  Inactive elements get value 1.0.  Only implemented for unilateral (lower bound) obstacle problems.  By default, elements are marked inactive if their DG0 degree of freedom is inactive (by activetol).
+    def eleminactive(self, uh, bound, boxside="lower", strong=False):
+        """Compute an element inactive set indicator in DG0, for a unilateral
+        obstacle problem with the given bound (boxside="lower" or "upper";
+        see _nodalactive()).  Inactive elements get value 1.0.  By default,
+        elements are marked inactive if their DG0 degree of freedom is
+        inactive (by activetol).
 
-        If strong=True then an element is only marked as inactive if all degrees of freedom of the function uh-lb exceed activetol.  That is, a cell is "strongly" inactive if all of its original dofs are inactive."""
-        self._checkuhlb(uh, lb)
+        If strong=True then an element is only marked as inactive if all
+        degrees of freedom of the gap function (uh-bound for boxside="lower",
+        bound-uh for boxside="upper") exceed activetol.  That is, a cell is
+        "strongly" inactive if all of its original dofs are inactive."""
+        self._checkuhbound(uh, bound, boxside=boxside)
         if strong:
-            # note uh > lb is equivalent to v > 0 ... actually we use activetol
-            v = Function(uh.function_space()).interpolate(uh - lb)
+            # note gap > 0 is equivalent to strictly inactive ... but we use activetol
+            gap_ufl = (bound - uh) if boxside == "upper" else (uh - bound)
+            v = Function(uh.function_space()).interpolate(gap_ufl)
             # z is in DG0 and contains min of v over each cell's dofs
             z = self._elemextreme(v, minimum=True, defaultval=PETSc.INFINITY)
             z.interpolate(conditional(z > self.activetol, 1.0, 0.0))
@@ -233,11 +258,13 @@ class VIAMR(OptionsManager, AVMMixin):
         else:
             _, DG0 = self.spaces(uh.function_space().mesh())
             z = Function(DG0, name="Element Inactive")
-            z.interpolate(conditional(abs(uh - lb) < self.activetol, 0.0, 1.0))
+            z.interpolate(conditional(abs(uh - bound) < self.activetol, 0.0, 1.0))
         return z
 
-    def thinelemactive(self, uh, lb):
-        """Compute element active set indicator into DG0, but "thinned".
+    def thinelemactive(self, uh, bound, boxside="lower"):
+        """Compute element active set indicator into DG0, but "thinned", for a
+        unilateral obstacle problem with the given bound (boxside="lower" or
+        "upper"; see _nodalactive()).
 
         In contrast to elemactive(), here a cell is marked as active only if it *and its neighboring cells* are active.  The test for active is based on testing at the DG0 degree of freedom, and according to activetol.  Returns a DG0 element-wise indicator, with thinned-active elements having value 1.
 
@@ -249,7 +276,7 @@ class VIAMR(OptionsManager, AVMMixin):
         """
         mesh = uh.function_space().mesh()
         CG1, DG0 = self.spaces(mesh)
-        inactive = self.eleminactive(uh, lb)
+        inactive = self.eleminactive(uh, bound, boxside=boxside)
         grown = self._elemextreme(
             self._elemtonodemax(inactive, CG1), minimum=False, defaultval=0.0
         )
@@ -372,8 +399,10 @@ class VIAMR(OptionsManager, AVMMixin):
         )
         return Function(DG0).interpolate(mark * large)
 
-    def udomark(self, uh, lb, n=1, restrict=None):
-        """Mark mesh using Unstructured Dilation Operator (UDO) algorithm.  The algorithm
+    def udomark(self, uh, bound, boxside="lower", n=1, restrict=None):
+        """Mark mesh using Unstructured Dilation Operator (UDO) algorithm, for a
+        unilateral obstacle problem with the given bound (boxside="lower" or
+        "upper"; see _nodalactive()).  The algorithm
         first computes an element-wise indicator for the free boundary.  Then the elements
         which neighbor free-boundary elements are added, and so on iteratively through n
         levels.  Note that n=0 already minimally marks the free boundary.  Optionally the
@@ -389,12 +418,12 @@ class VIAMR(OptionsManager, AVMMixin):
             if restrict == "active":
                 # restrict to active set plus border
                 indicator = Function(FunctionSpace(meshInit, "DG", 0)).interpolate(
-                    self.elemactive(uh, lb)
-                    + self._elemborder(self._nodalactive(uh, lb))
+                    self.elemactive(uh, bound, boxside=boxside)
+                    + self._elemborder(self._nodalactive(uh, bound, boxside=boxside))
                 )
             elif restrict == "inactive":
                 # restrict to inactive set, which contains border already
-                indicator = self.eleminactive(uh, lb)
+                indicator = self.eleminactive(uh, bound, boxside=boxside)
             else:
                 raise ValueError(
                     f"unknown restrict='{restrict}'; must be 'active', 'inactive', or None"
@@ -404,14 +433,15 @@ class VIAMR(OptionsManager, AVMMixin):
             # Use nodal active set indicator to make an initial DG0 element border
             # indicator. This is now on a restricted domain so allow_missing_dofs=True
             border = Function(DG0).interpolate(
-                self._elemborder(self._nodalactive(uh, lb)), allow_missing_dofs=True
+                self._elemborder(self._nodalactive(uh, bound, boxside=boxside)),
+                allow_missing_dofs=True,
             )
         else:
             mesh = uh.function_space().mesh()
             CG1, DG0 = self.spaces(mesh)
             # Use nodal active set indicator to make an initial DG0 element border
             # indicator.
-            border = self._elemborder(self._nodalactive(uh, lb))
+            border = self._elemborder(self._nodalactive(uh, bound, boxside=boxside))
 
         # main loop: expand element border out to n levels, via two constant-arity
         # PyOP2 kernels per level (cell->node max-scatter, then node->cell max-gather).
@@ -428,13 +458,16 @@ class VIAMR(OptionsManager, AVMMixin):
     def vcdmark(
         self,
         uh,
-        lb,
+        bound,
+        boxside="lower",
         bracket=[0.2, 0.8],
         returnSmooth=False,
         directsolver=False,
         vcdsolveriters=4,
     ):
-        """Mark mesh using Variable Coefficient Diffusion (VCD) algorithm.  The algorithm computes a nodal active set indicator and then diffuses it, using a variable coefficient based on mesh geometry.  Diffusion is by solving a single backward Euler time step for the corresponding time-dependent diffusion equation.  The linear equations are solved by a fixed number of iterations of ICC-preconditioned CG.  Thresholding to capture the middle values of this field then marks only those elements which are close to the free boundary.  The output is an element-wise marking for elements to refine near the free boundary.
+        """Mark mesh using Variable Coefficient Diffusion (VCD) algorithm, for a
+        unilateral obstacle problem with the given bound (boxside="lower" or
+        "upper"; see _nodalactive()).  The algorithm computes a nodal active set indicator and then diffuses it, using a variable coefficient based on mesh geometry.  Diffusion is by solving a single backward Euler time step for the corresponding time-dependent diffusion equation.  The linear equations are solved by a fixed number of iterations of ICC-preconditioned CG.  Thresholding to capture the middle values of this field then marks only those elements which are close to the free boundary.  The output is an element-wise marking for elements to refine near the free boundary.
         Tuning advice:  The bracket [a,b] should be adjusted as follows:
           * lower a from default 0.2 to mark more elements in/near *inactive* set
           * raise b from default 0.8 to mark more elements in/near *active* set"""
@@ -442,7 +475,7 @@ class VIAMR(OptionsManager, AVMMixin):
         # Compute nodal active set indicator
         mesh = uh.function_space().mesh()
         CG1, DG0 = self.spaces(mesh)
-        nu = self._nodalactive(uh, lb)
+        nu = self._nodalactive(uh, bound, boxside=boxside)
 
         # Diffuse according to square of cell diameter, with diffusivity D = (1/2) h^2.
         # The nodal active indicator gives the initial field u0.  Solve one backward
@@ -530,9 +563,11 @@ class VIAMR(OptionsManager, AVMMixin):
         DG0 = eta.function_space()
         return Function(DG0, name=eta.name()).interpolate(eta * mask)
 
-    def gradrecinactivemark(self, uh, lb, theta=0.5, method="max", safe=None):
+    def gradrecinactivemark(self, uh, bound, boxside="lower", theta=0.5, method="max", safe=None):
         """Return marking within the computed inactive set by using an
-        a posteriori gradient-recovery error indicator.  See Chapter 4 of
+        a posteriori gradient-recovery error indicator, for a unilateral
+        obstacle problem with the given bound (boxside="lower" or "upper";
+        see _nodalactive()).  See Chapter 4 of
           M. Ainsworth & J. T. Oden (2000).  A Posteriori Error Estimation in
           Finite Element Analysis, John Wiley & Sons, Inc., New York.
         The optional input safe is a DG0 {0,1} indicator, e.g. the output of
@@ -557,20 +592,23 @@ class VIAMR(OptionsManager, AVMMixin):
         eta = Function(DG0, name="eta on inactive set").interpolate(sqrt(eta_sq))  # eta from eta^2
         # restrict grad recovery eta to inactive set, further excluding any
         # certified-safe elements, before computing the threshold
-        imark = self.eleminactive(uh, lb)
+        imark = self.eleminactive(uh, bound, boxside=boxside)
         mask = imark if safe is None else Function(DG0).interpolate(imark * (1.0 - safe))
         ieta = self._maskexclude(eta, mask)
         # compute mark in inactive set
         mark, _, total_error_est = self.fixedratemark(ieta, theta, method)
         return (mark, ieta, total_error_est)
 
-    def brinactivemark(self, uh, lb, res, theta=0.5, method="max", alpha=None, safe=None):
+    def brinactivemark(
+        self, uh, bound, res, boxside="lower", theta=0.5, method="max", alpha=None, safe=None
+    ):
         """Return marking within the computed inactive set by using the
         a posteriori Babuška-Rheinboldt (1978) residual error indicator,
-        or a weighted version of it.
+        or a weighted version of it, for a unilateral obstacle problem with
+        the given bound (boxside="lower" or "upper"; see _nodalactive()).
 
-        The primary inputs are the current solution uh, the obstacle lb (to restrict
-        to the inactive set), and the residual res as a UFL expression.
+        The primary inputs are the current solution uh, the obstacle bound (to
+        restrict to the inactive set), and the residual res as a UFL expression.
 
         The optional input safe is a DG0 {0,1} indicator, e.g. the output of
         safeactiveunmark(), of elements to additionally exclude from
@@ -659,7 +697,7 @@ class VIAMR(OptionsManager, AVMMixin):
         # restrict BR eta to inactive set; strong=True means all dofs must be inactive to
         # get imark=1; further exclude any certified-safe elements, before computing the
         # threshold
-        imark = self.eleminactive(uh, lb, strong=True)
+        imark = self.eleminactive(uh, bound, boxside=boxside, strong=True)
         mask = imark if safe is None else Function(DG0).interpolate(imark * (1.0 - safe))
         ieta = self._maskexclude(eta, mask)
         mark, _, total_error_est = self.fixedratemark(ieta, theta, method)
@@ -1037,9 +1075,10 @@ class VIAMR(OptionsManager, AVMMixin):
             shapely.MultiLineString(E1), shapely.MultiLineString(E2), densify
         )
 
-    def freeboundarygraph2D(self, uh, lb):
+    def freeboundarygraph2D(self, uh, bound, boxside="lower"):
         """Compute the graph (vertices and edges) of the computed free boundary
-        of a 2D obstacle problem, as (x,y) coordinates.  Works for
+        of a 2D unilateral obstacle problem with the given bound (boxside="lower"
+        or "upper"; see _nodalactive()), as (x,y) coordinates.  Works for
         meshes with triangular or quadrilateral cells.  The free boundary
         vertices are those incident to both a bordering (partially-active)
         element and a fully-active element; see _elemborder() and
@@ -1058,8 +1097,9 @@ class VIAMR(OptionsManager, AVMMixin):
         (DistributedMeshOverlapType.VERTEX, n>=1)); see
         _checkparalleloverlap().
 
-        If the free boundary is empty (e.g. uh==lb identically, or uh>lb
-        everywhere) a warning is issued and empty lists are returned."""
+        If the free boundary is empty (e.g. uh==bound identically, or uh
+        strictly on the inactive side everywhere) a warning is issued and
+        empty lists are returned."""
 
         mesh = uh.function_space().mesh()
         if mesh.topological_dimension != 2:
@@ -1075,8 +1115,8 @@ class VIAMR(OptionsManager, AVMMixin):
         # Get lists of indices for active and border elements.  Include halo
         # (ghost) cells so free-boundary vertices/edges lying on a process boundaries
         # are visible to every rank.
-        elemactive = self.elemactive(uh, lb)
-        elemborder = self._elemborder(self._nodalactive(uh, lb))
+        elemactive = self.elemactive(uh, bound, boxside=boxside)
+        elemborder = self._elemborder(self._nodalactive(uh, bound, boxside=boxside))
         ActiveSetElementsIndices = np.where(elemactive.dat.data_ro_with_halos)[0]
         BorderElementsIndices = np.where(elemborder.dat.data_ro_with_halos)[0]
 

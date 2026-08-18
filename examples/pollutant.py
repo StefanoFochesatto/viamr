@@ -80,6 +80,10 @@ for i in range(refinements + 1):
         break
 
     marklower = amr.udomark(u, lb, n=1)
+    # FIXME: ub is an upper obstacle, so this call should pass boxside="upper"
+    # (default is boxside="lower", i.e. udomark() currently treats ub as if it
+    # were a floor here; harmless with debug=False, but wrong if debug=True,
+    # since VIAMR._checkuhbound()'s admissibility check would assert uh >= ub).
     markupper = amr.udomark(u, ub, n=1)
     mark = amr.unionmarks(marklower, markupper)
     mesh = mesh.refine_marked_elements(mark)  # uses Netgen refinement
