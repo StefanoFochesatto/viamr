@@ -13,7 +13,7 @@
 # and warm-starting from the previous eps at each step.  This is needed
 # for robustness at larger gamma, where the coefficient (u+eps)^{gamma-1}
 # is more degenerate near the free boundary than at gamma=2.  The eps_final
-# floor is raised to 0.1*hmin^(2/gamma) on fine meshes, since below that
+# floor is raised to 0.2*hmin^(2/gamma) on fine meshes, since below that
 # scale the coefficient varies by orders of magnitude within a single
 # element (an unresolved layer near the free boundary), which otherwise makes Newton
 # diverge; the hmin^(2/gamma) scaling comes from matched asymptotics of

@@ -553,7 +553,7 @@ for amrtype in refinetypes:
             # scale Z=(u-psi+eps)^(gamma-1) varies by orders of magnitude *within a
             # single element* near the free boundary, which causes Newton to diverge
             # on fine meshes.  Compare porous.py.
-            epsfinal_eff = max(args.epsfinal, 0.1 * hmin ** (2.0 / args.gamma))
+            epsfinal_eff = max(args.epsfinal, 0.2 * hmin ** (2.0 / args.gamma))
             if epsfinal_eff > args.epsfinal:
                 print(f"  eps-continuation floor raised to {epsfinal_eff:.2e} > epsfinal={args.epsfinal:.2e}")
             epsval = args.epsstart
