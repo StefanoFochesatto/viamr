@@ -12,7 +12,12 @@
 # geometrically from a mild eps_start to a small eps_final, re-solving
 # and warm-starting from the previous eps at each step.  This is needed
 # for robustness at larger gamma, where the coefficient (u+eps)^{gamma-1}
-# is more degenerate near the free boundary than at gamma=2.
+# is more degenerate near the free boundary than at gamma=2.  The eps_final
+# floor is raised to 0.1*hmin^(2/gamma) on fine meshes, since below that
+# scale the coefficient varies by orders of magnitude within a single
+# element (an unresolved layer near the free boundary), which otherwise makes Newton
+# diverge; the hmin^(2/gamma) scaling comes from matched asymptotics of
+# the degenerate free-boundary profile (gap ~ xi^(2/gamma)).
 #
 # The Newton initial iterate is raised eps_start above the obstacle,
 # and simple backtracking line search is used for the Newton solver.
@@ -39,7 +44,7 @@ from pyop2.mpi import MPI  # for MPI reduce in parallel
 
 # major parameters
 m0 = 6  # initial mesh is m0 x m0
-levels = 7  # number of AMR levels; converges to 9, at least, for gamma=2
+levels = 7  # number of AMR levels
 gamma = 2.0  # note that exact solution has infinite H^1 norm if gamma >= 4
 useweightedBR = True  # apply brinactivemark() using BV00 weighting
 
@@ -99,6 +104,7 @@ for i in range(levels + 1):
     dof.append(V.dim())
     print(f"mesh {i}:")
     amr.meshreport(mesh)
+    _, _, hmin, _ = amr.meshsizes(mesh)
 
     # initial iterate *above* solution, especially on active set
     if i == 0:
@@ -123,19 +129,34 @@ for i in range(levels + 1):
     g = Function(V, name="g_bdry").interpolate(uUFL)
     bcs = DirichletBC(V, g, "on_boundary")
 
-    # solve with u >= 0, via eps-continuation: step eps down geometrically
-    # from eps_start to eps_final, warm-starting uh from the previous step
+    # set up solver with u >= 0
     prob = NonlinearVariationalProblem(F, uh, bcs)
     solver = NonlinearVariationalSolver(prob, solver_parameters=sp, options_prefix="s")
     lb = Function(V).interpolate(Constant(0.0))
     ub = Function(V).interpolate(Constant(PETSc.INFINITY))
+
+    # solve using eps-continuation: step eps down geometrically
+    # from eps_start to eps_final, warm-starting uh from the previous step.
+    # The eps floor is raised when the mesh is finer than eps_final: below that
+    # scale Z=(u+eps)^(gamma-1) varies by orders of magnitude *within a
+    # single element* near the free boundary (an unresolved boundary layer),
+    # which causes Newton to diverge on fine meshes.  Matched asymptotics of
+    # the degenerate profile near a generic free-boundary point give
+    # gap(xi) ~ kappa*xi^(2/gamma) (xi = distance into the active set), so
+    # the layer has physical width xi* ~ (eps/kappa)^(gamma/2); resolving
+    # xi* with the mesh requires eps >~ kappa*hmin^(2/gamma).  kappa is
+    # problem-dependent and not known in closed form, so it's replaced here
+    # by a tuned constant.
+    epsfinal_eff = max(eps_final, 0.1 * hmin ** (2.0 / gamma))
+    if epsfinal_eff > eps_final:
+        print(f"  eps-continuation floor raised to {epsfinal_eff:.2e} > eps_final={eps_final:.2e}")
     epsval = eps_start
     while True:
         epsC.assign(epsval)
         solver.solve(bounds=(lb, ub))
-        if epsval <= eps_final:
+        if epsval <= epsfinal_eff:
             break
-        epsval = max(eps_final, epsval * eps_shrink)
+        epsval = max(epsfinal_eff, epsval * eps_shrink)
 
     # errors relative to exact; re-implement errornorm() with fixed
     # quadrature degree

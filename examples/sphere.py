@@ -549,14 +549,13 @@ for amrtype in refinetypes:
         if args.porous:
             # eps-continuation: step eps down geometrically from epsstart to
             # epsfinal, warm-starting uh from the previous step.
-            # The floor is raised to hmin when the mesh is finer than epsfinal:
-            # below that scale Z=(u-psi+eps)^(gamma-1) varies by orders of
-            # magnitude *within a single element* near the free boundary (an
-            # unresolved boundary layer), which is what was causing Newton to
-            # diverge on fine meshes even with backtracking.
-            epsfinal_eff = max(args.epsfinal, hmin)
+            # The eps floor is raised when the mesh is finer than epsfinal: below that
+            # scale Z=(u-psi+eps)^(gamma-1) varies by orders of magnitude *within a
+            # single element* near the free boundary, which causes Newton to diverge
+            # on fine meshes.  Compare porous.py.
+            epsfinal_eff = max(args.epsfinal, 0.1 * hmin ** (2.0 / args.gamma))
             if epsfinal_eff > args.epsfinal:
-                print(f"  eps-continuation floor raised to hmin={epsfinal_eff:.2e}")
+                print(f"  eps-continuation floor raised to {epsfinal_eff:.2e} > epsfinal={args.epsfinal:.2e}")
             epsval = args.epsstart
             while True:
                 epsC.assign(epsval)
