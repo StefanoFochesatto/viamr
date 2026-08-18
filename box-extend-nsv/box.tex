@@ -1,0 +1,459 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage[margin=1in]{geometry}
+\usepackage[dvipsnames]{xcolor}
+
+% hyperref should be the last package we load
+\usepackage[pdftex,
+colorlinks=true,
+plainpages=false,
+linkcolor=blue,
+citecolor=Red,
+urlcolor=black
+]{hyperref}
+
+\newtheorem{proposition}{Proposition}
+\newtheorem{lemma}{Lemma}
+\newtheorem{remark}{Remark}
+
+\newcommand{\Om}{\Omega}
+\newcommand{\dOm}{\partial\Omega}
+\newcommand{\psilo}{\psi_\bot}
+\newcommand{\psiup}{\psi^\top}
+\newcommand{\psiloh}{\psi_{\bot,h}}
+\newcommand{\psiuph}{\psi^\top_h}
+\newcommand{\Cbot}{C_\bot}
+\newcommand{\Ctop}{C^\top}
+\newcommand{\uh}{u_h}
+\newcommand{\Th}{\mathcal{T}_h}
+\newcommand{\Vh}{\mathbb{V}_h}
+\newcommand{\Vhr}{\mathring{\mathbb{V}}_h}
+\newcommand{\Nh}{\mathcal{N}_h}
+\newcommand{\Nhr}{\mathring{\mathcal{N}}_h}
+\newcommand{\Sh}{\mathcal{S}_h}
+\newcommand{\Ih}{I_h}
+\newcommand{\Uh}{\mathcal{U}_h}
+\newcommand{\Kh}{\mathcal{K}_h}
+\newcommand{\Thbot}{\mathcal{T}_{h,\bot}}
+\newcommand{\Thtop}{\Th^\top}
+\newcommand{\Thplus}{\Th^+}
+\newcommand{\Nhbot}{\mathcal{N}_{h,\bot}}
+\newcommand{\Nhtop}{\Nh^\top}
+\newcommand{\Lamh}{\Lambda_h}
+\newcommand{\Lamhbot}{\Lambda_{h,\bot}}
+\newcommand{\Lamhtop}{\Lambda_h^\top}
+
+\title{Appendix: Pointwise a posteriori error control for box-constrained\\
+elliptic variational inequalities}
+\author{Ed Bueler \and Claude Sonnet 5 (Anthropic)}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Setup}
+
+Let $\Om$ be a bounded, polyhedral, not necessarily convex domain in $\mathbb{R}^d$
+with $d \in \{1,2,3\}$. Let $f \in L^\infty(\Om)$ be a load function, let
+$\psilo, \psiup \in H^1(\Om) \cap C^{0,\alpha}(\bar\Om)$, $0 < \alpha \le 1$, be
+lower and upper obstacles satisfying the \emph{non-degeneracy assumption}
+\begin{equation}
+\label{eq:nondeg}
+  \psilo < \psiup \qquad \text{in } \Om,
+\end{equation}
+and let
+$g \in H^1(\Om) \cap C^{0,\alpha}(\bar\Om)$ be a Dirichlet boundary datum
+satisfying the compatibility condition
+\begin{equation}
+\label{eq:compat}
+  \psilo \le g \le \psiup \qquad \text{on } \dOm.
+\end{equation}
+Let $\mathcal{K}$ be the following non-empty, closed, convex, \emph{box-constrained}
+subset of $H^1(\Om)$:
+\begin{equation}
+\label{eq:K}
+  \mathcal{K} := \{v \in H^1(\Om) \mid \psilo \le v \le \psiup \text{ a.e.\ in } \Om,
+    \ v = g \text{ on } \dOm\}.
+\end{equation}
+The continuous problem reads:
+\begin{equation}
+\label{eq:VI}
+  u \in \mathcal{K}: \qquad
+  \langle \nabla u, \nabla(v - u)\rangle \ge \langle f, v - u\rangle
+  \qquad \text{for all } v \in \mathcal{K}.
+\end{equation}
+This is the immediate generalization of problem (1.1) of Nochetto, Siebert \&
+Veeser (NSV03) \cite{NSV03} from a one-sided constraint $v \ge \chi$ to the
+two-sided (\emph{bilateral}, \emph{box-constrained}) constraint
+$\psilo \le v \le \psiup$; we state it in $(v-u)$ form throughout this
+appendix (equivalent to NSV03's own $(u-v)$, $\le$ form by multiplying
+through by $-1$), matching the convention used elsewhere in this literature
+\cite{BF24}. As in NSV03, $\mathcal{K}$ admits a unique solution
+$u$, which is also H\"older continuous.
+
+\begin{remark}[Non-degeneracy]
+The strict separation $\psilo < \psiup$ rules out \emph{pinched} points,
+where the two obstacles touch and both constraints are simultaneously active.
+This keeps the continuum (and per-triangle) analysis below free of a third,
+degenerate case alongside lower- and upper-contact. A discrete
+implementation must still cope with near-pinching, since active-set
+membership there is decided against a numerical tolerance rather than exact
+equality; that bookkeeping is a matter for the code, not this analysis.
+\end{remark}
+
+Let $\sigma \in H^{-1}(\Om) = \mathring H^1(\Om)^*$ be the functional
+defined by
+\begin{equation}
+\label{eq:sigma}
+  \langle \sigma, \varphi\rangle = \langle \nabla u, \nabla \varphi\rangle - \langle f, \varphi\rangle
+  \qquad \text{for all } \varphi \in \mathring H^1(\Om).
+\end{equation}
+
+\begin{remark}[Sign convention]
+\label{rem:signconvention}
+This switches the sign relative to NSV03's formula (1.2); they define $\langle\sigma,\varphi\rangle = \langle f,\varphi\rangle
+- \langle\nabla u,\nabla\varphi\rangle$, which forces $\sigma \le 0$
+throughout in their unilateral (lower-obstacle) setting.  We use the
+opposite sign so that $\sigma \ge 0$ on lower contact, and our sign choice matches the
+traditional way a \emph{unilateral} complementarity condition is written:
+$a \ge 0$, $b \ge 0$, $ab = 0$.   This is also
+the convention already used by \texttt{viamr}'s \texttt{nsvmark()} and in \cite{BF24} \S 7.
+
+The sign choice in \eqref{eq:sigma} does not by itself say anything about upper contact.  For a
+unilateral \emph{upper}-obstacle problem ($v \le \psiup$, no lower
+bound), for example, the same fixed formula \eqref{eq:sigma} gives $\sigma \le 0$ on
+contact.  (Proof: test $v = u - t\varphi$, $\varphi \ge 0$, $t \ge 0$, the
+free direction when only an upper bound is present.)
+
+In any case, the reader should remember our sign convention as given by \eqref{eq:sigmasign} below.
+\end{remark}
+
+Unlike the unilateral case, $\sigma$ no longer has a fixed sign globally.
+Write $\Cbot := \{u = \psilo\}$ and $\Ctop := \{u = \psiup\}$ for the closed
+lower- and upper-contact sets; these are disjoint by the non-degeneracy
+assumption. Then
+\begin{equation}
+\label{eq:sigmasign}
+  \sigma \ge 0 \text{ on } \Cbot \qquad \text{and} \qquad \sigma \le 0 \text{ on } \Ctop,
+\end{equation}
+while $\sigma = 0$ on the open non-contact set $\{\psilo < u < \psiup\}$.
+
+The discrete counterpart $\sigma_h$ appears below in \S 2.
+
+
+\subsection{Separation of the contact sets}
+
+The non-degeneracy assumption $\psilo < \psiup$ only says the two contact
+sets $\Cbot, \Ctop$ are disjoint; it does not by itself say how far apart
+they are. A mesh star touching \emph{both} contact sets would break the simple sign argument in \S 2 for the discrete residual $\sigma_h$ introduced below.
+
+We need to control how much of the true contact set the discretization can
+recognize as such.  Compactness of $\bar\Om$ turns the qualitative
+separation into an explicit, data-determined one, quantifying that, as follows.
+
+Let $[\psiup]_\alpha$ denote the H\"older seminorm of $\psiup$ on $\bar\Om$,
+i.e.\ the least $L^\top \ge 0$ with $|\psiup(x) - \psiup(y)| \le L^\top
+|x-y|^\alpha$ for all $x,y \in \bar\Om$.  This is finite since $\psiup \in
+C^{0,\alpha}(\bar\Om)$, but note it can be zero, which motivates a convention below.
+
+We \emph{assume}, as NSV03 does for the unilateral
+problem, that the solution $u$ is also H\"older continuous on $\bar\Om$ with some exponent
+$\beta \in (0,1]$ and seminorm $L_u \ge 0$.
+%% TODO(citation): NSV03 attributes Hölder continuity of u, in the
+%% unilateral case, to Frehse & Mosco (1982) [their ref. 7], not to
+%% Rodrigues (1987) [their ref. 13, cited instead for existence/
+%% uniqueness]. Neither has been read directly here; find and verify a
+%% citation that actually covers the box-constrained/double-obstacle case
+%% before this goes further, rather than asserting one.
+
+\begin{proposition}[Separation of the contact sets]
+\label{prop:separation}
+Let
+\begin{equation}
+\label{eq:deltamin}
+  \delta_{\min} := \min_{\bar\Om} (\psiup - \psilo) > 0,
+\end{equation}
+which is attained and positive by compactness of $\bar\Om$ and continuity
+and non-degeneracy of $\psiup - \psilo$. If $\Cbot, \Ctop$ are both non-empty
+then
+\begin{equation}
+\label{eq:r0}
+  \operatorname{dist}(\Cbot, \Ctop) \ \ge\ r_0
+  := \min\left\{ \left(\frac{\delta_{\min}}{2 L^\top}\right)^{1/\alpha},
+                 \left(\frac{\delta_{\min}}{2 L_u}\right)^{1/\beta} \right\}.
+\end{equation}
+\end{proposition}
+
+Regarding possible division by zero in \eqref{eq:r0}, we make the convention that a term is omitted from the minimum if its
+denominator vanishes, i.e.\ if $\psiup$ or $u$ is constant.  That is, we regard the quotients as positive infinity in such cases.
+
+\begin{proof}
+Let $x \in \Cbot$, $y \in \Ctop$, and $r := |x-y|$. Since $u(x) = \psilo(x)$,
+\begin{equation}
+  \delta_{\min} \le \psiup(x) - \psilo(x) = \psiup(x) - u(x).
+\end{equation}
+Insert $\psiup(y) = u(y)$ and use the two H\"older bounds:
+\begin{equation}
+  \psiup(x) - u(x)
+  = \bigl(\psiup(x) - \psiup(y)\bigr) + \bigl(u(y) - u(x)\bigr)
+  \le L^\top r^\alpha + L_u r^\beta.
+\end{equation}
+Hence $\delta_{\min} \le L^\top r^\alpha + L_u r^\beta$. If $r < r_0$, then
+$L^\top r^\alpha < \delta_{\min}/2$ and $L_u r^\beta < \delta_{\min}/2$ (each
+by definition of $r_0$, dropping whichever term does not apply), so
+$L^\top r^\alpha + L_u r^\beta < \delta_{\min}$, a contradiction. Thus
+$r \ge r_0$, and since $x \in \Cbot$, $y \in \Ctop$ were arbitrary,
+$\operatorname{dist}(\Cbot,\Ctop) \ge r_0$.
+\end{proof}
+
+Proposition~\ref{prop:separation} gives an explicit, data-determined
+lower bound $r_0$ on the spatial separation of the two contact sets.  The bound depends on $\delta_{\min}$, on the H\"older constants of the obstacle data, and on the H\"older constant of the solution, which is itself controlled by $f,\psilo,\psiup,g$
+through the cited regularity theory.  As it turns out (Remark~\ref{rem:starseparation2}), \S 2 does
+\emph{not} need to impose $h < c\,r_0$ as a hypothesis for the estimator to
+be well-defined and correct; $r_0$'s role is instead to bound the width of
+the transition band $\Thplus$ once $h \lesssim r_0$, so that the
+discretization's lower- and upper-contact classification tracks the true
+contact sets closely, rather than under-recognizing them.
+
+
+\section{Discretization}
+
+Our notation follows NSV03 in most aspects.
+
+Let $\{\Th\}$ be a sequence of conforming partitions of $\bar\Om$ into
+closed simplices, namely closed intervals, closed triangles, or closed tetrahedra in dimensions $d=1,2,3$, respectively. Given a (closed) simplex $T$, $h_T$ is its diameter and $\rho_T$
+is the maximal radius of a ball contained in $T$.  We assume shape-regularity, namely the bound
+$\gamma(\Th) := \max_{T \in \Th} h_T/\rho_T \le \gamma^*$, with $\gamma^*$
+independent of $h$.  Let $\Nh$ be the node set of $\Th$, $\Nhr \subset \Nh$
+the interior nodes, and $\Sh$ the interior sides.
+
+Let $\Vh$ be the space of
+continuous piecewise-linear finite elements over $\Th$, with
+$\Vhr := \Vh \cap H_0^1(\Om)$.  We denote its nodal basis by $(\varphi_h^z)_{z \in \Nh}$.
+
+For $\omega
+\subset \bar\Om$, let
+\begin{equation}
+\Uh(\omega) := \bigcup\{T \in \Th : T \cap \omega \ne \emptyset\}.
+\end{equation}
+This closed set is a (finite) union of the closed simplices
+$T$.  Note that $T \cap \omega \ne \emptyset$ only requires $T$ to meet
+$\omega$ in a single point, so $\Uh(T)$ for a simplex $T$ includes every simplex with a shared edge or face, but it even includes every simplex touching $T$ at a single shared vertex.  The star of a node $z \in \Nh$ is $\Uh(z) :=
+\Uh(\{z\}) = \operatorname{supp} \varphi_h^z$, the closure of
+$\{\varphi_h^z > 0\}$.
+
+Let $\Ih$ be the Lagrange interpolation operator onto $\Vh$.  We write $\langle \cdot,\cdot\rangle_h$ for
+the lumped $L_2$ scalar product,
+\begin{equation}
+\langle \varphi_h, \psi_h\rangle_h := \int_\Om \Ih(\varphi_h \psi_h)
+\end{equation}
+This is exactly as in NSV03.  Also as in that reference, in what follows $C$ denotes different constants
+depending only on $\gamma^*$, $\Om$, and $d$, and $\preceq$ indicates $\le$
+up to such a constant.
+
+
+\subsection{Monotonicity of nodal interpolation, and $\Kh$}
+
+\begin{lemma}[Order-preservation of $I_h$]
+\label{lem:monotone}
+If $\phi, \zeta \in C(\bar\Om)$ satisfy $\phi \le \zeta$ on $\bar\Om$, then
+$\Ih \phi \le \Ih \zeta$ on $\bar\Om$, for any mesh $\Th$.
+\end{lemma}
+\begin{proof}
+By linearity of $\Ih$, $\Ih \zeta - \Ih \phi = \Ih(\zeta - \phi)$, and
+$\zeta - \phi \ge 0$ at every node. On each $T \in \Th$, $\Ih(\zeta-\phi)$
+is affine and equals a convex combination (barycentric coordinates) of the
+values of $\zeta - \phi$ at $T$'s vertices; a convex combination of
+nonnegative numbers is nonnegative. Hence $\Ih(\zeta-\phi) \ge 0$ on $T$,
+for every $T$.
+\end{proof}
+
+\begin{remark}
+This is special to piecewise-\emph{linear} interpolation (a higher-order
+Lagrange interpolant can overshoot and fail to preserve order); it needs no
+acuteness or mesh-fineness assumption on $\Th$.
+\end{remark}
+
+Set $\psiloh := \Ih \psilo$ and $\psiuph := \Ih \psiup$. Applying
+Lemma~\ref{lem:monotone} to $\psilo \le \psiup$ (non-degeneracy,
+\eqref{eq:nondeg}) gives
+\begin{equation}
+\label{eq:disc-nondeg}
+  \psiuph - \psiloh \ \ge\ \delta_{\min} \ >\ 0 \qquad \text{on } \bar\Om,
+\end{equation}
+with $\delta_{\min}$ exactly as in Proposition~\ref{prop:separation}; note
+this holds for \emph{every} mesh, not just fine ones. Applying it again to
+the compatibility condition $\psilo \le g \le \psiup$ on $\dOm$
+\eqref{eq:compat} gives $\psiloh \le \Ih g \le \psiuph$ on $\dOm$. Hence, with
+\begin{equation}
+\label{eq:Kh}
+  \Kh := \{v_h \in \Vh \mid \psiloh \le v_h \le \psiuph \text{ in } \Om,
+    \ v_h = \Ih g \text{ on } \dOm\},
+\end{equation}
+$\Kh$ is non-empty, closed, and convex for \emph{every} mesh $\Th$.  As in NSV03, $\Kh$ is in general not a subset of
+$\mathcal{K}$ defined by \eqref{eq:K}, so in this sense our approximation is non-conforming.
+
+The discrete problem corresponding to \eqref{eq:VI} reads
+\begin{equation}
+\label{eq:discVI}
+  u_h \in \Kh: \qquad
+  \langle \nabla u_h, \nabla(v_h - u_h)\rangle \ge \langle f, v_h - u_h\rangle
+  \qquad \text{for all } v_h \in \Kh,
+\end{equation}
+which admits a unique solution.
+
+\subsection{The discrete residual and its sign}
+
+For interior nodes $z \in \Nhr$, define $\sigma_h \in \Vh$ nodally by
+\begin{equation}
+\label{eq:sigmah}
+  \langle \sigma_h, \varphi_h^z \rangle_h
+  = \langle \nabla u_h, \nabla \varphi_h^z \rangle - \langle f, \varphi_h^z \rangle,
+\end{equation}
+whence $\sigma_h(z) = \bigl(\int_\Om \varphi_h^z\bigr)^{-1}
+\bigl(\langle \nabla u_h, \nabla \varphi_h^z\rangle - \langle f, \varphi_h^z\rangle\bigr)$.
+
+\begin{remark}[Consistent with $\sigma$]
+This is exactly NSV03's own formula (2.1), with the same sign flip as
+$\sigma$ itself (Remark~\ref{rem:signconvention}) --- $\sigma_h$ is not a
+second, independent sign choice, it is the discrete instance of the same
+$\sigma$ already fixed in \S 1. Concretely, \eqref{eq:sigmah} is the
+Galerkin (weak-form) instance of the strong-form nodal residual underlying
+BF24's mixed complementarity classification \cite{BF24} \S 7, and matches
+the convention already used by \texttt{viamr}'s \texttt{nsvmark()}.
+\end{remark}
+
+Let $\Nhbot := \{z \in \Nh : u_h(z) = \psiloh(z)\}$ and $\Nhtop := \{z \in
+\Nh : u_h(z) = \psiuph(z)\}$ be the discrete lower- and upper-contact node
+sets; these are disjoint by \eqref{eq:disc-nondeg}. Split $\Th$, exactly as
+NSV03 splits into $\Th^0, \Th^+$, but now into three parts:
+\begin{align}
+\label{eq:Thsplit}
+  \Thbot &:= \{T \in \Th : \Uh(T) \subset \{u_h = \psiloh\}\}, \\
+  \Thtop &:= \{T \in \Th : \Uh(T) \subset \{u_h = \psiuph\}\}, \\
+  \Thplus &:= \Th \setminus (\Thbot \cup \Thtop).
+\end{align}
+$\Lamhbot$ and $\Lamhtop$ denote the corresponding unions of elements
+(discrete lower- and upper-contact sets).
+
+\begin{remark}[These are \texttt{viamr}'s thin active sets]
+\label{rem:thinactive}
+$\Thbot$ and $\Thtop$ are exactly what \texttt{viamr} calls
+\texttt{thinelemactive()}: an element is counted only if it \emph{and every
+element sharing a node with it} is active, i.e.\ the naive element-wise
+active set eroded by one ring. That erosion is precisely the content of
+$\Uh(T) \subset \{u_h = \psiloh\}$ --- $\Uh(T)$ \emph{is} $T$'s ring of
+neighbors (every $T' \in \Th$ meeting $T$ in a node), so requiring the whole
+ring to be active is the same condition, just written in NSV03's star
+notation instead of \texttt{viamr}'s dilation-based one. Concretely,
+$\Thbot = \texttt{thinelemactive(u\_h, psilo\_h, boxside="lower")}$ and
+$\Thtop = \texttt{thinelemactive(u\_h, psiup\_h, boxside="upper")}$, using
+the \texttt{boxside} generalization already in \texttt{viamr}. This is not
+a coincidence: NSV03 needed the one-ring erosion for exactly the same
+reason \texttt{thinelemactive()} was built for AMR marking --- a single
+active element adjacent to the free boundary is not yet safely in the
+interior of the contact set, so testing (or refining, or excluding from
+refinement) based on its value alone is unsound; only once a whole
+neighborhood agrees is the sign (or safety) of that neighborhood-based
+decision unconditional. Proposition~\ref{prop:nodalsign} is the a
+posteriori-estimator-side reason \texttt{thinelemactive()}'s erosion is the
+right notion of ``safely interior,'' not merely a heuristic.
+\end{remark}
+
+\begin{lemma}[Vanishing of an affine function on a simplex]
+\label{lem:affine}
+Let $w$ be affine on a simplex $T$ with $w \ge 0$ at every vertex of $T$.
+Then $w = 0$ somewhere in $T$ if and only if $w = 0$ at some vertex of $T$.
+\end{lemma}
+\begin{proof}
+($\Leftarrow$) is trivial. For ($\Rightarrow$), write a point $x \in T$ in
+barycentric coordinates, $x = \sum_i \lambda_i x_i$, $\lambda_i \ge 0$,
+$\sum_i \lambda_i = 1$, so $w(x) = \sum_i \lambda_i w(x_i)$. If $w(x_i) > 0$
+for every vertex $x_i$, then $w(x) > 0$ for every $x \in T$ (some $\lambda_i
+> 0$ always, and all terms are non-negative with at least one strictly
+positive). Contrapositive gives the claim.
+\end{proof}
+
+\begin{proposition}[Nodal sign, wholly-contact case]
+\label{prop:nodalsign}
+If $z \in \Nhr$ and $\Uh(z) \subset \{u_h = \psiloh\}$ (i.e.\ $z$'s star is
+wholly lower-contact), then $\sigma_h(z) \ge 0$. Symmetrically, if $\Uh(z)
+\subset \{u_h = \psiuph\}$, then $\sigma_h(z) \le 0$.
+\end{proposition}
+\begin{proof}
+Suppose $\Uh(z) \subset \{u_h = \psiloh\}$. Since $\psiuph - \psiloh \ge
+\delta_{\min} > 0$ on $\bar\Om$ \eqref{eq:disc-nondeg} and $u_h = \psiloh$
+throughout $\Uh(z)$, also $\psiuph - u_h \ge \delta_{\min} > 0$ throughout
+$\Uh(z)$; in particular $\Uh(z) \cap \Nhtop = \emptyset$. Fix $t \in [0,
+\delta_{\min}/\max_{\Uh(z)} \varphi_h^z]$ and set $v_h := u_h + t
+\varphi_h^z \in \Vh$. Since $\varphi_h^z \ge 0$ and $u_h = \psiloh$ on
+$\Uh(z)$, $v_h \ge \psiloh$ there (and $v_h = u_h \ge \psiloh$ elsewhere);
+by the choice of $t$, $v_h \le u_h + \delta_{\min} \le \psiuph$ on $\Uh(z)$
+too (and $v_h = u_h \le \psiuph$ elsewhere). So $v_h \in \Kh$. Testing
+\eqref{eq:discVI} with this $v_h$ and dividing by $t \ge 0$ gives $\langle
+\nabla u_h, \nabla \varphi_h^z\rangle \ge \langle f, \varphi_h^z\rangle$,
+i.e.\ $\sigma_h(z) \ge 0$ by \eqref{eq:sigmah}. The upper case is symmetric,
+testing with $t \le 0$.
+\end{proof}
+
+\begin{remark}[Why no separation hypothesis is needed here]
+\label{rem:starseparation2}
+This is exactly the case NSV03's own estimator uses $\sigma_h$'s sign for:
+elements of $\Thbot$ or $\Thtop$. For a node whose star meets \emph{both}
+contact types (necessarily an element of $\Thplus$, by
+\eqref{eq:Thsplit}), the perturbation argument above breaks --- moving
+$t>0$ toward the free lower direction can run directly into an upper-contact
+point elsewhere in the star, for any $t>0$, however small (Lemma
+\ref{lem:affine} with the roles reversed) --- but $\Thplus$ elements never
+call on $\sigma_h$'s sign in the estimator to begin with (see the
+forthcoming efficiency/lower-bounds section), so no separation hypothesis
+is actually load-bearing for correctness.
+Proposition~\ref{prop:separation}'s $r_0$ still matters for
+\emph{sharpness}: once $h \lesssim r_0$, $\Thplus$ shrinks to a thin
+transition band tracking the true free boundary, rather than swallowing up
+contact elements that should have been classified $\Thbot$ or $\Thtop$.
+\end{remark}
+
+%% TODO: remaining sections, mirroring NSV03's structure, not yet written:
+%%
+%%  (a) Boundary formula for sigma_h at Dirichlet nodes z in N_h \ N_h^o: no
+%%      perturbation freedom there (v_h = I_h g is an equality constraint),
+%%      so sigma_h(z) there is a diagnostic quantity, not derived from
+%%      stationarity as in Proposition~\ref{prop:nodalsign}. Need the
+%%      two-sided analogue of NSV03's boundary-node formula (their page 169):
+%%      a symmetric (R -+ bnd)^{+/-} truncation construction, worked out in
+%%      discussion 2026-08-18 but not yet transcribed into this file.
+%%  (b) Positivity-preserving interpolation Pi_h (NSV03 sec. 2.2, the
+%%      Chen-Nochetto ball-averaging operator): restate; properties (2.5)-
+%%      (2.8) should carry over unchanged, since Pi_h does not depend on
+%%      obstacle shape.
+%%  (c) Galerkin functional G_h (NSV03 sec. 3): generalize the T_h^0/T_h^+
+%%      split there to Thbot/Thtop/Thplus as in section 2 above; check
+%%      whether NSV03's almost-Galerkin-orthogonality (3.4) and
+%%      representation formula (3.5) need a second correction term for the
+%%      second obstacle.
+%%  (d) Barriers (NSV03 sec. 4): upper/lower barrier construction via the
+%%      Riesz representation w of G_h; the continuous-maximum-principle
+%%      argument looks obstacle-shape-agnostic and should carry over
+%%      directly, but has not been checked.
+%%  (e) Pointwise estimates (NSV03 sec. 5): Green's function bound and
+%%      Holder continuity of w; likely unchanged from NSV03 modulo notation.
+%%  (f) Efficiency / lower bounds (NSV03 sec. 6): Prop. 6.2/6.3 analogues
+%%      (bubble functions), needed for both Thbot and Thtop.
+%%  (g) Still open: citation for Holder continuity of u in the
+%%      box-constrained case (see TODO(citation) in section 1 above).
+
+\bibliographystyle{plain}
+\begin{thebibliography}{9}
+\bibitem{NSV03}
+R.~H.~Nochetto, K.~G.~Siebert, A.~Veeser.
+\emph{Pointwise a posteriori error control for elliptic obstacle problems}.
+Numer. Math. \textbf{95} (2003), 163--195.
+\bibitem{BF24}
+E.~Bueler, P.~E.~Farrell.
+\emph{A full approximation scheme multilevel method for nonlinear
+variational inequalities}.
+SIAM J. Sci. Comput. \textbf{46} (2024), A2421--A2444.
+\end{thebibliography}
+
+\end{document}
