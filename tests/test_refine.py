@@ -475,6 +475,55 @@ def test_safeactiveunmark_notimplemented():
         )
 
 
+def test_upper_obstacle_elasto():
+    # Classical Laplacian *upper*-obstacle problem (elastic-plastic torsion):
+    #   -Delta u = 2C,  u <= psi,  u = 0 on boundary,
+    # with tent obstacle psi(x,y) = min(y, 1-x, x, 1-y) on the unit square.
+    # See R. Kornhuber (1994). Monotone multigrid methods for elliptic
+    # variational inequalities, Numer. Math. 69, 167-184.
+    # Exercises marking primitives with boxside="upper".
+    mesh = UnitSquareMesh(16, 16, diagonal="crossed")
+    amr = VIAMR(debug=True)
+    CG1, DG0 = amr.spaces(mesh)
+    x, y = SpatialCoordinate(mesh)
+    psi_ufl = conditional(
+        y <= x,
+        conditional(y <= 1.0 - x, y, 1.0 - x),
+        conditional(y <= 1.0 - x, x, 1.0 - y),
+    )
+    ub = Function(CG1).interpolate(psi_ufl)
+    lb = Function(CG1).interpolate(Constant(-1.0e10))
+    C = 2.5
+    f = Constant(2.0 * C)
+
+    u = Function(CG1)
+    v = TestFunction(CG1)
+    F = (inner(grad(u), grad(v)) - f * v) * dx
+    bcs = DirichletBC(CG1, Constant(0.0), "on_boundary")
+    problem = NonlinearVariationalProblem(F, u, bcs=bcs)
+    sp = {
+        "snes_type": "vinewtonrsls",
+        "snes_vi_zero_tolerance": 1.0e-10,
+        "ksp_type": "preonly",
+        "pc_type": "lu",
+    }
+    solver = NonlinearVariationalSolver(problem, solver_parameters=sp, options_prefix="s")
+    solver.solve(bounds=(lb, ub))
+
+    assert amr.checkadmissible(u, ub, boxside="upper")
+
+    active = amr.elemactive(u, ub, boxside="upper")
+    inactive = amr.eleminactive(u, ub, boxside="upper")
+    assert 0 < amr.countmark(active) < DG0.dim()  # genuine contact set, not all/none
+    assert amr.countmark(active) + amr.countmark(inactive) == DG0.dim()
+
+    mark = amr.udomark(u, ub, boxside="upper", n=1)
+    assert 0 < amr.countmark(mark) < DG0.dim()
+
+    _, fb = amr.freeboundarygraph2D(u, ub, boxside="upper")
+    assert len(fb) > 0  # contact plateau has a nonempty free boundary
+
+
 if __name__ == "__main__":
     test_overrefine_udo()
     test_finer_udo()
@@ -489,3 +538,4 @@ if __name__ == "__main__":
     test_fixedrate_total()
     test_udomark_nontrivial()
     test_udomark_restrict()
+    test_upper_obstacle_elasto()
