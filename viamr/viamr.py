@@ -763,21 +763,41 @@ class VIAMR(OptionsManager, AVMMixin):
 
         # compute residual sigmah in CG1 following section 2.1 of NSV03, page 169,
         #   but use opposite sign convention so sigmah >= 0.   complementarity is
-        #   uh >= 0,  sigmah >= 0,  uh sigmah = 0  because psih=0
-        # step 1: residual as a cofunction
+        #   uh >= lb,  sigmah >= 0,  (uh - lb) sigmah = 0
+        # step 1: residual as a cofunction; the "- inner(grad(uh), n) * phi * ds" term
+        #   is NSV03's boundary flux correction (page 169) -- it vanishes identically
+        #   at interior nodes z, since phi_h^z restricted to any boundary facet not
+        #   incident to z is zero, so this one assembly is exact for interior dofs and
+        #   gives the *uncorrected* boundary-node value handled in step 4 below.
         phi = TestFunction(CG1)
-        res = assemble((inner(grad(uh), grad(phi)) - f_ufl * phi) * dx)  # cofunction
+        res = assemble(
+            (inner(grad(uh), grad(phi)) - f_ufl * phi) * dx
+            - inner(grad(uh), n) * phi * ds
+        )  # cofunction
         # step 2: create cofunction with values  s_i = int_Omega phi_i dx  for *all*
         #   nodes i; we *do not* want riesz_representation() here
         scale = assemble(phi * dx)
         # step 3: apply scale, that is, divide by s_i
         sigmah = Function(CG1, name="sigma_h (residual)")
         sigmah.dat.data[:] = res.dat.data_ro / scale.dat.data_ro  # divide numpy arrays
-        # FIXME use general g below
-        # step 4: zero out boundary values because all boundary nodes are inactive *in this
-        #    example*, but page 169 addresses cases where boundary nodes are active
-        #    plan to use?:  inner(grad(uh), n) * omegah * ds
-        DirichletBC(CG1, Constant(0.0), "on_boundary").apply(sigmah)
+        # step 4: at boundary nodes z there is no perturbation freedom (v_h = I_h g is
+        #   an equality constraint there), so sigmah(z) is not derived from stationarity
+        #   as at interior nodes; following NSV03 page 169, it is instead defined as
+        #   the *positive part* of the boundary-corrected residual above, and only kept
+        #   nonzero where z's whole star U_h(z) is active -- otherwise sigmah(z) = 0.
+        #   "Whole star active" is computed by dilating the *inactive* nodal set by one
+        #   element ring (node -> element max, then element -> node max) and negating,
+        #   the same one-ring-erosion idea thinelemactive() uses elementwise.
+        nodalinactive = Function(CG1).interpolate(1.0 - self._nodalactive(uh, lb))
+        elemtouchesinactive = self._elemextreme(
+            nodalinactive, minimum=False, defaultval=0.0
+        )
+        nodetouchesinactive = self._elemtonodemax(elemtouchesinactive, CG1)
+        starwhollyactive = Function(CG1).interpolate(1.0 - nodetouchesinactive)
+        bdryval = Function(CG1).interpolate(
+            starwhollyactive * conditional(sigmah > 0.0, sigmah, 0.0)
+        )
+        DirichletBC(CG1, bdryval, "on_boundary").apply(sigmah)
 
         # check dual admissiblity (up to tolerance)
         assert self._globalextreme(sigmah, minimum=True) >= -dualtol

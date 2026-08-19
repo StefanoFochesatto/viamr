@@ -303,6 +303,74 @@ def test_nsvmark_nontrivial():
     _nsvmark_nontrivial(VIAMR(debug=True))
 
 
+def _nsvmark_active_boundary_soln(amr):
+    """Solve examples/aol.py's obstacle problem: -Delta u = -1, u >= 0, on the
+    rectangle [0,0.5]x[0,1], with Dirichlet data equal to the exact solution
+    u(x,y) = max(0.25 r - 0.5 - 0.5 ln(0.5 r), 0), r = (x+1)^2+y^2.  Unlike
+    _nsvmark_nontrivial_soln() above, whose Dirichlet data keeps the whole
+    boundary inactive, part of this rectangle's boundary genuinely touches
+    the obstacle (r >= 2 there), exercising nsvmark()'s NSV03-page-169
+    boundary formula for sigma_h rather than the all-zero fallback."""
+    mesh = RectangleMesh(
+        6, 12, 0.5, 1.0, distribution_parameters=VIAMR.PARALLEL_OVERLAP
+    )
+    CG1, _ = amr.spaces(mesh)
+    x, y = SpatialCoordinate(mesh)
+    r = (x + 1.0) ** 2 + y ** 2
+    g_ufl = conditional(r < 2.0, 0.25 * r - 0.5 - 0.5 * ln(0.5 * r), 0.0)
+    f_ufl = Constant(-1.0)
+
+    uh = Function(CG1, name="uh")
+    vh = TestFunction(CG1)
+    F = inner(grad(uh), grad(vh)) * dx - f_ufl * vh * dx
+    g = Function(CG1).interpolate(g_ufl)
+    bcs = DirichletBC(CG1, g, "on_boundary")
+    problem = NonlinearVariationalProblem(F, uh, bcs)
+    lb = Function(CG1).interpolate(Constant(0.0))
+    ub = Function(CG1).interpolate(Constant(1.0e10))
+    sp = {
+        "snes_type": "vinewtonrsls",
+        "ksp_type": "preonly",
+        "pc_type": "lu",
+        "pc_factor_mat_solver_type": "mumps",
+    }
+    solver = NonlinearVariationalSolver(problem, solver_parameters=sp, options_prefix="s")
+    solver.solve(bounds=(lb, ub))
+    return mesh, uh, lb, f_ufl, g, g_ufl
+
+
+def test_nsvmark_active_boundary():
+    amr = VIAMR(debug=True)
+    mesh, uh, lb, f_ufl, g, g_ufl = _nsvmark_active_boundary_soln(amr)
+    CG1, DG0 = amr.spaces(mesh)
+    assert amr.checkadmissible(uh, lb)
+
+    # boundary indicator, parallel-safe (same DirichletBC-apply idiom nsvmark() uses)
+    isbdry = Function(CG1).assign(0.0)
+    DirichletBC(CG1, Constant(1.0), "on_boundary").apply(isbdry)
+
+    # confirm this problem genuinely has both active and inactive boundary
+    # nodes, i.e. it actually exercises the case nsvmark() previously ignored
+    gap = Function(CG1).interpolate(uh - lb)
+    gap_boundary_only = Function(CG1).interpolate(
+        conditional(isbdry > 0.5, gap, 1.0e10)
+    )
+    assert amr.scalarrange(gap_boundary_only)[0] < amr.activetol  # some node active
+    assert amr.scalarrange(Function(CG1).interpolate(gap * isbdry))[1] > amr.activetol
+    # ... and some node inactive
+
+    mark, etainf, sigmah, total_err, etad = amr.nsvmark(uh, lb, g, f_ufl, g_ufl)
+    assert sigmah.function_space().ufl_element() == CG1.ufl_element()
+
+    # the point of the fix: sigma_h must respect the sign convention (also
+    # asserted internally by nsvmark()) and now be genuinely nonzero at some
+    # boundary dof; before the fix, boundary values of sigma_h were
+    # unconditionally zeroed by nsvmark(), regardless of activity there
+    sigmah_boundary = Function(CG1).interpolate(sigmah * isbdry)
+    assert amr.scalarrange(sigmah_boundary)[0] >= -1.0e-10
+    assert amr.scalarrange(sigmah_boundary)[1] > amr.activetol
+
+
 def _fixedrate_total_case(amr):
     # Shared by test_fixedrate_total() here and
     # tests/test_parallel.py::test_fixedrate_total_parallel(), so the two
@@ -535,6 +603,7 @@ if __name__ == "__main__":
     test_refine_br_total()
     test_nsvmark_allinactive()
     test_nsvmark_nontrivial()
+    test_nsvmark_active_boundary()
     test_fixedrate_total()
     test_udomark_nontrivial()
     test_udomark_restrict()
