@@ -326,6 +326,7 @@ where $v^+ := \max\{v,0\}$ and $v^- := -\min\{v,0\}$ are the positive and negati
 
 Thus, at a boundary node whose star lies wholly in one active set, we keep the correctly-signed part of $R_h(z)$ and zero out the rest; at any other boundary node, including one whose star meets both contact types or neither, $\sigma_h(z)$ is simply set to zero.  Up to the sign flip already noted, the first case of \eqref{eq:sigmah-bnd} is exactly \cite[formula (2.2)]{NSV03}, and the second case, for upper-contact boundary nodes, is appropriately symmetric.
 
+
 \subsection{Positivity-preserving interpolation}
 
 We record here the ball-averaging interpolation operator of Chen \& Nochetto \cite{ChenNochetto2000}, since the Galerkin-functional and barrier constructions to come both use it.  The construction does not depend on the obstacles at all, so it is unchanged for the box-constrained case; we simply state it following \cite[\S 2.2]{NSV03}, and citing \cite{ChenNochetto2000} for proofs.  We call a linear operator $A$ \emph{positive} if $\varphi \ge 0$ implies $A\varphi \ge 0$.
@@ -374,9 +375,9 @@ This is exactly \cite[formula (3.3)]{NSV03}.  Note that
 \label{eq:Ghagain}
 \left<\Gh,\varphi\right> = \left<\nabla(u-u_h),\nabla\varphi\right> - \left<\sigma+\tilde\sigma_h,\varphi\right>
 \end{equation}
-because $-\nabla\cdot\nabla u = \sigma + f$, the strong form of \eqref{eq:sigma}.  Thus the (mostly, and only up to quadrature) computable quantity $\Gh$, not directly defined in terms of the solution $u,\sigma$, plays the role the residual in the error equation plays for an unconstrained linear equation.
+by definition \eqref{eq:sigma} of $\sigma$.
 
-Next we apply $\Gh$ to a mesh hat function.
+Next we apply $\Gh$ to a piecewise-linear function $\varphi_h$.  We see that the result would be zero if $\sigma_h$ and $\tilde \sigma_h$ were computing the same thing, and if the inner products $\left<\cdot,\cdot\right>$ and $\left<\cdot,\cdot\right>_h$ were the same, but of course they are not.
 
 \begin{lemma}[Almost Galerkin orthogonality]
 \label{lem:almostGO}
@@ -415,21 +416,24 @@ Then, for $\varphi \in \mathring H^1(\Om)$,
 \end{lemma}
 
 \begin{proof}
-Split $\left<\Gh,\varphi\right> = \left<\Gh,\Pih\varphi\right> + \left<\Gh,\varphi-\Pih\varphi\right>$, and evaluate each term.  For $\left<\Gh,\Pih\varphi\right>$, apply Lemma~\ref{lem:almostGO} with $\varphi_h=\Pih\varphi\in\Vhr$:
+Split $\left<\Gh,\varphi\right> = \left<\Gh,\varphi-\Pih\varphi\right> + \left<\Gh,\Pih\varphi\right>$, and evaluate each term.
+
+For $\left<\Gh,\varphi-\Pih\varphi\right>$, use definition \eqref{eq:Gh} with $\varphi$ replaced by $\varphi - \Pih\varphi \in \mathring H^1(\Om)$.  Integrate $\left<\nabla u_h,\nabla(\varphi-\Pih\varphi)\right>$ by parts elementwise: $u_h$ is affine on each $T$, so no interior element term survives, leaving only the interior jump terms.  (There is no boundary term since $\varphi-\Pih\varphi$ vanishes on $\dOm$.)  For $\left<\tilde\sigma_h,\varphi-\Pih\varphi\right>$, use definition \eqref{eq:sigmatilde}.  On $\Thzero$, $\tilde\sigma_h=\sigma_h$ directly, while on $\Thplus$, $\tilde\sigma_h$ pairs against $\Pih$ applied to the test function, and by linearity of $\Pih$, $\Pih(\varphi-\Pih\varphi) = \Pih\varphi - \Pih^2\varphi$.  Altogether,
+\begin{equation}
+\label{eq:Gh-first}
+  \left<\Gh,\varphi-\Pih\varphi\right> = \left<\Rh,\varphi-\Pih\varphi\right> \ -\ \sum_{T\in\Thplus}\int_T \Ih\bigl(\sigma_h(\Pih\varphi-\Pih^2\varphi)\bigr).
+\end{equation}
+
+For $\left<\Gh,\Pih\varphi\right>$, apply Lemma~\ref{lem:almostGO} with $\varphi_h=\Pih\varphi\in\Vhr$:
 \begin{equation}
 \label{eq:Gh-second}
   \left<\Gh,\Pih\varphi\right> = \left<\Qh,\Pih\varphi\right> \ +\ \sum_{T\in\Thplus}\int_T \Ih\bigl(\sigma_h(\Pih\varphi-\Pih^2\varphi)\bigr).
 \end{equation}
 
-For $\left<\Gh,\varphi-\Pih\varphi\right>$, use \eqref{eq:Gh}'s $H^1$-pairing form directly, with $\varphi$ there replaced by $\varphi - \Pih\varphi \in \mathring H^1(\Om)$.  Integrate $\left<\nabla u_h,\nabla(\varphi-\Pih\varphi)\right>$ by parts elementwise: $u_h$ is affine on each $T$, so no interior element term survives, leaving only the interior side jump terms with no boundary term since $\varphi-\Pih\varphi$ vanishes on $\dOm$.  For $\left<\tilde\sigma_h,\varphi-\Pih\varphi\right>$, use \eqref{eq:sigmatilde}.  (On $\Thzero$, $\tilde\sigma_h=\sigma_h$ directly; on $\Thplus$, $\tilde\sigma_h$ pairs against $\Pih$ applied to the test function, and by linearity of $\Pih$, $\Pih(\varphi-\Pih\varphi) = \Pih\varphi - \Pih^2\varphi$.)  Altogether,
-\begin{equation}
-\label{eq:Gh-first}
-  \left<\Gh,\varphi-\Pih\varphi\right> = \left<\Rh,\varphi-\Pih\varphi\right> \ -\ \sum_{T\in\Thplus}\int_T \Ih\bigl(\sigma_h(\Pih\varphi-\Pih^2\varphi)\bigr).
-\end{equation}
 Adding \eqref{eq:Gh-second} and \eqref{eq:Gh-first} and cancelling leaves \eqref{eq:Gh-repn}.
 \end{proof}
 
-As with Lemma~\ref{lem:almostGO}, this derivation only used the $\Th = \Thzero \sqcup \Thplus$ split, $\sigma_h$'s definition, and linearity of $\Pih$ and $\Ih$.  (The identity of which obstacle is active on $\Thzero$ is not relevant.)  The cancellation above is exactly why $\tilde\sigma_h$, rather than $\sigma_h$ itself, appears in \eqref{eq:Gh}.  If one used $\sigma_h$ in place of $\tilde\sigma_h$ it would leave an uncancelled $\Thplus$ term in \eqref{eq:Gh-repn}, one that does not shrink at the rate needed for a second-order estimator; see the discussion after \cite[formula (3.6)]{NSV03}.
+As with Lemma~\ref{lem:almostGO}, this derivation only used the $\Th = \Thzero \sqcup \Thplus$ split, $\sigma_h$'s definition, and linearity of $\Pih$ and $\Ih$; which obstacle is active on $\Thzero$ is not relevant.  The cancellation is exactly why $\tilde\sigma_h$, rather than $\sigma_h$ itself, appears in \eqref{eq:Gh}.  If one used $\sigma_h$ in place of $\tilde\sigma_h$ it would leave an uncancelled $\Thplus$ term in \eqref{eq:Gh-repn}, one that does not shrink at the rate needed for a second-order estimator; see the discussion after \cite[formula (3.6)]{NSV03}.
 
 
 %% TODO: remaining sections, mirroring NSV03's structure, not yet written:
