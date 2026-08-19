@@ -46,6 +46,8 @@ def pytest_configure(config):
     )
     if os.environ.get(_CHILD_FLAG):
         return  # this process IS one of the mpiexec-spawned workers; just run normally
+    print("Note pytest customization: MPI-parallel tests first; "
+          "dropped from session below.")
     for filepath, restrict in _target_files(config):
         for funcname, nprocs in _find_parallel_tests(filepath):
             if restrict is not None and funcname != restrict:
