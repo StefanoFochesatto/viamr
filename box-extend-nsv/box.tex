@@ -63,13 +63,15 @@ urlcolor=black
 \begin{document}
 \maketitle
 
+
 \section{Introduction and goals} \label{sec:intro}
 
 The VIAMR library (\href{https://github.com/StefanoFochesatto/viamr}{\texttt{github.com/StefanoFochesatto/viamr}}) implements adaptive mesh refinement (AMR) and mesh adaptation algorithms for variational inequalities (VIs).  Some of the implemented methods incorporate heuristic strategies and extend AMR for VIs to highly-nonlinear and/or degenerate problems.  However, for a classical obstacle problem, namely a unilateral obstacle problem where the operator is the (weak) Laplacian and the corresponding PDE is the Poisson equation, the library implements element marking using the fully-rigorous \emph{a posteriori} estimator from Nochetto, Siebert, \& Veeser \cite{NSV03}.  For that estimator reliability (estimator gives upper bound on error) and efficiency (lower bound as well) are proven in the $L^\infty$ pointwise norm.
 
 This Appendix extends their proof to the bilateral case, with continuous lower \emph{and upper} bounds.  However, note that the operator must still be the ordinary linear Laplacian.  Our notation follows that in \cite{NSV03} to a significant extent, but we flag cases where it does not.
 
-\section{Setup} \label{sec:setup}
+
+\section{Continuum problem and setup} \label{sec:setup}
 
 \subsection{The variational inequality, and its residual}  Let $\Om$ be a bounded, polyhedral, not necessarily convex domain in $\mathbb{R}^d$
 with $d \in \{1,2,3\}$.  Suppose
@@ -248,6 +250,7 @@ and $\Kh$ is non-empty, closed, and convex.  As noted by \cite{NSV03} for the un
 \end{equation}
 which again admits a unique solution.
 
+
 \subsection{The discrete residual and its sign}
 
 For interior nodes $z \in \Nhr$, define $\sigma_h \in \Vh$ nodally by
@@ -302,6 +305,7 @@ Observe that no separation hypothesis is needed in Proposition \ref{prop:nodalsi
 
 Proposition~\ref{prop:separation}'s separation constant $r_0$ still matters for \emph{sharpness}: once $h \lesssim r_0$, $\Thplus$ shrinks to a thin transition band tracking the true free boundary, rather than swallowing up contact elements that should have been classified into $\Thbot$ or $\Thtop$.
 
+
 \subsection{The residual at boundary nodes}
 
 At a boundary node $z \in \Nh \setminus \Nhr$, $\phi_h^z$ does not vanish on $\dOm$, and $v_h = \Ih g$ is fixed there by \eqref{eq:Kh}, so the stationarity argument of Proposition~\ref{prop:nodalsign} gives nothing.  Instead, $\sigma_h(z)$ at a boundary node must be defined by the following diagnostic construction, similar to \cite[\S 2.1]{NSV03}.
@@ -355,6 +359,8 @@ where $|D^2\varphi|_{\mathrm{var}} := \sum_{i=1}^d |D\partial_i\varphi|_{\mathrm
 
 We will need properties \eqref{eq:Pihprops} and \eqref{eq:PihBV} in the following sections.
 
+
+\section{A posteriori estimator} \label{sec:estimator}
 
 \subsection{The Galerkin functional}
 
@@ -436,13 +442,55 @@ Adding \eqref{eq:Gh-second} and \eqref{eq:Gh-first} and cancelling leaves \eqref
 As with Lemma~\ref{lem:almostGO}, this derivation only used the $\Th = \Thzero \sqcup \Thplus$ split, $\sigma_h$'s definition, and linearity of $\Pih$ and $\Ih$; which obstacle is active on $\Thzero$ is not relevant.  The cancellation is exactly why $\tilde\sigma_h$, rather than $\sigma_h$ itself, appears in \eqref{eq:Gh}.  If one used $\sigma_h$ in place of $\tilde\sigma_h$ it would leave an uncancelled $\Thplus$ term in \eqref{eq:Gh-repn}, one that does not shrink at the rate needed for a second-order estimator; see the discussion after \cite[formula (3.6)]{NSV03}.
 
 
+\subsection{Localized residual and quadrature estimators}
+
+Bounding $\Gh$ pointwise will be carried-out in later sections.  We will follow \cite[\S\S 4--5]{NSV03}, so we first need to bound $\Gh$ in a dual space larger than $\mathring H^1(\Om)$ itself.
+
+Following \cite[\S 3.2]{NSV03}, let
+\begin{equation}
+\label{eq:W}
+  W := \{\varphi \in \mathring H^1(\Om) : \nabla\varphi \in BV(\Om)^d\},
+\end{equation}
+equipped with the seminorm $\varphi \mapsto |D^2\varphi|_{\mathrm{var}}(\Om)$ already used in \eqref{eq:PihBV}.  This space is slightly larger than $\mathring W^{1,2}(\Om) \cap \mathring H^1(\Om)$, but it still contains the discrete space $\Vhr$; both facts matter below.
+
+For $1 \le p \le \infty$, with dual exponent $p' = p/(p-1)$, define the \emph{localized residual} $R_p$, element-wise over $T\in\Th$, by
+\begin{equation}
+\label{eq:Rp}
+  R_p|_T := h_T^{-1/p'}\,|T|^{-1/p}\,\bigl\|\jump{\partial_\nu u_h}\bigr\|_{0,p;\partial T \setminus \dOm}
+  \ +\ \begin{cases} |f - \sigma_h|, & T \in \Thzero, \\ |f|, & T \in \Thplus. \end{cases}
+\end{equation}
+This is exactly \cite[formula (3.7)]{NSV03}: the first term is the usual interior-flux-jump contribution over $\partial T$, and the second is the residual magnitude $|f-\sigma_h|$ on wholly-active elements, or the bare source term $|f|$ elsewhere.  Nothing here refers to the nature of the active obstacle, so \eqref{eq:Rp} is unchanged from the unilateral case.
+
+By the BV-approximation properties \eqref{eq:PihBV} of $\Pih$ and additivity of $|D^2\varphi|_{\mathrm{var}}$ over $\Th$, definition \eqref{eq:RhQh} of $\Rh$ gives
+\begin{equation}
+\label{eq:Rhbound}
+  \bigl|\left<\Rh,\varphi-\Pih\varphi\right>\bigr| \ \preceq\ \|h^2 R_\infty\|_{0,\infty;\Om}\, |D^2\varphi|_{\mathrm{var}}(\Om)
+\end{equation}
+for $\varphi \in W$.  This is \cite[formula (3.8)]{NSV03}.
+
+The second term $\left<\Qh,\Pih\varphi\right>$ in the representation formula \eqref{eq:Gh-repn} accounts for the effect of quadrature.  It too is independent of obstacle type, and it already arises for an unconstrained linear problem.  Applying the first bound in \eqref{eq:Pihprops} together with the Sobolev-type inequality $\|\nabla\varphi\|_{0,d';\Om} \preceq |D^2\varphi|_{\mathrm{var}}(\Om)$, valid for $\varphi \in W$, gives \cite[formula (3.9)]{NSV03}, namely
+\begin{equation}
+\label{eq:Qhbound}
+  \bigl|\left<\Qh,\Pih\varphi\right>\bigr| \ \preceq\ \|h^2\nabla\sigma_h\|_{0,d;\Lamh}\, \|\nabla\Pih\varphi\|_{0,d';\Om}
+  \ \preceq\ \|h^2\nabla\sigma_h\|_{0,d;\Lamh}\, |D^2\varphi|_{\mathrm{var}}(\Om),
+\end{equation}
+where $\Lamh := \Lamhbot \cup \Lamhtop = \bigcup_{T\in\Thzero} T$ is the union of both active regions.  We have generalized from the unilateral contact set \cite[formula (2.4)]{NSV03} to the bilateral case in the obvious way.
+
+Inserting \eqref{eq:Rhbound} and \eqref{eq:Qhbound} into the representation formula \eqref{eq:Gh-repn} gives the upper bound
+\begin{equation}
+\label{eq:Ghbound}
+  \|\Gh\|_{-2,\infty;\Om} \ \preceq\ \|h^2 R_\infty\|_{0,\infty;\Om} \ +\ \|h^2\nabla\sigma_h\|_{0,d;\Lamh},
+\end{equation}
+where
+\begin{equation}
+\label{eq:Ghdualnorm}
+  \|\Gh\|_{-2,\infty;\Om} := \sup\bigl\{\left<\Gh,\varphi\right> : \varphi\in W,\ |D^2\varphi|_{\mathrm{var}}(\Om)\le 1\bigr\}.
+\end{equation}
+Bound \eqref{eq:Ghbound} is \cite[formula (3.10)]{NSV03}.  As with the Galerkin functional itself, nothing in its derivation distinguishes lower from upper contact; the same bound controls $\Gh$ whether the active elements $T\in\Thzero$ come from $\Thbot$ or $\Thtop$.
+
+
 %% TODO: remaining sections, mirroring NSV03's structure, not yet written:
 %%
-%%  (c) Localized residual and quadrature estimators (NSV03 sec. 3.2):
-%%      bound Gh in the dual space of Pih's BV-type estimates \eqref{eq:PihBV};
-%%      define the localized residual R_p (NSV03 (3.7)) over Thzero/Thplus
-%%      and derive the upper bound (3.8)-(3.10) on Gh; likely a routine
-%%      relabeling like the rest of this subsection, but not yet checked.
 %%  (d) Barriers (NSV03 sec. 4): upper/lower barrier construction via the
 %%      Riesz representation w of G_h; the continuous-maximum-principle
 %%      argument looks obstacle-shape-agnostic and should carry over
