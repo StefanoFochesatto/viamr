@@ -7,11 +7,13 @@ This repository contains Python algorithms for adaptive mesh refinement (AMR) an
 <img src="images/spiralblue.png" height="250" alt="spiral mesh (upper left)">
 </p>
 
-In describing algorithms we use the language of _active_ and _inactive_ sets.  In an _active set_, also known as a _coincidence_ or _contact_ set, one of the bound inequalities holds as an equality.  In the _inactive set_ the constraints are strict inequalities, so the solution satisfies a PDE.
+## Meshing for accurate set geometry
 
-Our primary AMR goals in this context are to generate rapid convergence in solution norm, to generated accurate computed free boundaries, and to be able to measure geometrical errors in free boundaries and active sets.
+In describing algorithms we use the language of _active_ and _inactive_ sets.  In an _active set_, also known as a _coincidence_ or _contact_ set, one of the bound inequalities holds as an equality.  In the _inactive set_ the constraints are strict inequalities, so the solution satisfies a PDE.  A _free boundary_ is where these sets meet.
 
-Our library defines the `VIAMR` Python class in `viamr/viamr.py`.  It bundles 3 kinds of strategies for deciding _where_ to refine: free-boundary-proximity heuristics, classical residual/jump estimators applied only in inactive sets, and a whole-domain estimator designed for VIs.  These methods produce DG0 indicators (markings), with $\{0,1\}$ values, which can be combined by unioning if desired.  Markings can be fed to 2 tag-and-refine skeleton-based mesh refinement methods, [PETSc's](https://petsc.org/release/) (limited to 2D) or [Netgen's](https://ngsolve.org/).  All of these algorithms are parallel, with excellent weak scaling.
+Our primary AMR goals for free-boundary problems posed as VIs are to generate rapid convergence in solution norm, to generated accurate computed free boundaries and (in)active sets, and to be able to measure geometrical errors in free boundaries and active sets.
+
+Our library defines the `VIAMR` Python class.  (See `viamr/viamr.py`.)  This class bundles 3 kinds of strategies for deciding _where_ to refine: free-boundary-proximity heuristics, classical residual/jump estimators applied only in inactive sets, and a whole-domain estimator already designed for VIs.  These methods produce DG0 indicators (piece-wise constant markings) on meshes, with $\{0,1\}$ values, which can be combined by unioning if desired.  Markings can be fed to 2 tag-and-refine skeleton-based mesh refinement methods, [PETSc's](https://petsc.org/release/) (limited to 2D) or [Netgen's](https://ngsolve.org/).  All of these algorithms are parallel, with excellent weak scaling.
 
 Metric-based mesh adaptation, i.e. re-meshing, is also supported, via our `AVMMixin` class which applies the [animate](https://github.com/mesh-adaptation/animate) mesh-adaptation library.
 
