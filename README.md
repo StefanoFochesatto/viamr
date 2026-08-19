@@ -2,6 +2,15 @@
 
 This repository contains Python algorithms for adaptive mesh refinement (AMR) and mesh adaptation for variational inequalities (VIs), which are partial differential equation (PDE) problems where the solution is subject to inequalities.  The constraint set for these problems must be defined by a lower- and upper-bound inequalities.  Our algorithms apply the [Firedrake](https://www.firedrakeproject.org) finite element library.
 
+<p align="center">
+<table>
+  <tr>
+    <td><img src="images/spiralbw.png" height="250" alt="spiral active set"></td>
+    <td><img src="images/spiralblue.png" height="250" alt="spiral mesh (upper left)"></td>
+  </tr>
+</table>
+</p>
+
 In describing algorithms we use the language of _active_ and _inactive_ sets.  In an _active set_, also known as a _coincidence_ or _contact_ set, one of the bound inequalities holds as an equality.  In the _inactive set_ the constraints are strict inequalities, so the solution satisfies a PDE.
 
 Our primary AMR goals in this context are to generate rapid convergence in solution norm, to generated accurate computed free boundaries, and to be able to measure geometrical errors in free boundaries and active sets.
