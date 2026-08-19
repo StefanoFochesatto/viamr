@@ -1,4 +1,4 @@
-# VIAMR = adaptive mesh refinement and adaptation for variational inequalities
+# VIAMR = adaptive mesh refinement for variational inequalities
 
 This repository contains Python algorithms for adaptive mesh refinement (AMR) and mesh adaptation for variational inequalities (VIs), which are partial differential equation (PDE) problems where the solution is subject to inequalities.  The constraint set for these problems must be defined by a lower- and upper-bound inequalities.  Our algorithms apply the [Firedrake](https://www.firedrakeproject.org) finite element library.
 
