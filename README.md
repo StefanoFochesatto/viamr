@@ -13,11 +13,19 @@ In describing algorithms we use the language of _active_ and _inactive_ sets.  I
 
 Our primary AMR goals for free-boundary problems posed as VIs are to generate rapid convergence in solution norm, to generated accurate computed free boundaries and (in)active sets, and to be able to measure geometrical errors in free boundaries and active sets.
 
-Our library defines the `VIAMR` Python class.  (See `viamr/viamr.py`.)  This class bundles 3 kinds of strategies for deciding _where_ to refine: free-boundary-proximity heuristics, classical residual/jump estimators applied only in inactive sets, and a whole-domain estimator already designed for VIs.  These methods produce DG0 indicators (piece-wise constant markings) on meshes, with $\{0,1\}$ values, which can be combined by unioning if desired.  Markings can be fed to 2 tag-and-refine skeleton-based mesh refinement methods, [PETSc's](https://petsc.org/release/) (limited to 2D) or [Netgen's](https://ngsolve.org/).  All of these algorithms are parallel, with excellent weak scaling.
+## Library design
 
-Metric-based mesh adaptation, i.e. re-meshing, is also supported, via our `AVMMixin` class which applies the [animate](https://github.com/mesh-adaptation/animate) mesh-adaptation library.
+Our library defines the `VIAMR` Python class.  (See `viamr/viamr.py`.)  This class bundles 3 kinds of strategies for deciding _where_ to refine: free-boundary-proximity heuristics, classical residual/jump estimators applied only in inactive sets, and a whole-domain estimator already designed for Laplacian-type VIs.  The first two strategies generalize to very nonlinear and/or degenerate operators.  These methods produce DG0 indicators (piece-wise constant markings) on meshes, with $\{0,1\}$ values, which can be combined by unioning if desired.
 
-Solution-norm error is a standard, supported way to evaluate quality.  However, the library also supports a diagnostic layer which measures active-set geometrical error (Jaccard distances) and free-boundary location accuracy (Hausdorff metric).  Free-boundary accuracy is often a goal for computations using variational inequalities.
+The tag-and-refine element markings from the above strategies can be fed to two skeleton-based mesh refinement methods, [PETSc's](https://petsc.org/release/) (limited to 2D) or [Netgen's](https://ngsolve.org/).
+
+Metric-based mesh adaptation, i.e. re-meshing, is also supported.  The library defines a `AVMMixin` class which implements an averaged-metric generation step, and applies the [animate](https://github.com/mesh-adaptation/animate) mesh-adaptation library to generate the new mesh.
+
+All of the algorithms are parallel, and they have excellent weak scaling.
+
+Solution-norm error is a standard, supported way to evaluate quality.  Effectivity indices against the implemented _a posteriori_ estimators can be computed when exact solutions are available.
+
+The library also supports a diagnostic layer which measures active-set geometrical error (Jaccard distances) and free-boundary location accuracy (Hausdorff metric).  Free-boundary accuracy is often a goal for computations using VIs.
 
 These codes extend Stefano's Master of Science project at the University of Alaska Fairbanks (S. Fochesatto (2024). _Adaptive mesh refinement for variational inequalities_).  A paper is in progress.
 
