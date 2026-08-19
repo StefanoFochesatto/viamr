@@ -1,4 +1,15 @@
-all:
+all: box.pdf
+
+box.pdf: box.tex box.aux box.bbl
+	pdflatex box
+	pdflatex box
+
+box.aux: box.tex
+	pdflatex box
+	bibtex box
+
+box.bbl: box.aux box.bib
+	bibtex box
 
 .PHONY: clean
 
