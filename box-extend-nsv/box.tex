@@ -169,7 +169,7 @@ $L^\top r^\alpha < \delta_{\min}/2$ and $L_u r^\beta < \delta_{\min}/2$, by defi
 $r \ge r_0$, and $\operatorname{dist}(\Cbot,\Ctop) \ge r_0$ follows.
 \end{proof}
 
-Proposition~\ref{prop:separation} gives an explicit, data-determined lower bound $r_0$ on the spatial separation of the two contact sets; $r_0$ is controlled by $f,\psilo,\psiup,g$ through the regularity theory.  As it turns out (Remark~\ref{rem:starseparation2}), \S \ref{sec:discretization} does \emph{not} need to impose $h < c\,r_0$ as a hypothesis for the estimator to be well-defined and correct.  Instead, $r_0$'s role is to bound the width of the transition band so that the discretization's classification tracks the true contact sets closely.
+Proposition~\ref{prop:separation} gives an explicit, data-determined lower bound $r_0$ on the spatial separation of the two contact sets; $r_0$ is controlled by $f,\psilo,\psiup,g$ through the regularity theory.  As it turns out, \S \ref{sec:discretization} does \emph{not} need to impose $h < c\,r_0$ as a hypothesis for the estimator to be well-defined and correct.  Instead, $r_0$'s role is to bound the width of the transition band so that the discretization's classification tracks the true contact sets closely.
 
 
 \section{Discretization} \label{sec:discretization}
@@ -296,16 +296,33 @@ Observe that no separation hypothesis is needed in Proposition \ref{prop:nodalsi
 
 Proposition~\ref{prop:separation}'s separation constant $r_0$ still matters for \emph{sharpness}: once $h \lesssim r_0$, $\Thplus$ shrinks to a thin transition band tracking the true free boundary, rather than swallowing up contact elements that should have been classified into $\Thbot$ or $\Thtop$.
 
+\subsection{The residual at boundary nodes}
+
+At a boundary node $z \in \Nh \setminus \Nhr$, $\phi_h^z$ does not vanish on $\dOm$, and $v_h = \Ih g$ is fixed there by \eqref{eq:Kh}, so the stationarity argument of Proposition~\ref{prop:nodalsign} gives nothing.  Instead, $\sigma_h(z)$ at a boundary node must be defined by the following diagnostic construction, similar to \cite[\S 2.1]{NSV03}.
+
+Because $\phi_h^z$ does not vanish on $\dOm$ for a boundary node, the bracket in \eqref{eq:sigmah} is no longer the whole residual: integrating $\langle\nabla u_h,\nabla\phi_h^z\rangle$ by parts elementwise picks up an extra boundary flux term, $\langle\langle\partial_n u_h,\phi_h^z\rangle\rangle := \int_{\dOm}()\partial_n u_h)\,\phi_h^z$, where $\partial_n$ is the outward-normal derivative, taken elementwise. Write
+\begin{equation}
+\label{eq:Rbnd}
+  R_h(z) := \langle\nabla u_h,\nabla\phi_h^z\rangle - \langle f,\phi_h^z\rangle - \langle\langle\partial_n u_h,\phi_h^z\rangle\rangle, \qquad z \in \Nh\setminus\Nhr,
+\end{equation}
+for this boundary-corrected residual bracket, in our sign convention. Since \eqref{eq:Rbnd} is not derived from a stationarity argument, it carries no guaranteed sign, but \cite{NSV03} handles this by keeping only the part of the bracket that has the sign \eqref{eq:sigmasign} demands, and discarding the rest.
+
+We extend the same device to both obstacles, defining, for $z \in \Nh\setminus\Nhr$,
+\begin{equation}
+\label{eq:sigmah-bnd}
+  \sigma_h(z) := \begin{cases}
+    R_h(z)^+ / \int_\Om \phi_h^z, & \text{if } \Uh(z) \subset \{u_h = \psiloh\}, \\
+    -R_h(z)^- / \int_\Om \phi_h^z, & \text{if } \Uh(z) \subset \{u_h = \psiuph\}, \\
+    0, & \text{otherwise},
+  \end{cases}
+\end{equation}
+where $v^+ := \max\{v,0\}$ and $v^- := -\min\{v,0\}$ are the positive and negative parts of $v$. Since $R_h(z)^+ \ge 0$ and $-R_h(z)^- \le 0$ by construction, \eqref{eq:sigmah-bnd} satisfies \eqref{eq:sigmasign} by fiat.
+
+Thus, at a boundary node whose star lies wholly in one active set, we keep the correctly-signed part of $R_h(z)$ and zero out the rest; at any other boundary node, including one whose star meets both contact types or neither, $\sigma_h(z)$ is simply set to zero.  Up to the sign flip already noted, the first case of \eqref{eq:sigmah-bnd} is exactly \cite[formula (2.2)]{NSV03}, and the second case, for upper-contact boundary nodes, is appropriately symmetric.
+
 
 %% TODO: remaining sections, mirroring NSV03's structure, not yet written:
 %%
-%%  (a) Boundary formula for sigma_h at Dirichlet nodes z in N_h \ N_h^o: no
-%%      perturbation freedom there (v_h = I_h g is an equality constraint),
-%%      so sigma_h(z) there is a diagnostic quantity, not derived from
-%%      stationarity as in Proposition~\ref{prop:nodalsign}. Need the
-%%      two-sided analogue of NSV03's boundary-node formula (their page 169):
-%%      a symmetric (R -+ bnd)^{+/-} truncation construction, worked out in
-%%      discussion 2026-08-18 but not yet transcribed into this file.
 %%  (b) Positivity-preserving interpolation Pi_h (NSV03 sec. 2.2, the
 %%      Chen-Nochetto ball-averaging operator): restate; properties (2.5)-
 %%      (2.8) should carry over unchanged, since Pi_h does not depend on
