@@ -196,20 +196,25 @@ Also as in \cite{NSV03}, in what follows $C$ denotes different constants dependi
 
 \subsection{Monotonicity of nodal interpolation, and $\Kh$}
 
-Let us start with a property special to piecewise-\emph{linear} interpolation which needs no acuteness or mesh-fineness assumption on $\Th$.  This does not hold generally for higher-order elements.
+Let us start with two properties special to affine functions and piecewise-\emph{linear} interpolation, which need no acuteness or mesh-fineness assumption on $\Th$.  They do not hold generally for higher-order elements.
+
+\begin{lemma}[Vanishing affine functions on simplices]
+\label{lem:affine}
+If $w$ is affine on a simplex $T$, and if $w \ge 0$ at every vertex of $T$, then $w\ge 0$ everywhere on $T$.  Furthermore, $w = 0$ somewhere in $T$ if and only if $w = 0$ at some vertex of $T$.
+\end{lemma}
+
+\begin{proof}
+Most parts are obvious affine function properties.  For ($\Rightarrow$) direction of the equivalence claim, write a point $x \in T$ in barycentric coordinates, $x = \sum_i \lambda_i x_i$, $\lambda_i \ge 0$, $\sum_i \lambda_i = 1$, so $w(x) = \sum_i \lambda_i w(x_i)$.  If $w(x_i) > 0$ for every vertex $x_i$, then $w(x) > 0$ for every $x \in T$ (some $\lambda_i > 0$ always, and all terms are non-negative with at least one strictly positive).
+\end{proof}
 
 \begin{lemma}[Order-preservation of $I_h$]
 \label{lem:monotone}
 If $\phi, \zeta \in C(\bar\Om)$ satisfy $\phi \le \zeta$ on $\bar\Om$, then
 $\Ih \phi \le \Ih \zeta$ on $\bar\Om$, for any mesh $\Th$.
 \end{lemma}
+
 \begin{proof}
-By linearity of $\Ih$, $\Ih \zeta - \Ih \phi = \Ih(\zeta - \phi)$, and
-$\zeta - \phi \ge 0$ at every node. On each $T \in \Th$, $\Ih(\zeta-\phi)$
-is affine and equals a convex combination (barycentric coordinates) of the
-values of $\zeta - \phi$ at $T$'s vertices; a convex combination of
-nonnegative numbers is nonnegative. Hence $\Ih(\zeta-\phi) \ge 0$ on $T$,
-for every $T$.
+By linearity of $\Ih$, $\Ih \zeta - \Ih \phi = \Ih(\zeta - \phi)$, and $\zeta - \phi \ge 0$ at every node. On each $T \in \Th$, $\Ih(\zeta-\phi)$ is affine, hence $\Ih(\zeta-\phi) \ge 0$ on $T$, for every $T$, by the Lemma \ref{lem:affine}.
 \end{proof}
 
 Set $\psiloh := \Ih \psilo$ and $\psiuph := \Ih \psiup$. Applying
@@ -266,80 +271,31 @@ which are also discrete lower- and upper-contact active sets, but now element-wi
 
 \begin{remark}[``Thin'' active sets]
 \label{rem:thinactive}
-$\Thbot$ and $\Thtop$ are exactly what the \texttt{VIAMR.thinelemactive()} method marks.  An element is marked only if it \emph{and every
-element sharing a node with it} is active, i.e.\ the naive element-wise
-active set eroded by one ring. That erosion is precisely the content of
-$\Uh(T) \subset \{u_h = \psiloh\}$ --- $\Uh(T)$ \emph{is} $T$'s ring of
-neighbors (every $T' \in \Th$ meeting $T$ in a node), so requiring the whole
-ring to be active is the same condition, just written in NSV03's star
-notation instead of \texttt{viamr}'s dilation-based one. Concretely,
-$\Thbot = \texttt{thinelemactive(u\_h, psilo\_h, boxside="lower")}$ and
-$\Thtop = \texttt{thinelemactive(u\_h, psiup\_h, boxside="upper")}$, using
-the \texttt{boxside} generalization already in \texttt{viamr}. This is not
-a coincidence: NSV03 needed the one-ring erosion for exactly the same
-reason \texttt{thinelemactive()} was built for AMR marking --- a single
-active element adjacent to the free boundary is not yet safely in the
-interior of the contact set, so testing (or refining, or excluding from
-refinement) based on its value alone is unsound; only once a whole
-neighborhood agrees is the sign (or safety) of that neighborhood-based
-decision unconditional. Proposition~\ref{prop:nodalsign} is the a
-posteriori-estimator-side reason \texttt{thinelemactive()}'s erosion is the
-right notion of ``safely interior,'' not merely a heuristic.
+The element sets $\Thbot$ and $\Thtop$ are exactly what the \texttt{VIAMR.thinelemactive()} method marks.  An element is marked only if it \emph{and every element sharing a node with it} is active.  This erodes, by one element ring, the seemingly-strict element-wise active set, namely method \texttt{elemactive()}, which marks an element active if all its nodes are active, i.e.~in $\Nhbot,\Nhtop$ respectively.  That erosion is precisely the content of ``$\Uh(T) \subset \{u_h = \psiloh\}$'', for example, because $\Uh(T)$ \emph{is} $T$'s ring of neighbors (every $T' \in \Th$ meeting $T$ in a node).  Concretely, the calls are
+\begin{align*}
+\Thbot &= \texttt{thinelemactive(uh, psiloh, boxside="lower")} \\
+\Thtop &= \texttt{thinelemactive(uh, psiuph, boxside="upper")}
+\end{align*}
+using the \texttt{boxside} kwarg.  The original implementation of the unilateral \cite{NSV03} marking already needed the one-ring erosion in \texttt{thinelemactive()}.  Proposition~\ref{prop:nodalsign} below is the rigorous estimator-side justification of this ``safely interior'' erosion; it is not merely a heuristic.
 \end{remark}
 
-\begin{lemma}[Vanishing of an affine function on a simplex]
-\label{lem:affine}
-Let $w$ be affine on a simplex $T$ with $w \ge 0$ at every vertex of $T$.
-Then $w = 0$ somewhere in $T$ if and only if $w = 0$ at some vertex of $T$.
-\end{lemma}
-\begin{proof}
-($\Leftarrow$) is trivial. For ($\Rightarrow$), write a point $x \in T$ in
-barycentric coordinates, $x = \sum_i \lambda_i x_i$, $\lambda_i \ge 0$,
-$\sum_i \lambda_i = 1$, so $w(x) = \sum_i \lambda_i w(x_i)$. If $w(x_i) > 0$
-for every vertex $x_i$, then $w(x) > 0$ for every $x \in T$ (some $\lambda_i
-> 0$ always, and all terms are non-negative with at least one strictly
-positive). Contrapositive gives the claim.
-\end{proof}
-
-\begin{proposition}[Nodal sign, wholly-contact case]
+\begin{proposition}[Nodal residual sign in active cases]
 \label{prop:nodalsign}
-If $z \in \Nhr$ and $\Uh(z) \subset \{u_h = \psiloh\}$ (i.e.\ $z$'s star is
-wholly lower-contact), then $\sigma_h(z) \ge 0$. Symmetrically, if $\Uh(z)
-\subset \{u_h = \psiuph\}$, then $\sigma_h(z) \le 0$.
+If $z \in \Nhr$ and $\Uh(z) \subset \{u_h = \psiloh\}$, i.e.\ $z$'s star is wholly lower-active, then $\sigma_h(z) \ge 0$.  Symmetrically, if $\Uh(z) \subset \{u_h = \psiuph\}$ then $\sigma_h(z) \le 0$.
 \end{proposition}
+
 \begin{proof}
-Suppose $\Uh(z) \subset \{u_h = \psiloh\}$. Since $\psiuph - \psiloh \ge
-\delta_{\min} > 0$ on $\bar\Om$ \eqref{eq:disc-nondeg} and $u_h = \psiloh$
-throughout $\Uh(z)$, also $\psiuph - u_h \ge \delta_{\min} > 0$ throughout
-$\Uh(z)$; in particular $\Uh(z) \cap \Nhtop = \emptyset$. Fix $t \in [0,
-\delta_{\min}/\max_{\Uh(z)} \varphi_h^z]$ and set $v_h := u_h + t
-\varphi_h^z \in \Vh$. Since $\varphi_h^z \ge 0$ and $u_h = \psiloh$ on
-$\Uh(z)$, $v_h \ge \psiloh$ there (and $v_h = u_h \ge \psiloh$ elsewhere);
-by the choice of $t$, $v_h \le u_h + \delta_{\min} \le \psiuph$ on $\Uh(z)$
-too (and $v_h = u_h \le \psiuph$ elsewhere). So $v_h \in \Kh$. Testing
-\eqref{eq:discVI} with this $v_h$ and dividing by $t \ge 0$ gives $\langle
-\nabla u_h, \nabla \varphi_h^z\rangle \ge \langle f, \varphi_h^z\rangle$,
-i.e.\ $\sigma_h(z) \ge 0$ by \eqref{eq:sigmah}. The upper case is symmetric,
-testing with $t \le 0$.
+Suppose $\Uh(z) \subset \{u_h = \psiloh\}$.  Since $\psiuph - \psiloh \ge \delta_{\min} > 0$ on $\bar\Om$ by \eqref{eq:disc-nondeg}, and because $u_h = \psiloh$ throughout $\Uh(z)$, also $\psiuph - u_h \ge \delta_{\min} > 0$ throughout $\Uh(z)$.  In particular, $\Uh(z) \cap \Nhtop = \emptyset$.
+
+Now fix $t \in [0, \delta_{\min}/\max_{\Uh(z)} \varphi_h^z]$ and set $v_h := u_h + t \varphi_h^z \in \Vh$. Since $\varphi_h^z \ge 0$ and $u_h = \psiloh$ on $\Uh(z)$, $v_h \ge \psiloh$ there, and $v_h = u_h \ge \psiloh$ elsewhere.  By the choice of $t$, $v_h \le u_h + \delta_{\min} \le \psiuph$ on $\Uh(z)$, and $v_h = u_h \le \psiuph$ elsewhere, so $v_h \in \Kh$.  Testing \eqref{eq:discVI} with this $v_h$ and dividing by $t \ge 0$ gives $\langle \nabla u_h, \nabla \varphi_h^z\rangle \ge \langle f, \varphi_h^z\rangle$, which implies $\sigma_h(z) \ge 0$ by \eqref{eq:sigmah}.
+
+The upper case is symmetric, testing with $t \le 0$.
 \end{proof}
 
-\begin{remark}[Why no separation hypothesis is needed here]
-\label{rem:starseparation2}
-This is exactly the case NSV03's own estimator uses $\sigma_h$'s sign for:
-elements of $\Thbot$ or $\Thtop$. For a node whose star meets \emph{both}
-contact types (necessarily an element of $\Thplus$, by
-\eqref{eq:Thsplit}), the perturbation argument above breaks --- moving
-$t>0$ toward the free lower direction can run directly into an upper-contact
-point elsewhere in the star, for any $t>0$, however small (Lemma
-\ref{lem:affine} with the roles reversed) --- but $\Thplus$ elements never
-call on $\sigma_h$'s sign in the estimator to begin with (see the
-forthcoming efficiency/lower-bounds section), so no separation hypothesis
-is actually load-bearing for correctness.
-Proposition~\ref{prop:separation}'s $r_0$ still matters for
-\emph{sharpness}: once $h \lesssim r_0$, $\Thplus$ shrinks to a thin
-transition band tracking the true free boundary, rather than swallowing up
-contact elements that should have been classified $\Thbot$ or $\Thtop$.
-\end{remark}
+Observe that no separation hypothesis is needed in Proposition \ref{prop:nodalsign}.  This is important because we need to extend the \cite{NSV03} estimator using $\sigma_h$'s sign over elements in $\Thbot$ or $\Thtop$.  For a node whose star meets \emph{both} contact types, thus necessarily an element of $\Thplus$ by \eqref{eq:Thsplit}, the perturbation argument above breaks.  In fact, moving $t>0$ toward the free lower direction can collide with an upper-contact point elsewhere in the star, for any $t>0$, however small.  However, in the estimator, for $\Thplus$ elements we will never call on $\sigma_h$'s sign to begin with (see the forthcoming efficiency/lower-bounds section), so no separation hypothesis is needed for correctness.
+
+Proposition~\ref{prop:separation}'s separation constant $r_0$ still matters for \emph{sharpness}: once $h \lesssim r_0$, $\Thplus$ shrinks to a thin transition band tracking the true free boundary, rather than swallowing up contact elements that should have been classified into $\Thbot$ or $\Thtop$.
+
 
 %% TODO: remaining sections, mirroring NSV03's structure, not yet written:
 %%
