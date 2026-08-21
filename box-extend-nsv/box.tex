@@ -15,6 +15,7 @@ urlcolor=black
 
 \newtheorem{proposition}{Proposition}
 \newtheorem{lemma}{Lemma}
+\newtheorem{assumption}{Assumption}
 
 \theoremstyle{definition}
 \newtheorem{remark}{Remark}
@@ -66,9 +67,11 @@ urlcolor=black
 
 \section{Introduction and goals} \label{sec:intro}
 
-The VIAMR library (\href{https://github.com/StefanoFochesatto/viamr}{\texttt{github.com/StefanoFochesatto/viamr}}) implements adaptive mesh refinement (AMR) and mesh adaptation algorithms for variational inequalities (VIs).  Some of the implemented methods incorporate heuristic strategies and extend AMR for VIs to highly-nonlinear and/or degenerate problems.  However, for a classical obstacle problem, namely a unilateral obstacle problem where the operator is the (weak) Laplacian and the corresponding PDE is the Poisson equation, the library implements element marking using the fully-rigorous \emph{a posteriori} estimator from Nochetto, Siebert, \& Veeser \cite{NSV03}.  For that estimator reliability (estimator gives upper bound on error) and efficiency (lower bound as well) are proven in the $L^\infty$ pointwise norm.
+The VIAMR library (\href{https://github.com/StefanoFochesatto/viamr}{\texttt{github.com/StefanoFochesatto/viamr}}) implements adaptive mesh refinement (AMR) and mesh adaptation algorithms for variational inequalities (VIs).  Some of the implemented methods incorporate heuristic strategies and extend AMR for VIs to highly-nonlinear and/or degenerate problems.  See the main paper for the general setting.
 
-This Appendix extends their proof to the bilateral case, with continuous lower \emph{and upper} bounds.  However, note that the operator must still be the ordinary linear Laplacian.  Our notation follows that in \cite{NSV03} to a significant extent, but we flag cases where it does not.
+However, for classical obstacle problems, namely unilateral problems where the operator is the (weak) Laplacian and the corresponding PDE is the Poisson equation, the library also implements element marking using the fully-rigorous \emph{a posteriori} estimator from Nochetto, Siebert, \& Veeser \cite{NSV03}.  For that estimator reliability (estimator gives upper bound on error) and efficiency (lower bound as well) are proven in the $L^\infty$ pointwise norm, a degree of precision which is generally not available for nonlinear and/or degenerating operators.
+
+This Appendix extends their proof of reliability and efficiency to the bilateral case, that is, with continuous lower \emph{and upper} bounds.  (Note that the operator must still be the ordinary linear Laplacian; this is not changed.)  The sequence of topics here, and much of the notation, generally follows that in \cite{NSV03}.
 
 
 \section{Continuum problem and setup} \label{sec:setup}
@@ -87,6 +90,11 @@ Finally, let $f \in L^\infty(\Om)$ be a source function and $g \in H^1(\Om) \cap
   \psilo \le g \le \psiup \qquad \text{on } \dOm.
 \end{equation}
 
+
+\begin{remark}[Non-degeneracy]
+Strict separation \eqref{eq:nondeg} rules out ``pinched'' points \cite{BuelerFarrell2024} where the two obstacles touch, and thus both constraints are simultaneously active.  Thus the analysis below is free of an extra degenerate case, but our VIAMR library implementation must still cope with near-pinching, since active sets are decided against a numerical tolerance.
+\end{remark}
+
 Let $\mathcal{K}$ be the non-empty, closed, convex, \emph{box-constrained} subset of $H^1(\Om)$ defined by the bilateral obstacles:
 \begin{equation}
 \label{eq:K}
@@ -100,19 +108,13 @@ The fixed boundary condition $v=g$ is in the trace sense.  The continuous VI pro
   \left< \nabla u, \nabla(v - u)\right> \ge \left< f, v - u\right>
   \qquad \text{for all } v \in \mathcal{K}.
 \end{equation}
-This is the immediate generalization of problem (1.1) of \cite{NSV03}, from a one-sided constraint to the bilateral case.  We state it in ``$(v-u)$'' form throughout this Appendix, matching common conventions elsewhere in the library \cite{BuelerFarrell2024,Falk1974,GraeserKornhuber2009,KinderlehrerStampacchia1980}, but obviously equivalent to the ``$(u-v)$'' form in \cite{NSV03}.  It is well-known that \eqref{eq:VI} admits a unique solution $u \in \mathcal{K}$ \cite{KinderlehrerStampacchia1980}, which is also H\"older continuous.
+This is the immediate generalization of problem (1.1) of \cite{NSV03}, from a one-sided constraint to the bilateral case.  We state the VI in form \eqref{eq:VI}, matching common conventions elsewhere in the literature \cite{BuelerFarrell2024,Falk1974,GraeserKornhuber2009,KinderlehrerStampacchia1980}, and in the library itself, and it is obviously equivalent to the reversed form ``$\left< \nabla u, \nabla(u - v)\right> \le \left< f, u - v\right>$'' used in \cite[formula (1.1)]{NSV03}.
+
+It is well-known that \eqref{eq:VI} admits a unique H\"older continuous solution $u \in \mathcal{K}$ \cite{KinderlehrerStampacchia1980}.
 %% TODO(citation): NSV03 attributes Hölder continuity of u, in the
 %% unilateral case, to Frehse & Mosco (1982); find and verify a
 %% citation that actually covers the box-constrained/double-obstacle case
 %% before this goes further, rather than asserting one.
-
-\begin{remark}[Non-degeneracy]
-The strict separation $\psilo < \psiup$ rules out \emph{pinched} points \cite{BuelerFarrell2024},
-where the two obstacles touch and both constraints are simultaneously active.
-This keeps the continuum (and per-triangle) analysis below free of an extra degenerate case alongside lower- and upper-contact.  However, a discrete
-implementation must still cope with near-pinching, since active-set
-membership there is decided against a numerical tolerance.
-\end{remark}
 
 Let $\sigma \in H^{-1}(\Om) = \mathring H^1(\Om)^*$ be the \emph{residual functional}
 defined by
@@ -130,20 +132,16 @@ lower- and upper-contact \emph{active sets}.  Then
 \label{eq:sigmasign}
   \sigma \ge 0 \text{ on } \Cbot \qquad \text{and} \qquad \sigma \le 0 \text{ on } \Ctop,
 \end{equation}
-while $\sigma = 0$ on the open non-contact set $\{\psilo < u < \psiup\}$.  The proof is by taking a smooth and locally-supported test function $\phi\in \mathring H^1(\Omega)$, $\phi\ge 0$, and substituting $v=u+\eps \phi$ into \eqref{eq:VI}, for sufficiently small $\eps>0$ such that $v\in\mathcal{K}$.
+while $\sigma = 0$ on the open non-contact set $\{\psilo < u < \psiup\}$.  The proof is by taking a smooth and locally-supported test function $\phi\in \mathring H^1(\Omega)$, with $\phi\ge 0$ compactly supported in $\Om \setminus \Ctop$, or $\phi\le 0$ compactly supported in $\Om \setminus \Cbot$, respectively, and substituting $v=u+\eps \phi$ into \eqref{eq:VI}, for sufficiently small $\eps>0$, such that $v\in\mathcal{K}$.  Thus the non-degeneracy assumption \eqref{eq:nondeg} implies that $\sigma$ is a signed Radon measure \cite{EvansGariepy2015} with a corresponding splitting: $\sigma$ admits the Jordan decomposition $\sigma = \mu_{\bot} - \mu_{\top}$ into nonnegative Radon measures supported on $\Cbot$ and $\Ctop$ respectively.
 
 
-\subsection{Separation of the bilateral active (contact) sets}  While the non-degeneracy assumption $\psilo < \psiup$ implies that the two contact sets $\Cbot, \Ctop$ are disjoint, it does not by itself say how far apart they are.  This is important because, upon discretization (\S \ref{sec:discretization}), a mesh star touching \emph{both} contact sets would break the simple sign argument which we will need for the discrete residual $\sigma_h$ introduced below.  For the argument to follow, we need to control how much of the true contact set the discretization can recognize as such, and compactness of $\bar\Om$ allows us to quantify the separation of the contact sets, as follows.
+\subsection{Separation of the bilateral active (contact) sets}  While the non-degeneracy assumption $\psilo < \psiup$ implies that the two contact sets $\Cbot, \Ctop$ are disjoint, it does not by itself say how far apart they are.  This is important because, upon discretization (\S \ref{sec:discretization}), a mesh star (definition \eqref{eq:star} below, or e.g.~\cite{Langeetal2016}) touching \emph{both} contact sets would break the simple sign argument which we will need for the discrete residual $\sigma_h$ introduced below.  For the argument to follow, we need to control how much of the true contact set the discretization can recognize as such, and compactness of $\bar\Om$ allows us to quantify the separation of the contact sets, as follows.
 
 Let $[\psiup]_\alpha$ denote the H\"older seminorm of $\psiup$ on $\bar\Om$, i.e.\ the least $L^\top \ge 0$ with $|\psiup(x) - \psiup(y)| \le L^\top |x-y|^\alpha$ for all $x,y \in \bar\Om$.  This value is finite since $\psiup \in C^{0,\alpha}(\bar\Om)$, but note it can be zero, related to the division convention below.
 
-We \emph{assume}, as \cite{NSV03} does for the unilateral
-problem, that the solution $u$ is also H\"older continuous on $\bar\Om$ with some exponent
-$\beta \in (0,1]$ and seminorm $L_u \ge 0$.
-
 \begin{proposition}[Separation of the contact sets]
 \label{prop:separation}
-Let
+Assume, as \cite{NSV03} does for the unilateral problem, that the solution $u$ is H\"older continuous on $\bar\Om$ with some exponent $\beta \in (0,1]$ and seminorm $L_u \ge 0$.  Let
 \begin{equation}
 \label{eq:deltamin}
   \delta_{\min} := \min_{\bar\Om} (\psiup - \psilo) > 0,
@@ -186,16 +184,15 @@ Let $\{\Th\}$ be a sequence of conforming partitions of $\bar\Om$ into \emph{clo
 
 Given a (closed) simplex $T$, $h_T$ is its diameter and $\rho_T$ is the maximal radius of a ball contained in $T$.  We assume shape-regularity, namely a bound $h_T/\rho_T \le \gamma^*$ for all $T \in \Th$, with $\gamma^*$ independent of $h$.
 
-Let $\Vh$ be the space of continuous piecewise-linear finite elements over $\Th$, with
-$\Vhr := \Vh \cap \mathring H^1(\Om)$.  We denote the nodal basis of $\Vh$ by $(\varphi_h^z)_{z \in \Nh}$.
-
 For $\omega \subset \bar\Om$ any subset, let
 \begin{equation}
+\label{eq:star}
 \Uh(\omega) := \bigcup\{T \in \Th : T \cap \omega \ne \emptyset\}.
 \end{equation}
-This closed set is a (finite) union of the closed simplices $T$.  Note that $T \cap \omega \ne \emptyset$ only requires $T$ to meet $\omega$ in a single point, so for example $\Uh(T)$ for a simplex $T$ includes every simplex with a shared vertex, edge, or face.  The star of a node $z \in \Nh$ is $\Uh(z) := \Uh(\{z\}) = \operatorname{supp} \varphi_h^z$, the closure of $\{\varphi_h^z > 0\}$.
+This closed set is a (finite) union of the closed simplices $T$.  Note that $T \cap \omega \ne \emptyset$ only requires $T$ to meet $\omega$ in a single point, so for example $\Uh(T)$ for a simplex $T$ includes every simplex with a shared vertex, edge, or face.  The star of a node \cite{Langeetal2016} is $\Uh(z) := \Uh(\{z\}) = \operatorname{supp} \varphi_h^z$ for $z \in \Nh$, which is the closure of $\{\varphi_h^z > 0\}$.
 
-Let $\Ih$ be the Lagrange interpolation operator onto $\Vh$, specifically $\Ih:C(\bar\Om) \to \Vh$.  As in \cite{NSV03} we write $\left< \cdot,\cdot\right>_h$ for the lumped $L_2$ scalar product,
+Let $\Vh$ be the space of continuous piecewise-linear finite elements over $\Th$, with
+$\Vhr := \Vh \cap \mathring H^1(\Om)$.  We denote the nodal basis of $\Vh$ by $(\varphi_h^z)_{z \in \Nh}$.  Let $\Ih$ be the Lagrange interpolation operator onto $\Vh$, specifically $\Ih:C(\bar\Om) \to \Vh$.  As in \cite{NSV03} we write $\left< \cdot,\cdot\right>_h$ for the lumped $L_2$ scalar product,
 \begin{equation}
 \left< \varphi_h, \psi_h\right>_h := \int_\Om \Ih(\varphi_h \psi_h)
 \end{equation}
@@ -377,13 +374,16 @@ The \emph{Galerkin functional} $\Gh \in H^{-1}(\Om)$ is
   \left<\Gh,\varphi\right> := -\left<\nabla u_h,\nabla\varphi\right> + \left< f - \tilde\sigma_h,\varphi\right>, \qquad \varphi \in \mathring H^1(\Om).
 \end{equation}
 This is exactly \cite[formula (3.3)]{NSV03}.  Note that
+
+FIXME THE SIGN IN THE SIGMA TERM IS SUSPECT.  THIS SHOULD BE LIKE ``$\Gh = u-u_h + \sigma-\sigma_h$'' in outline
+ 
 \begin{equation}
 \label{eq:Ghagain}
 \left<\Gh,\varphi\right> = \left<\nabla(u-u_h),\nabla\varphi\right> - \left<\sigma+\tilde\sigma_h,\varphi\right>
 \end{equation}
 by definition \eqref{eq:sigma} of $\sigma$.
 
-Next we apply $\Gh$ to a piecewise-linear function $\varphi_h$.  We see that the result would be zero if $\sigma_h$ and $\tilde \sigma_h$ were computing the same thing, and if the inner products $\left<\cdot,\cdot\right>$ and $\left<\cdot,\cdot\right>_h$ were the same, but of course they are not.
+Consider the application of $\Gh$ to a piecewise-linear function $\varphi_h$.  The following Lemma can be read as saying that the result would be zero if $\sigma_h$ and $\tilde \sigma_h$ were computing the same thing, and if the inner products $\left<\cdot,\cdot\right>$ and $\left<\cdot,\cdot\right>_h$ were the same.  Of course, these statements are not true, thus the ``almost'' in the Lemma's name.
 
 \begin{lemma}[Almost Galerkin orthogonality]
 \label{lem:almostGO}
@@ -489,12 +489,122 @@ where
 Bound \eqref{eq:Ghbound} is \cite[formula (3.10)]{NSV03}.  As with the Galerkin functional itself, nothing in its derivation distinguishes lower from upper contact; the same bound controls $\Gh$ whether the active elements $T\in\Thzero$ come from $\Thbot$ or $\Thtop$.
 
 
+\section{Barriers} \label{sec:barriers}
+
+Following \cite[\S 4]{NSV03}, we now construct continuous barriers for $u$ from a correction $w$ solving a linear problem.  Let $w \in \mathring H^1(\Om)$ be the Riesz representation of the Galerkin functional $\Gh$,
+\begin{equation}
+\label{eq:w}
+  \int_\Om \nabla w \cdot \nabla\varphi = \left<\Gh,\varphi\right> \qquad \text{for all } \varphi \in \mathring H^1(\Om).
+\end{equation}
+As in \cite{NSV03} we assume here that $w$ is continuous; this is established, independently of the box constraint, in \S\ref{sec:pointwise} below.
+
+\begin{remark}[Why the unilateral barrier construction does not carry over directly]
+Recall from \S 2.2 that $\sigma_h \le 0$ throughout $\bar\Om$ in the unilateral setting of \cite{NSV03}, \emph{unconditionally}: testing the discrete VI with $v_h = u_h + t\phi_h^z$, $t \ge 0$, is feasible at \emph{any} interior node, since raising $u_h$ by a non-negative multiple of $\phi_h^z$ can never violate a one-sided lower bound.  This global sign is what powers \cite[Prop.~4.1, 4.2]{NSV03}: it makes $\tilde\sigma_h$ non-positive against any $v \ge 0$, with no restriction on the mesh.  In our box-constrained setting this mechanism is gone.  Testing with $t \ge 0$ at a node whose star meets $\Ctop$ risks violating the upper bound, so Proposition~\ref{prop:nodalsign} only grants $\sigma_h(z) \ge 0$ under the stronger hypothesis that $z$'s star is \emph{wholly} lower-active, and symmetrically $\sigma_h(z) \le 0$ only when wholly upper-active.  There is no bilateral analogue of the global sign, and the construction below compensates for this locally, at the cost of a mesh-resolution hypothesis that \cite{NSV03} never needs.
+\end{remark}
+
+\subsection{Local resolution of the active sets}
+
+Write $L_\bot := [\psilo]_\alpha$ for the H\"older seminorm of $\psilo$, defined exactly as $L^\top := [\psiup]_\alpha$ was in \S 2.2.
+
+\begin{assumption}[Local resolution]
+\label{ass:localres}
+There is a constant $C_{\mathrm{prox}}$, depending only on the shape-regularity $\gamma^*$, such that every $T \in \Thbot$ satisfies $\operatorname{dist}(T,\Cbot) \le C_{\mathrm{prox}} h_T$, and every $T \in \Thtop$ satisfies $\operatorname{dist}(T,\Ctop) \le C_{\mathrm{prox}} h_T$.
+\end{assumption}
+
+Assumption~\ref{ass:localres} says a discretely wholly-active element cannot sit far, relative to its own diameter, from the true contact set of the same type.  Proposition~\ref{prop:separation}'s radius $r_0$ is the natural scale against which ``far'' should be judged: once $h_T \lesssim r_0$ near the transition between obstacle types, the discrete and continuum contact sets of each type are confined to a shared neighborhood, rather than one type of discrete activity appearing spuriously deep inside the other's territory or in the genuine non-contact set.  We do not attempt an independent proof of Assumption~\ref{ass:localres} here.  Doing so without presupposing the very $u \approx u_h$ estimate this section builds toward is left open; for now it is a standing hypothesis of this section, in the same spirit as the assumed H\"older continuity of $u$ itself.
+
+For $T \in \Th$, set
+\begin{equation}
+\label{eq:etapm}
+  \eta_\bot(T) := L_\bot h_T^\alpha + L_u h_T^\beta, \qquad
+  \eta^\top(T) := L^\top h_T^\alpha + L_u h_T^\beta,
+\end{equation}
+the same two H\"older terms combined in $r_0$ \eqref{eq:r0}, and set $\eta_\bot := \max_{T \in \Thbot} \eta_\bot(T)$, $\eta^\top := \max_{T \in \Thtop} \eta^\top(T)$ (each $0$ if the corresponding element set is empty).
+
+\begin{lemma}[Local defect on the discrete active sets]
+\label{lem:etabound}
+Under Assumption~\ref{ass:localres}, $u - \psilo \le \eta_\bot$ on $\Lamhbot$, and $\psiup - u \le \eta^\top$ on $\Lamhtop$.
+\end{lemma}
+
+\begin{proof}
+Let $x \in T \in \Thbot$ and pick $y \in \Cbot$ with $|x-y| \le C_{\mathrm{prox}} h_T$, as in Assumption~\ref{ass:localres}.  Since $u(y) = \psilo(y)$,
+\[
+  u(x) - \psilo(x) = \bigl(u(x)-u(y)\bigr) + \bigl(\psilo(y)-\psilo(x)\bigr) \le L_u|x-y|^\beta + L_\bot|x-y|^\alpha \ \preceq\ \eta_\bot(T) \ \le\ \eta_\bot,
+\]
+using H\"older continuity of $u$ and $\psilo$.  The bound on $\Lamhtop$ is symmetric, using $y \in \Ctop$ and $\psiup(y) = u(y)$.
+\end{proof}
+
+\subsection{Upper barrier}
+
+\begin{proposition}[Upper barrier]
+\label{prop:upperbarrier}
+Under Assumption~\ref{ass:localres}, the function
+\begin{equation}
+\label{eq:ubarupper}
+  u^\top := u_h + w + \|w\|_{0,\infty;\Om} + \|g-I_hg\|_{0,\infty;\partial\Om} + \|(\psilo-u_h)^+\|_{0,\infty;\Om} + \eta_\bot
+\end{equation}
+satisfies $u \le u^\top$ in $\Om$.
+\end{proposition}
+
+\begin{proof}
+\textbf{1.} On $\partial\Om$, $u=g$, $u_h = I_hg$, and $w=0$ (continuity of $w$), so, dropping the other non-negative terms of $u^\top$,
+\[
+  (u-u^\top)|_{\partial\Om} \ \le\ (g-I_hg) - \|g-I_hg\|_{0,\infty;\partial\Om} \ \le\ 0.
+\]
+Thus $v := (u-u^\top)^+ \in \mathring H^1(\Om)$, since $v$ vanishes on $\partial\Om$ and $u, u^\top \in H^1(\Om)$.
+
+\textbf{2.} Since $u^\top - u_h - w$ is spatially constant, $\nabla u^\top = \nabla u_h + \nabla w$, so by \eqref{eq:w} and \eqref{eq:Ghagain},
+\[
+  \|\nabla v\|_{0,2;\Om}^2 = \int_\Om \nabla(u-u^\top)\cdot\nabla v
+  = \left<\nabla(u-u_h),\nabla v\right> - \left<\Gh,v\right>
+  = \left<\sigma+\tilde\sigma_h,\,v\right>.
+\]
+
+\textbf{3.} We show $\left<\sigma+\tilde\sigma_h,v\right> \le 0$; by Poincar\'e's inequality this forces $v \equiv 0$, i.e.\ $u \le u^\top$.
+
+Since $u^\top \ge u_h + \|(\psilo-u_h)^+\|_{0,\infty;\Om} \ge u_h + (\psilo-u_h)^+ \ge \psilo$ pointwise, $\{v>0\} = \{u>u^\top\} \subset \{u>\psilo\} = \Om\setminus\Cbot$.  Since $\sigma = \mu_\bot - \mu_\top$ (\S 2.1) with $\mu_\bot$ supported on $\Cbot$, $v=0$ $\mu_\bot$-a.e., so
+\[
+  \left<\sigma,v\right> = -\int_\Om v\,d\mu_\top \ \le\ 0.
+\]
+
+For $\tilde\sigma_h$, definition \eqref{eq:sigmatilde} splits $\left<\tilde\sigma_h,v\right>$ into a sum over $\Thbot$, $\Thtop$, and $\Thplus$.  On $\Thtop$, Proposition~\ref{prop:nodalsign} gives $\sigma_h \le 0$ at every vertex of every $T \in \Thtop$ (its star, hence each vertex's smaller star, lies in $\{u_h=\psiuph\}$), so $\sigma_h \le 0$ throughout $T$ by Lemma~\ref{lem:affine}, and $\int_T \sigma_h v \le 0$.
+
+On $\Thbot$, symmetrically $\sigma_h \ge 0$ throughout each $T$ — the wrong sign, and exactly the term \cite{NSV03} never has to control.  Here Assumption~\ref{ass:localres} does the work: on $\Lamhbot$, $u^\top \ge \psilo + \eta_\bot \ge \psilo + (u-\psilo) = u$ by Lemma~\ref{lem:etabound}, so $v=0$ on $\Lamhbot$ and $\int_T \sigma_h v = 0$ for every $T \in \Thbot$.
+
+On $\Thplus$, $\sigma_h$ carries no definite sign in general, and we have not shown $v=0$ there.  Closing this last case — presumably by tracking the same wholly-active/wholly-inactive nodal dichotomy underlying Proposition~\ref{prop:nodalsign} rather than the coarser element-wise split $\Thbot,\Thtop,\Thplus$ used above — is left as the remaining gap in this proof.
+\end{proof}
+
+\subsection{Lower barrier}
+
+\begin{proposition}[Lower barrier]
+\label{prop:lowerbarrier}
+Under Assumption~\ref{ass:localres}, the function
+\begin{equation}
+\label{eq:ubarlower}
+  u_\bot := u_h + w - \|w\|_{0,\infty;\Om} - \|g-I_hg\|_{0,\infty;\partial\Om} - \|(u_h-\psiup)^+\|_{0,\infty;\Om} - \eta^\top
+\end{equation}
+satisfies $u_\bot \le u$ in $\Om$.
+\end{proposition}
+
+\begin{proof}
+Symmetric to Proposition~\ref{prop:upperbarrier}, exchanging $\bot \leftrightarrow \top$ and reversing signs throughout: boundary values give $v := (u_\bot - u)^+ \in \mathring H^1(\Om)$; step 2 gives $\|\nabla v\|_{0,2;\Om}^2 = -\left<\sigma+\tilde\sigma_h,v\right>$; the bound $u_\bot \le \psiup$ pointwise gives $\{v>0\}\subset\Om\setminus\Ctop$, hence $\left<\sigma,v\right> = \int_\Om v\,d\mu_\bot \ge 0$; on $\Thbot$, $\sigma_h \ge 0$ gives $\int_T\sigma_h v \ge 0$; and on $\Thtop$, Lemma~\ref{lem:etabound} and the $\eta^\top$ term give $v=0$ on $\Lamhtop$.  The same gap remains on $\Thplus$.
+\end{proof}
+
+Together, Propositions~\ref{prop:upperbarrier} and~\ref{prop:lowerbarrier} give
+\begin{align}
+\label{eq:barrierbound}
+  \|u-u_h\|_{0,\infty;\Om} \ \le\ &2\|w\|_{0,\infty;\Om} + \|g-I_hg\|_{0,\infty;\partial\Om} \\
+  &+ \max\bigl(\|(\psilo-u_h)^+\|_{0,\infty;\Om},\, \|(u_h-\psiup)^+\|_{0,\infty;\Om}\bigr) + \max(\eta_\bot,\eta^\top), \notag
+\end{align}
+generalizing \cite[formula (4.8)]{NSV03}.  Besides $\|w\|_{0,\infty;\Om}$, every term on the right is computable from the discrete solution and given data.  Bounding $\|w\|_{0,\infty;\Om}$ itself is the subject of \S\ref{sec:pointwise}, taken up next.
+
+
 %% TODO: remaining sections, mirroring NSV03's structure, not yet written:
 %%
-%%  (d) Barriers (NSV03 sec. 4): upper/lower barrier construction via the
-%%      Riesz representation w of G_h; the continuous-maximum-principle
-%%      argument looks obstacle-shape-agnostic and should carry over
-%%      directly, but has not been checked.
+%%  (d) Barriers (NSV03 sec. 4): drafted above (\S\ref{sec:barriers}), modulo
+%%      two open gaps: (i) Assumption~\ref{ass:localres} (local resolution)
+%%      is stated but not proven from r_0 alone; (ii) the T_h^+ sign
+%%      indeterminacy in both barrier proofs is flagged, not closed.
 %%  (e) Pointwise estimates (NSV03 sec. 5): Green's function bound and
 %%      Holder continuity of w; likely unchanged from NSV03 modulo notation.
 %%  (f) Efficiency / lower bounds (NSV03 sec. 6): Prop. 6.2/6.3 analogues
