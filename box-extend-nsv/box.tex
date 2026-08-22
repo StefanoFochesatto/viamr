@@ -370,48 +370,49 @@ This is exactly \cite[formula (3.1)]{NSV03}: on wholly-active elements $\tilde\s
 The \emph{Galerkin functional} $\Gh \in H^{-1}(\Om)$ is
 \begin{equation}
 \label{eq:Gh}
-  \left<\Gh,\varphi\right> := -\left<\nabla u_h,\nabla\varphi\right> + \left< f - \tilde\sigma_h,\varphi\right>, \qquad \varphi \in \mathring H^1(\Om).
+  \left<\Gh,\varphi\right> := -\left<\nabla u_h,\nabla\varphi\right> + \left< f + \tilde\sigma_h,\varphi\right>, \qquad \varphi \in \mathring H^1(\Om).
 \end{equation}
-This is exactly \cite[formula (3.3)]{NSV03}.  Note that
+This is \cite[formula (3.3)]{NSV03}, but with $\tilde\sigma_h$ entering with the opposite sign (because our $\sigma_h$ is the negative of theirs).
 
-FIXME THE SIGN IN THE SIGMA TERM IS SUSPECT.  THIS SHOULD BE LIKE ``$\Gh = u-u_h + \sigma-\sigma_h$'' in outline
- 
+Eliminating $f$, definition \eqref{eq:sigma} of $\sigma$ gives the equivalent form
 \begin{equation}
 \label{eq:Ghagain}
-\left<\Gh,\varphi\right> = \left<\nabla(u-u_h),\nabla\varphi\right> - \left<\sigma+\tilde\sigma_h,\varphi\right>
+\left<\Gh,\varphi\right> = \left<\nabla(u-u_h),\nabla\varphi\right> - \left<\sigma-\tilde\sigma_h,\varphi\right>.
 \end{equation}
-by definition \eqref{eq:sigma} of $\sigma$.
+Thus $\Gh$ measures two mismatches at once, between $u$ and $u_h$, and between the exact residual $\sigma$ and its discrete surrogate $\tilde\sigma_h$.
 
-Consider the application of $\Gh$ to a piecewise-linear function $\varphi_h$.  The following Lemma can be read as saying that the result would be zero if $\sigma_h$ and $\tilde \sigma_h$ were computing the same thing, and if the inner products $\left<\cdot,\cdot\right>$ and $\left<\cdot,\cdot\right>_h$ were the same.  Of course, these statements are not true, thus the ``almost'' in the Lemma's name.
+Consider the application of $\Gh$ to a piecewise-linear function $\varphi_h$.  The following Lemma can be read as saying that the result would be zero if $\sigma_h$ and $\tilde \sigma_h$ were computing the same thing, and if the inner products $\left<\cdot,\cdot\right>$ and $\left<\cdot,\cdot\right>_h$ were the same.  Because these statements are not true, we ``almost'' have orthogonality.
 
 \begin{lemma}[Almost Galerkin orthogonality]
 \label{lem:almostGO}
 For all $\varphi_h \in \Vhr$,
 \begin{align}
 \label{eq:almostGO}
-  \left< \Gh, \varphi_h\right> &= \left< \sigma_h,\varphi_h\right>_h - \left<\tilde\sigma_h,\varphi_h\right> \\
-  &= \sum_{T\in\Thzero}\int_T \Ih(\sigma_h\varphi_h) - \sigma_h\varphi_h
-  \ +\ \sum_{T\in\Thplus}\int_T \Ih\bigl(\sigma_h(\varphi_h - \Pih\varphi_h)\bigr). \notag
+  \left< \Gh, \varphi_h\right> &= \left<\tilde\sigma_h,\varphi_h\right> - \left< \sigma_h,\varphi_h\right>_h \\
+  &= \sum_{T\in\Thzero}\int_T \sigma_h\varphi_h - \Ih(\sigma_h\varphi_h)
+  \ +\ \sum_{T\in\Thplus}\int_T \Ih\bigl(\sigma_h(\Pih\varphi_h - \varphi_h)\bigr). \notag
 \end{align}
 \end{lemma}
 
 \begin{proof}
-For $\varphi_h\in\Vhr$, \eqref{eq:sigmah} gives $\left<\nabla u_h,\nabla\varphi_h\right> = \left< f,\varphi_h\right> - \left<\sigma_h,\varphi_h\right>_h$: this is $\sigma_h$'s defining relation at interior nodes, and it holds at \emph{every} $z\in\Nhr$ unconditionally, so by linearity it holds for every $\varphi_h \in \Vhr$, not just those supported where a star is wholly active.  Substituting into \eqref{eq:Gh},
+For $\varphi_h\in\Vhr$, \eqref{eq:sigmah} gives $\left<\nabla u_h,\nabla\varphi_h\right> = \left< f,\varphi_h\right> + \left<\sigma_h,\varphi_h\right>_h$: this is $\sigma_h$'s defining relation at interior nodes, and it holds at \emph{every} $z\in\Nhr$ unconditionally, so by linearity it holds for every $\varphi_h \in \Vhr$, not just those supported where a star is wholly active.  Substituting into \eqref{eq:Gh},
 \[
-  \left<\Gh,\varphi_h\right> = -\bigl(\left< f,\varphi_h\right> - \left<\sigma_h,\varphi_h\right>_h\bigr) + \left< f,\varphi_h\right> - \left<\tilde\sigma_h,\varphi_h\right> = \left<\sigma_h,\varphi_h\right>_h - \left<\tilde\sigma_h,\varphi_h\right>,
+  \left<\Gh,\varphi_h\right> = -\bigl(\left< f,\varphi_h\right> + \left<\sigma_h,\varphi_h\right>_h\bigr) + \left< f,\varphi_h\right> + \left<\tilde\sigma_h,\varphi_h\right> = \left<\tilde\sigma_h,\varphi_h\right> - \left<\sigma_h,\varphi_h\right>_h,
 \]
-the first equality.  For the second, $\left<\sigma_h,\varphi_h\right>_h = \sum_{T\in\Th}\int_T \Ih(\sigma_h\varphi_h)$, since $\left<\cdot,\cdot\right>_h$ is by definition $\int_\Om \Ih(\cdot)$ and the integral is additive over $\Th$.  Subtracting \eqref{eq:sigmatilde} and collecting terms, the $\Thzero$ part gives $\int_T \Ih(\sigma_h\varphi_h) - \sigma_h\varphi_h$, and the $\Thplus$ part gives $\int_T \Ih(\sigma_h\varphi_h) - \Ih(\sigma_h\Pih\varphi_h) = \int_T \Ih\bigl(\sigma_h(\varphi_h-\Pih\varphi_h)\bigr)$ by linearity of $\Ih$.
+the first equality.  For the second, $\left<\sigma_h,\varphi_h\right>_h = \sum_{T\in\Th}\int_T \Ih(\sigma_h\varphi_h)$, since $\left<\cdot,\cdot\right>_h$ is by definition $\int_\Om \Ih(\cdot)$ and the integral is additive over $\Th$.  Subtracting this from \eqref{eq:sigmatilde} and collecting terms, the $\Thzero$ part gives $\int_T \sigma_h\varphi_h - \Ih(\sigma_h\varphi_h)$, and the $\Thplus$ part gives $\int_T \Ih(\sigma_h\Pih\varphi_h) - \Ih(\sigma_h\varphi_h) = \int_T \Ih\bigl(\sigma_h(\Pih\varphi_h-\varphi_h)\bigr)$ by linearity of $\Ih$.
 \end{proof}
 
 Every step above uses only the set-theoretic split $\Th = \Thzero \sqcup \Thplus$ and the unconditional definition \eqref{eq:sigmah} of $\sigma_h$ at interior nodes.  These definitions do not care whether the unified (and thinned) active elements $\Thzero$ are from a lower or upper obstacle.
+
+In the following Lemma, $\Rh$ is a residual while $\Qh$ is a quadrature error.
 
 \begin{lemma}[Representation formula for $\Gh$]
 \label{lem:Gh-repn}
 For each interior edge/face $S \in \Sh$, fix a unit normal $\nu$ and write $\jump{\partial_\nu u_h}$ for the jump across $S$.  Define $\Rh \in H^{-1}(\Om)$ and $\Qh \in \Vhr$ by
 \begin{align}
 \label{eq:RhQh}
-  \left<\Rh,\varphi\right> &:= \sum_{S\in\Sh}\int_S \jump{\partial_\nu u_h}\,\varphi + \sum_{T\in\Thzero}\int_T (f-\sigma_h)\varphi + \sum_{T\in\Thplus}\int_T f\varphi, \\
-  \left<\Qh,\varphi_h\right> &:= \sum_{T\in\Thzero}\int_T \Ih(\sigma_h\varphi_h) - \sigma_h\varphi_h. \notag
+  \left<\Rh,\varphi\right> &:= \sum_{S\in\Sh}\int_S \jump{\partial_\nu u_h}\,\varphi + \sum_{T\in\Thzero}\int_T (f+\sigma_h)\varphi + \sum_{T\in\Thplus}\int_T f\varphi, \\
+  \left<\Qh,\varphi_h\right> &:= \sum_{T\in\Thzero}\int_T \sigma_h\varphi_h - \Ih(\sigma_h\varphi_h). \notag
 \end{align}
 Then, for $\varphi \in \mathring H^1(\Om)$,
 \begin{equation}
@@ -426,13 +427,13 @@ Split $\left<\Gh,\varphi\right> = \left<\Gh,\varphi-\Pih\varphi\right> + \left<\
 For $\left<\Gh,\varphi-\Pih\varphi\right>$, use definition \eqref{eq:Gh} with $\varphi$ replaced by $\varphi - \Pih\varphi \in \mathring H^1(\Om)$.  Integrate $\left<\nabla u_h,\nabla(\varphi-\Pih\varphi)\right>$ by parts elementwise: $u_h$ is affine on each $T$, so no interior element term survives, leaving only the interior jump terms.  (There is no boundary term since $\varphi-\Pih\varphi$ vanishes on $\dOm$.)  For $\left<\tilde\sigma_h,\varphi-\Pih\varphi\right>$, use definition \eqref{eq:sigmatilde}.  On $\Thzero$, $\tilde\sigma_h=\sigma_h$ directly, while on $\Thplus$, $\tilde\sigma_h$ pairs against $\Pih$ applied to the test function, and by linearity of $\Pih$, $\Pih(\varphi-\Pih\varphi) = \Pih\varphi - \Pih^2\varphi$.  Altogether,
 \begin{equation}
 \label{eq:Gh-first}
-  \left<\Gh,\varphi-\Pih\varphi\right> = \left<\Rh,\varphi-\Pih\varphi\right> \ -\ \sum_{T\in\Thplus}\int_T \Ih\bigl(\sigma_h(\Pih\varphi-\Pih^2\varphi)\bigr).
+  \left<\Gh,\varphi-\Pih\varphi\right> = \left<\Rh,\varphi-\Pih\varphi\right> \ +\ \sum_{T\in\Thplus}\int_T \Ih\bigl(\sigma_h(\Pih\varphi-\Pih^2\varphi)\bigr).
 \end{equation}
 
 For $\left<\Gh,\Pih\varphi\right>$, apply Lemma~\ref{lem:almostGO} with $\varphi_h=\Pih\varphi\in\Vhr$:
 \begin{equation}
 \label{eq:Gh-second}
-  \left<\Gh,\Pih\varphi\right> = \left<\Qh,\Pih\varphi\right> \ +\ \sum_{T\in\Thplus}\int_T \Ih\bigl(\sigma_h(\Pih\varphi-\Pih^2\varphi)\bigr).
+  \left<\Gh,\Pih\varphi\right> = \left<\Qh,\Pih\varphi\right> \ -\ \sum_{T\in\Thplus}\int_T \Ih\bigl(\sigma_h(\Pih\varphi-\Pih^2\varphi)\bigr).
 \end{equation}
 
 Adding \eqref{eq:Gh-second} and \eqref{eq:Gh-first} and cancelling leaves \eqref{eq:Gh-repn}.
@@ -443,9 +444,7 @@ As with Lemma~\ref{lem:almostGO}, this derivation only used the $\Th = \Thzero \
 
 \subsection{Localized residual and quadrature estimators}
 
-Bounding $\Gh$ pointwise will be carried-out in later sections.  We will follow \cite[\S\S 4--5]{NSV03}, so we first need to bound $\Gh$ in a dual space larger than $\mathring H^1(\Om)$ itself.
-
-Following \cite[\S 3.2]{NSV03}, let
+Following \cite[\S\S 4--5]{NSV03}, our next task is to bound $\Gh$ in a dual space larger than $\mathring H^1(\Om)$ itself.  As in \cite[\S 3.2]{NSV03}, let
 \begin{equation}
 \label{eq:W}
   W := \{\varphi \in \mathring H^1(\Om) : \nabla\varphi \in BV(\Om)^d\},
@@ -456,9 +455,9 @@ For $1 \le p \le \infty$, with dual exponent $p' = p/(p-1)$, define the \emph{lo
 \begin{equation}
 \label{eq:Rp}
   R_p|_T := h_T^{-1/p'}\,|T|^{-1/p}\,\bigl\|\jump{\partial_\nu u_h}\bigr\|_{0,p;\partial T \setminus \dOm}
-  \ +\ \begin{cases} |f - \sigma_h|, & T \in \Thzero, \\ |f|, & T \in \Thplus. \end{cases}
+  \ +\ \begin{cases} |f + \sigma_h|, & T \in \Thzero, \\ |f|, & T \in \Thplus. \end{cases}
 \end{equation}
-This is exactly \cite[formula (3.7)]{NSV03}: the first term is the usual interior-flux-jump contribution over $\partial T$, and the second is the residual magnitude $|f-\sigma_h|$ on wholly-active elements, or the bare source term $|f|$ elsewhere.  Nothing here refers to the nature of the active obstacle, so \eqref{eq:Rp} is unchanged from the unilateral case.
+This is \cite[formula (3.7)]{NSV03}, again with the sign of $\sigma_h$ flipped: the first term is the usual interior-flux-jump contribution over $\partial T$, and the second is the residual magnitude $|f+\sigma_h|$ on wholly-active elements, matching the volume density of $\Rh$ in \eqref{eq:RhQh}, or the bare source term $|f|$ elsewhere.  Nothing here refers to the nature of the active obstacle, so \eqref{eq:Rp} is unchanged from the unilateral case.
 
 By the BV-approximation properties \eqref{eq:PihBV} of $\Pih$ and additivity of $|D^2\varphi|_{\mathrm{var}}$ over $\Th$, definition \eqref{eq:RhQh} of $\Rh$ gives
 \begin{equation}
@@ -495,52 +494,31 @@ Following \cite[\S 4]{NSV03}, we now construct continuous barriers for $u$ from 
 \label{eq:w}
   \int_\Om \nabla w \cdot \nabla\varphi = \left<\Gh,\varphi\right> \qquad \text{for all } \varphi \in \mathring H^1(\Om).
 \end{equation}
-As in \cite{NSV03} we assume here that $w$ is continuous; this is established, independently of the box constraint, in \S\ref{sec:pointwise} below.
+As in \cite{NSV03} we assume here that $w$ is continuous; this is established, independently of the box constraint, in \S FIXME below.
 
 \begin{remark}[Why the unilateral barrier construction does not carry over directly]
-Recall from \S 2.2 that $\sigma_h \le 0$ throughout $\bar\Om$ in the unilateral setting of \cite{NSV03}, \emph{unconditionally}: testing the discrete VI with $v_h = u_h + t\phi_h^z$, $t \ge 0$, is feasible at \emph{any} interior node, since raising $u_h$ by a non-negative multiple of $\phi_h^z$ can never violate a one-sided lower bound.  This global sign is what powers \cite[Prop.~4.1, 4.2]{NSV03}: it makes $\tilde\sigma_h$ non-positive against any $v \ge 0$, with no restriction on the mesh.  In our box-constrained setting this mechanism is gone.  Testing with $t \ge 0$ at a node whose star meets $\Ctop$ risks violating the upper bound, so Proposition~\ref{prop:nodalsign} only grants $\sigma_h(z) \ge 0$ under the stronger hypothesis that $z$'s star is \emph{wholly} lower-active, and symmetrically $\sigma_h(z) \le 0$ only when wholly upper-active.  There is no bilateral analogue of the global sign, and the construction below compensates for this locally, at the cost of a mesh-resolution hypothesis that \cite{NSV03} never needs.
+In the unilateral setting of \cite{NSV03}, in our sign convention, $\sigma_h \ge 0$ throughout $\bar\Om$ \emph{unconditionally}: testing the discrete VI with $v_h = u_h + t\phi_h^z$, $t \ge 0$, is feasible at \emph{any} interior node, since raising $u_h$ by a non-negative multiple of $\phi_h^z$ can never violate a one-sided lower bound.  This global sign is what powers \cite[Prop.~4.1, 4.2]{NSV03}: it makes $\tilde\sigma_h$ non-negative against any $v \ge 0$, with no restriction on the mesh.  In our box-constrained setting this mechanism is gone.  Testing with $t \ge 0$ at a node whose star meets $\Ctop$ risks violating the upper bound, so Proposition~\ref{prop:nodalsign} only grants $\sigma_h(z) \ge 0$ under the stronger hypothesis that $z$'s star is \emph{wholly} lower-active, and symmetrically $\sigma_h(z) \le 0$ only when wholly upper-active.  There is no bilateral analogue of the global sign.  Each barrier below therefore acquires a term which the unilateral construction does not need, namely the interpolation error of the obstacle \emph{opposite} to the one that barrier already handles.
 \end{remark}
 
-\subsection{Local resolution of the active sets}
 
-Write $L_\bot := [\psilo]_\alpha$ for the H\"older seminorm of $\psilo$, defined exactly as $L^\top := [\psiup]_\alpha$ was in \S 2.2.
+\subsection{Obstacle interpolation errors}
 
-\begin{assumption}[Local resolution]
-\label{ass:localres}
-There is a constant $C_{\mathrm{prox}}$, depending only on the shape-regularity $\gamma^*$, such that every $T \in \Thbot$ satisfies $\operatorname{dist}(T,\Cbot) \le C_{\mathrm{prox}} h_T$, and every $T \in \Thtop$ satisfies $\operatorname{dist}(T,\Ctop) \le C_{\mathrm{prox}} h_T$.
-\end{assumption}
-
-Assumption~\ref{ass:localres} says a discretely wholly-active element cannot sit far, relative to its own diameter, from the true contact set of the same type.  Proposition~\ref{prop:separation}'s radius $r_0$ is the natural scale against which ``far'' should be judged: once $h_T \lesssim r_0$ near the transition between obstacle types, the discrete and continuum contact sets of each type are confined to a shared neighborhood, rather than one type of discrete activity appearing spuriously deep inside the other's territory or in the genuine non-contact set.  We do not attempt an independent proof of Assumption~\ref{ass:localres} here.  Doing so without presupposing the very $u \approx u_h$ estimate this section builds toward is left open; for now it is a standing hypothesis of this section, in the same spirit as the assumed H\"older continuity of $u$ itself.
-
-For $T \in \Th$, set
+Write
 \begin{equation}
-\label{eq:etapm}
-  \eta_\bot(T) := L_\bot h_T^\alpha + L_u h_T^\beta, \qquad
-  \eta^\top(T) := L^\top h_T^\alpha + L_u h_T^\beta,
+\label{eq:Epm}
+  E_\bot := \|\psilo - \psiloh\|_{0,\infty;\Om}, \qquad
+  E^\top := \|\psiup - \psiuph\|_{0,\infty;\Om}
 \end{equation}
-the same two H\"older terms combined in $r_0$ \eqref{eq:r0}, and set $\eta_\bot := \max_{T \in \Thbot} \eta_\bot(T)$, $\eta^\top := \max_{T \in \Thtop} \eta^\top(T)$ (each $0$ if the corresponding element set is empty).
-
-\begin{lemma}[Local defect on the discrete active sets]
-\label{lem:etabound}
-Under Assumption~\ref{ass:localres}, $u - \psilo \le \eta_\bot$ on $\Lamhbot$, and $\psiup - u \le \eta^\top$ on $\Lamhtop$.
-\end{lemma}
-
-\begin{proof}
-Let $x \in T \in \Thbot$ and pick $y \in \Cbot$ with $|x-y| \le C_{\mathrm{prox}} h_T$, as in Assumption~\ref{ass:localres}.  Since $u(y) = \psilo(y)$,
-\[
-  u(x) - \psilo(x) = \bigl(u(x)-u(y)\bigr) + \bigl(\psilo(y)-\psilo(x)\bigr) \le L_u|x-y|^\beta + L_\bot|x-y|^\alpha \ \preceq\ \eta_\bot(T) \ \le\ \eta_\bot,
-\]
-using H\"older continuity of $u$ and $\psilo$.  The bound on $\Lamhtop$ is symmetric, using $y \in \Ctop$ and $\psiup(y) = u(y)$.
-\end{proof}
+for the sup-norm interpolation errors of the two obstacles.  Both are computable from the given data alone, and each is $O(h^2)$ when the corresponding obstacle is in $W^{2,\infty}(\Om)$.  These are the only new quantities the box-constrained barriers need.  In particular, no relation between the mesh size and the geometry of the contact sets is assumed, and the H\"older continuity of the exact solution $u$, used in Proposition~\ref{prop:separation} to separate the contact sets, is not needed again here.
 
 \subsection{Upper barrier}
 
 \begin{proposition}[Upper barrier]
 \label{prop:upperbarrier}
-Under Assumption~\ref{ass:localres}, the function
+The function
 \begin{equation}
 \label{eq:ubarupper}
-  u^\top := u_h + w + \|w\|_{0,\infty;\Om} + \|g-I_hg\|_{0,\infty;\partial\Om} + \|(\psilo-u_h)^+\|_{0,\infty;\Om} + \eta_\bot
+  u^\top := u_h + w + \|w\|_{0,\infty;\Om} + \|g-I_hg\|_{0,\infty;\partial\Om} + \|(\psilo-u_h)^+\|_{0,\infty;\Om} + E^\top
 \end{equation}
 satisfies $u \le u^\top$ in $\Om$.
 \end{proposition}
@@ -556,19 +534,23 @@ Thus $v := (u-u^\top)^+ \in \mathring H^1(\Om)$, since $v$ vanishes on $\partial
 \[
   \|\nabla v\|_{0,2;\Om}^2 = \int_\Om \nabla(u-u^\top)\cdot\nabla v
   = \left<\nabla(u-u_h),\nabla v\right> - \left<\Gh,v\right>
-  = \left<\sigma+\tilde\sigma_h,\,v\right>.
+  = \left<\sigma-\tilde\sigma_h,\,v\right>.
 \]
 
-\textbf{3.} We show $\left<\sigma+\tilde\sigma_h,v\right> \le 0$; by Poincar\'e's inequality this forces $v \equiv 0$, i.e.\ $u \le u^\top$.
+\textbf{3.} We show $\left<\sigma,v\right> \le 0$ and $\left<\tilde\sigma_h,v\right> \ge 0$, so that $\left<\sigma-\tilde\sigma_h,v\right> \le 0$; by Poincar\'e's inequality this forces $v \equiv 0$, i.e.\ $u \le u^\top$.
 
 Since $u^\top \ge u_h + \|(\psilo-u_h)^+\|_{0,\infty;\Om} \ge u_h + (\psilo-u_h)^+ \ge \psilo$ pointwise, $\{v>0\} = \{u>u^\top\} \subset \{u>\psilo\} = \Om\setminus\Cbot$.  Since $\sigma = \mu_\bot - \mu_\top$ (\S 2.1) with $\mu_\bot$ supported on $\Cbot$, $v=0$ $\mu_\bot$-a.e., so
 \[
   \left<\sigma,v\right> = -\int_\Om v\,d\mu_\top \ \le\ 0.
 \]
 
-For $\tilde\sigma_h$, definition \eqref{eq:sigmatilde} splits $\left<\tilde\sigma_h,v\right>$ into a sum over $\Thbot$, $\Thtop$, and $\Thplus$.  On $\Thtop$, Proposition~\ref{prop:nodalsign} gives $\sigma_h \le 0$ at every vertex of every $T \in \Thtop$ (its star, hence each vertex's smaller star, lies in $\{u_h=\psiuph\}$), so $\sigma_h \le 0$ throughout $T$ by Lemma~\ref{lem:affine}, and $\int_T \sigma_h v \le 0$.
+For $\tilde\sigma_h$, definition \eqref{eq:sigmatilde} splits $\left<\tilde\sigma_h,v\right>$ into a sum over $\Thbot$, $\Thtop$, and $\Thplus$.  On $\Thbot$, Proposition~\ref{prop:nodalsign} gives $\sigma_h \ge 0$ at every vertex of every $T \in \Thbot$ (its star, hence each vertex's smaller star, lies in $\{u_h=\psiloh\}$), so $\sigma_h \ge 0$ throughout $T$ by Lemma~\ref{lem:affine}, and $\int_T \sigma_h v \ge 0$.  This is the term \cite{NSV03} also has, and it needs nothing further.
 
-On $\Thbot$, symmetrically $\sigma_h \ge 0$ throughout each $T$ — the wrong sign, and exactly the term \cite{NSV03} never has to control.  Here Assumption~\ref{ass:localres} does the work: on $\Lamhbot$, $u^\top \ge \psilo + \eta_\bot \ge \psilo + (u-\psilo) = u$ by Lemma~\ref{lem:etabound}, so $v=0$ on $\Lamhbot$ and $\int_T \sigma_h v = 0$ for every $T \in \Thbot$.
+On $\Thtop$, symmetrically $\sigma_h \le 0$ throughout each $T$, which is the wrong sign, and this is the term with no unilateral counterpart.  Here the $E^\top$ term in \eqref{eq:ubarupper} does the work.  Each $T \in \Thtop$ has $u_h = \psiuph$ on $T$, and $w + \|w\|_{0,\infty;\Om} \ge 0$, so on $\Lamhtop$,
+\[
+  u^\top \ \ge\ u_h + E^\top \ =\ \psiuph + \|\psiup - \psiuph\|_{0,\infty;\Om} \ \ge\ \psiup \ \ge\ u.
+\]
+Thus $v=0$ on $\Lamhtop$ and $\int_T \sigma_h v = 0$ for every $T \in \Thtop$.  Note that only the interpolation error of $\psiup$ enters; no hypothesis about how well $\Th$ resolves $\Ctop$ is needed.
 
 On $\Thplus$, $\sigma_h$ carries no definite sign in general, and we have not shown $v=0$ there.  Closing this last case — presumably by tracking the same wholly-active/wholly-inactive nodal dichotomy underlying Proposition~\ref{prop:nodalsign} rather than the coarser element-wise split $\Thbot,\Thtop,\Thplus$ used above — is left as the remaining gap in this proof.
 \end{proof}
@@ -577,33 +559,32 @@ On $\Thplus$, $\sigma_h$ carries no definite sign in general, and we have not sh
 
 \begin{proposition}[Lower barrier]
 \label{prop:lowerbarrier}
-Under Assumption~\ref{ass:localres}, the function
+The function
 \begin{equation}
 \label{eq:ubarlower}
-  u_\bot := u_h + w - \|w\|_{0,\infty;\Om} - \|g-I_hg\|_{0,\infty;\partial\Om} - \|(u_h-\psiup)^+\|_{0,\infty;\Om} - \eta^\top
+  u_\bot := u_h + w - \|w\|_{0,\infty;\Om} - \|g-I_hg\|_{0,\infty;\partial\Om} - \|(u_h-\psiup)^+\|_{0,\infty;\Om} - E_\bot
 \end{equation}
 satisfies $u_\bot \le u$ in $\Om$.
 \end{proposition}
 
 \begin{proof}
-Symmetric to Proposition~\ref{prop:upperbarrier}, exchanging $\bot \leftrightarrow \top$ and reversing signs throughout: boundary values give $v := (u_\bot - u)^+ \in \mathring H^1(\Om)$; step 2 gives $\|\nabla v\|_{0,2;\Om}^2 = -\left<\sigma+\tilde\sigma_h,v\right>$; the bound $u_\bot \le \psiup$ pointwise gives $\{v>0\}\subset\Om\setminus\Ctop$, hence $\left<\sigma,v\right> = \int_\Om v\,d\mu_\bot \ge 0$; on $\Thbot$, $\sigma_h \ge 0$ gives $\int_T\sigma_h v \ge 0$; and on $\Thtop$, Lemma~\ref{lem:etabound} and the $\eta^\top$ term give $v=0$ on $\Lamhtop$.  The same gap remains on $\Thplus$.
+Symmetric to Proposition~\ref{prop:upperbarrier}, exchanging $\bot \leftrightarrow \top$ and reversing signs throughout: boundary values give $v := (u_\bot - u)^+ \in \mathring H^1(\Om)$; step 2 gives $\|\nabla v\|_{0,2;\Om}^2 = -\left<\sigma-\tilde\sigma_h,v\right>$, so now we need $\left<\sigma,v\right> \ge 0$ and $\left<\tilde\sigma_h,v\right> \le 0$; the bound $u_\bot \le \psiup$ pointwise gives $\{v>0\}\subset\Om\setminus\Ctop$, hence $\left<\sigma,v\right> = \int_\Om v\,d\mu_\bot \ge 0$; on $\Thtop$, $\sigma_h \le 0$ gives $\int_T\sigma_h v \le 0$; and on $\Thbot$, where $u_h = \psiloh$, the $E_\bot$ term gives $u_\bot \le u_h - E_\bot \le \psilo \le u$, so $v = 0$ on $\Lamhbot$.  The same gap remains on $\Thplus$.
 \end{proof}
 
 Together, Propositions~\ref{prop:upperbarrier} and~\ref{prop:lowerbarrier} give
 \begin{align}
 \label{eq:barrierbound}
   \|u-u_h\|_{0,\infty;\Om} \ \le\ &2\|w\|_{0,\infty;\Om} + \|g-I_hg\|_{0,\infty;\partial\Om} \\
-  &+ \max\bigl(\|(\psilo-u_h)^+\|_{0,\infty;\Om},\, \|(u_h-\psiup)^+\|_{0,\infty;\Om}\bigr) + \max(\eta_\bot,\eta^\top), \notag
+  &+ \max\bigl(\|(\psilo-u_h)^+\|_{0,\infty;\Om},\, \|(u_h-\psiup)^+\|_{0,\infty;\Om}\bigr) + \max(E_\bot,E^\top), \notag
 \end{align}
-generalizing \cite[formula (4.8)]{NSV03}.  Besides $\|w\|_{0,\infty;\Om}$, every term on the right is computable from the discrete solution and given data.  Bounding $\|w\|_{0,\infty;\Om}$ itself is the subject of \S\ref{sec:pointwise}, taken up next.
+generalizing \cite[formula (4.8)]{NSV03}.  Besides $\|w\|_{0,\infty;\Om}$, every term on the right is computable from the discrete solution and given data.  In fact the third term is dominated by the fourth, because $u_h \ge \psiloh$ in $\Om$ gives $(\psilo - u_h)^+ \le (\psilo - \psiloh)^+ \le E_\bot$, and symmetrically $(u_h - \psiup)^+ \le E^\top$.  Bounding $\|w\|_{0,\infty;\Om}$ itself is the subject of \S FIXME, taken up next.
 
 
 %% TODO: remaining sections, mirroring NSV03's structure, not yet written:
 %%
 %%  (d) Barriers (NSV03 sec. 4): drafted above (\S\ref{sec:barriers}), modulo
-%%      two open gaps: (i) Assumption~\ref{ass:localres} (local resolution)
-%%      is stated but not proven from r_0 alone; (ii) the T_h^+ sign
-%%      indeterminacy in both barrier proofs is flagged, not closed.
+%%      one open gap: the T_h^+ sign indeterminacy in both barrier proofs
+%%      is flagged, not closed.
 %%  (e) Pointwise estimates (NSV03 sec. 5): Green's function bound and
 %%      Holder continuity of w; likely unchanged from NSV03 modulo notation.
 %%  (f) Efficiency / lower bounds (NSV03 sec. 6): Prop. 6.2/6.3 analogues
