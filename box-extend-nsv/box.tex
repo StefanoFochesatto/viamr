@@ -10,7 +10,7 @@ colorlinks=true,
 plainpages=false,
 linkcolor=blue,
 citecolor=Red,
-urlcolor=black
+urlcolor=blue,
 ]{hyperref}
 
 \newtheorem{proposition}{Proposition}
@@ -64,10 +64,9 @@ urlcolor=black
 \begin{document}
 \maketitle
 
-
 \section{Introduction and goals} \label{sec:intro}
 
-The VIAMR library (\href{https://github.com/StefanoFochesatto/viamr}{\texttt{github.com/StefanoFochesatto/viamr}}) implements adaptive mesh refinement (AMR) and mesh adaptation algorithms for variational inequalities (VIs).  Some of the implemented methods incorporate heuristic strategies and extend AMR for VIs to highly-nonlinear and/or degenerate problems.  See the main paper for the general setting.
+The VIAMR library (\href{https://github.com/StefanoFochesatto/viamr}{github.com/StefanoFochesatto/viamr}) implements adaptive mesh refinement (AMR) and mesh adaptation algorithms for variational inequalities (VIs).  Some of the implemented methods incorporate heuristic strategies and extend AMR for VIs to highly-nonlinear and/or degenerate problems.  See the main paper for the general setting.
 
 However, for classical obstacle problems, namely unilateral problems where the operator is the (weak) Laplacian and the corresponding PDE is the Poisson equation, the library also implements element marking using the fully-rigorous \emph{a posteriori} estimator from Nochetto, Siebert, \& Veeser \cite{NSV03}.  For that estimator reliability (estimator gives upper bound on error) and efficiency (lower bound as well) are proven in the $L^\infty$ pointwise norm, a degree of precision which is generally not available for nonlinear and/or degenerating operators.
 
@@ -199,7 +198,7 @@ $\Vhr := \Vh \cap \mathring H^1(\Om)$.  We denote the nodal basis of $\Vh$ by $(
 Also as in \cite{NSV03}, in what follows $C$ denotes different constants depending only on $\gamma^*$, $\Om$, and $d$, and $\preceq$ indicates $\le$ up to such a constant.
 
 
-\subsection{Monotonicity of nodal interpolation, and $\Kh$}
+\subsection{Monotonicity of nodal interpolation, and \texorpdfstring{$\Kh$}{Kh}}
 
 Let us start with two properties special to affine functions and piecewise-\emph{linear} interpolation, which need no acuteness or mesh-fineness assumption on $\Th$.  They do not hold generally for higher-order elements.
 
