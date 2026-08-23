@@ -339,7 +339,6 @@ if mesh.comm.rank == 0:
     # natural reference is mesh-resolution scaling h ~ DOFs^(-1/d), not the
     # L^2/H^1 rates above; as in sphere.py
     hausfile = "porous_hausdorff.png"
-    print(f"generating convergence figure {hausfile} ...")
     plt.figure()
     for amrtype in refinetypes:
         rdofs = np.array(results[amrtype][0])
@@ -367,7 +366,6 @@ if mesh.comm.rank == 0:
     # compute an a posteriori estimator; linear y-axis, semilogx x-axis,
     # horizontal reference at eff=1
     efffile = "porous_effectivity.png"
-    print(f"generating effectivity figure {efffile} ...")
     edofs, eff_a = np.array(results["udobv"][0]), np.array(results["udobv"][5])
     plt.figure()
     plt.semilogx(edofs, eff_a, "g^", label="BV00 in quasi-norm")
