@@ -136,14 +136,16 @@ while $\sigma = 0$ on the open \emph{non-contact set} (inactive set) where $\{\p
 The proof of \eqref{eq:sigmasign} is by taking a smooth and locally-supported test function $\varphi\in \mathring H^1(\Om)$, with $\varphi\ge 0$ compactly supported in $\Om \setminus \Ctop$, or $\varphi\le 0$ compactly supported in $\Om \setminus \Cbot$, respectively, and substituting $v=u+\eps \varphi$ into \eqref{eq:VI}, for sufficiently small $\eps>0$, such that $v\in\mathcal{K}$.  Thus the non-degeneracy assumption \eqref{eq:nondeg} implies that $\sigma$ is a signed Radon measure \cite{EvansGariepy2015} with a corresponding splitting: $\sigma$ admits the Jordan decomposition $\sigma = \mu_{\bot} - \mu_{\top}$ into nonnegative Radon measures supported on $\Cbot$ and $\Ctop$ respectively.
 
 
-\subsection{Separation of the bilateral active (contact) sets}  While the non-degeneracy assumption $\psilo < \psiup$ implies that the two contact sets $\Cbot, \Ctop$ are disjoint, it does not by itself say how far apart they are.  This is important because, upon discretization (\S \ref{sec:discretization}), a mesh star (definition \eqref{eq:star} below, or e.g.~\cite{Langeetal2016}) touching \emph{both} contact sets would break the sign argument which we will apply to the discrete residual $\sigma_h$ below.  Roughly speaking, we will need to control how much of the true contact sets the discretization can recognize as such.
+\subsection{Separation of the bilateral active (contact) sets}  While the non-degeneracy assumption $\psilo < \psiup$ implies that the two contact sets $\Cbot, \Ctop$ are disjoint, it does not by itself say how far apart they are.  We quantify the gap here because it is the natural scale at which one expects the discrete classification of \S \ref{sec:discretization} to begin tracking the true contact sets.  It is \emph{not} needed for any result below.
 
 For the continuum problem, compactness of $\bar\Om$ allows us to quantify the separation of the contact sets, as follows.  First, let
 \begin{equation}
 \label{eq:deltamin}
   \delta_{\min} := \min_{\bar\Om} (\psiup - \psilo),
 \end{equation}
-equivalently the largest constant with $\psilo + \delta_{\min} \le \psiup$ on $\bar\Om$.  The minimum is attained, and positive, by nondegeneracy \eqref{eq:nondeg}, continuity of $\psiup - \psilo$, and compactness of $\bar\Om$.  Next, let $L^\top \ge 0$ be the H\"older seminorm of $\psiup$ on $\bar\Om$, i.e.\ the least constant with $|\psiup(x) - \psiup(y)| \le L^\top |x-y|^\alpha$ for all $x,y \in \bar\Om$.  This value is finite since $\psiup \in C^{0,\alpha}(\bar\Om)$, but note it can be zero, related to the division convention below.  We assume, as does \cite{NSV03} for the unilateral problem, that the solution $u$ is H\"older continuous on $\bar\Om$ with some exponent $\beta \in (0,1]$ and seminorm $L_u \ge 0$.
+equivalently the largest constant with $\psilo + \delta_{\min} \le \psiup$ on $\bar\Om$.  The minimum is attained, and positive, by nondegeneracy \eqref{eq:nondeg}, continuity of $\psiup - \psilo$, and compactness of $\bar\Om$.
+
+Let $L^\top \ge 0$ be the H\"older seminorm of $\psiup$ on $\bar\Om$, i.e.\ the least constant with $|\psiup(x) - \psiup(y)| \le L^\top |x-y|^\alpha$ for all $x,y \in \bar\Om$.  This value is finite since $\psiup \in C^{0,\alpha}(\bar\Om)$, but note it can be zero, related to the division convention below.  We assume, as does \cite{NSV03} for the unilateral problem, that the solution $u$ is H\"older continuous on $\bar\Om$ with some exponent $\beta \in (0,1]$ and seminorm $L_u \ge 0$.
 
 \begin{proposition}[Separation of the contact sets]
 \label{prop:separation}
@@ -236,7 +238,9 @@ Thus we define the discrete constraint set just as in \eqref{eq:K}:
   \Kh := \{v_h \in \Vh \mid \psiloh \le v_h \le \psiuph \text{ in } \Om,
     \ v_h = \Ih g \text{ on } \dOm\},
 \end{equation}
-This set is closed and convex, and it is non-empty: choose $v_h \in \Vh$ nodally, equal to $\Ih g$ at boundary nodes and anywhere in the non-empty interval $[\psiloh(z),\psiuph(z)]$ at interior nodes, and Lemma~\ref{lem:affine} promotes these nodal inequalities to all of $\bar\Om$.  As noted by \cite{NSV03} for the unilateral case, $\Kh$ is in general not a subset of $\mathcal{K}$ defined by \eqref{eq:K}, so in this sense our approximation is non-conforming.  The discrete problem corresponding to \eqref{eq:VI} reads
+This set is closed and convex, and it is non-empty: choose $v_h \in \Vh$ nodally, equal to $\Ih g$ at boundary nodes and anywhere in the non-empty interval $[\psiloh(z),\psiuph(z)]$ at interior nodes, and Lemma~\ref{lem:affine} promotes these nodal inequalities to all of $\bar\Om$.  As noted by \cite{NSV03} for the unilateral case, $\Kh$ is in general not a subset of $\mathcal{K}$ defined by \eqref{eq:K}, so in this sense our approximation is non-conforming.
+
+The discrete problem corresponding to \eqref{eq:VI} reads
 \begin{equation}
 \label{eq:discVI}
   u_h \in \Kh: \qquad
@@ -258,20 +262,43 @@ whence $\sigma_h(z) = \bigl(\int_\Om \phi_h^z\bigr)^{-1}
 \bigl(\left< \nabla u_h, \nabla \phi_h^z\right> - \left< f, \phi_h^z\right>\bigr)$.  This is \cite[formula (2.1)]{NSV03}, but here with the same sign convention as for $\sigma$ itself (see \eqref{eq:sigma}).  Note that while $\sigma \in H^{-1}(\Om)$ is a quite general object, generally a measure, $\sigma_h$ simply assigns a real value for each interior node in the mesh.  (On the other hand, the reader might be wise to regard $\sigma_h$ as a collection of delta measures at points.)  Definition \eqref{eq:sigmah} is extended to boundary nodes below.
 % also, \eqref{eq:sigmah} is the Galerkin (weak-form) instance of the strong-form nodal residual underlying \cite{BuelerFarrell2024}'s mixed complementarity classification in their \S 7, and it matches the convention already used by \texttt{viamr}'s \texttt{nsvmark()}
 
-Let $\Nhbot := \{z \in \Nh : u_h(z) = \psiloh(z)\}$ and $\Nhtop := \{z \in \Nh : u_h(z) = \psiuph(z)\}$ be the \emph{nodal active sets}, the discrete lower- and upper-contact sets; they are disjoint by \eqref{eq:disc-nondeg}.
+Because the constraints in \eqref{eq:Kh} compare piecewise-linear functions, admissibility is decided at the nodes alone.  Indeed, for $v_h \in \Vh$ the differences $v_h - \psiloh$ and $\psiuph - v_h$ are affine on each $T \in \Th$, so Lemma~\ref{lem:affine} promotes nodal inequalities to pointwise ones and
+\begin{equation}
+\label{eq:nodalKh}
+  v_h \in \Kh \quad\iff\quad v_h = \Ih g \text{ on } \dOm \ \text{ and } \ \psiloh(z) \le v_h(z) \le \psiuph(z) \ \text{ for all } z \in \Nh.
+\end{equation}
+This is the same observation already used above to see that $\Kh \ne \emptyset$.  It has a strong consequence for $\sigma_h$.
 
-\begin{proposition}[Nodal residual sign in active cases]
-\label{prop:nodalsign}
-If $z \in \Nhr$ and $\Uh(z) \subset \{u_h = \psiloh\}$, i.e.\ $z$'s star is wholly lower-active, then $\sigma_h(z) \ge 0$.  Symmetrically, if $\Uh(z) \subset \{u_h = \psiuph\}$ then $\sigma_h(z) \le 0$.
+\begin{proposition}[Nodal complementarity]
+\label{prop:nodalsign}  Let $\Nhbot := \{z \in \Nh : u_h(z) = \psiloh(z)\}$ and $\Nhtop := \{z \in \Nh : u_h(z) = \psiuph(z)\}$ be the \emph{nodal active sets}, the discrete lower- and upper-contact sets; they are disjoint by \eqref{eq:disc-nondeg}.  Let $z \in \Nhr$ be an interior node.  Then
+\begin{align}
+\label{eq:nodalcomp}
+  z \in \Nhbot \ &\implies\ \sigma_h(z) \ge 0, \\
+  z \in \Nhtop \ &\implies\ \sigma_h(z) \le 0, \notag \\
+  z \notin \Nhbot \cup \Nhtop \ &\implies\ \sigma_h(z) = 0. \notag
+\end{align}
+Contrapositively, $\sigma_h(z) > 0$ implies $z \in \Nhbot$, and $\sigma_h(z) < 0$ implies $z \in \Nhtop$.
 \end{proposition}
 
 \begin{proof}
-Suppose $\Uh(z) \subset \{u_h = \psiloh\}$.  Since $\psiuph - \psiloh \ge \delta_{\min} > 0$ on $\bar\Om$ by \eqref{eq:disc-nondeg}, and because $u_h = \psiloh$ throughout $\Uh(z)$, also $\psiuph - u_h \ge \delta_{\min} > 0$ throughout $\Uh(z)$.  In particular, $\Uh(z) \cap \Nhtop = \emptyset$.
+For $t \in \mathbb{R}$ set $v_h := u_h + t \phi_h^z \in \Vh$.  Since $z$ is an interior node, $\phi_h^z$ vanishes on $\dOm$, so $v_h = u_h = \Ih g$ there.  At any node $z' \ne z$ we have $\phi_h^z(z') = 0$, hence $v_h(z') = u_h(z')$, which satisfies the bounds in \eqref{eq:nodalKh} because $u_h \in \Kh$; and $v_h(z) = u_h(z) + t$.  So, by \eqref{eq:nodalKh},
+\begin{equation}
+\label{eq:tfeasible}
+  v_h \in \Kh \quad\iff\quad \psiloh(z) - u_h(z) \ \le\ t \ \le\ \psiuph(z) - u_h(z).
+\end{equation}
+This is a condition at the single node $z$; no hypothesis about the rest of $z$'s star is involved.  Testing \eqref{eq:discVI} with any such $v_h$, and using \eqref{eq:sigmah}, gives
+\begin{equation}
+\label{eq:tsigma}
+  t\,\sigma_h(z) \ \ge\ 0 \qquad \text{for every feasible } t.
+\end{equation}
 
-Now fix $t \in (0, \delta_{\min}/\max_{\Uh(z)} \phi_h^z]$ and set $v_h := u_h + t \phi_h^z \in \Vh$. Since $\phi_h^z \ge 0$ and $u_h = \psiloh$ on $\Uh(z)$, $v_h \ge \psiloh$ there, and $v_h = u_h \ge \psiloh$ elsewhere.  By the choice of $t$, $v_h \le u_h + \delta_{\min} \le \psiuph$ on $\Uh(z)$, and $v_h = u_h \le \psiuph$ elsewhere, so $v_h \in \Kh$.  Testing \eqref{eq:discVI} with this $v_h$ gives $t\left< \nabla u_h, \nabla \phi_h^z\right> \ge t\left< f, \phi_h^z\right>$, and dividing by $t > 0$ preserves the inequality, so $\left< \nabla u_h, \nabla \phi_h^z\right> \ge \left< f, \phi_h^z\right>$, which implies $\sigma_h(z) \ge 0$ by \eqref{eq:sigmah}.
-
-The upper case is symmetric.  Supposing $\Uh(z) \subset \{u_h = \psiuph\}$, fix instead $t \in [-\delta_{\min}/\max_{\Uh(z)} \phi_h^z, 0)$, so that $v_h \le u_h = \psiuph$ on $\Uh(z)$ while $v_h \ge u_h - \delta_{\min} \ge \psiloh$ there, again giving $v_h \in \Kh$.  Dividing by $t < 0$ now \emph{reverses} the inequality, and $\sigma_h(z) \le 0$ follows.
+Suppose $z \in \Nhbot$, so $u_h(z) = \psiloh(z)$.  Then $\psiuph(z) - u_h(z) \ge \delta_{\min} > 0$ by \eqref{eq:disc-nondeg}, so every $t \in (0,\delta_{\min}]$ is feasible in \eqref{eq:tfeasible}; dividing \eqref{eq:tsigma} by $t > 0$ preserves the inequality and gives $\sigma_h(z) \ge 0$.  Symmetrically, if $z \in \Nhtop$ then every $t \in [-\delta_{\min},0)$ is feasible, and dividing by $t < 0$ \emph{reverses} the inequality, giving $\sigma_h(z) \le 0$.  Finally, if $z$ lies in neither set then $\psiloh(z) < u_h(z) < \psiuph(z)$, so all $t$ of sufficiently small modulus are feasible, of either sign; both preceding conclusions then apply and $\sigma_h(z) = 0$.  The three cases are exhaustive, and the first two are mutually exclusive, because $\Nhbot \cap \Nhtop = \emptyset$ by \eqref{eq:disc-nondeg}.
 \end{proof}
+
+\begin{remark}[What replaces the unilateral global sign]
+\label{rem:nodalglobal}
+In the unilateral setting of \cite{NSV03}, in our sign convention, $\sigma_h \ge 0$ holds \emph{throughout} $\bar\Om$: raising $u_h$ by a non-negative multiple of any nodal basis function can never violate a one-sided lower bound, so \eqref{eq:tsigma} is available with $t > 0$ at every interior node.  With two obstacles that fails, and $\sigma_h$ has no global sign.  Proposition~\ref{prop:nodalsign} is what takes its place: a \emph{nodal} statement, which is precisely the discrete form of the complementarity structure \eqref{eq:sigmasign}.  Note that $\sigma_h$ vanishes identically at every strictly inactive interior node, so $\sigma_h$ can be non-zero only on the nodal active sets $\Nhbot \cup \Nhtop$.
+\end{remark}
 
 
 \subsection{Thinned/eroded element-wise active sets}
@@ -295,9 +322,11 @@ The element sets $\Thbot$ and $\Thtop$ are exactly what the \texttt{VIAMR.thinel
 \Thtop &= \texttt{thinelemactive(uh, psiuph, boxside="upper")}.
 \end{align*}
 
-Observe that no separation hypothesis is needed in Proposition \ref{prop:nodalsign} above.  This is important because we need to use $\sigma_h$'s (nodal) sign to extend the \cite{NSV03} estimator over elements in $\Thbot$ or $\Thtop$.  For a node whose star meets \emph{both} contact types, thus necessarily adjacent to an element of $\Thplus$ by \eqref{eq:Thsplit}, the perturbation argument used in proving Proposition \ref{prop:nodalsign} could break.  However, that argument is never needed there.  The sign of $\sigma_h$ enters this Appendix through Proposition \ref{prop:nodalsign} alone, and that Proposition is only ever applied on $\Thzero$.  On $\Thplus$ elements $\sigma_h$ appears through its \emph{value} only, in the second sum of \eqref{eq:sigmatilde}, while \eqref{eq:RhQh} and \eqref{eq:Rp} carry no $\sigma_h$ on $\Thplus$ at all.  So no separation hypothesis is needed for correctness.  What the unilateral argument of \cite{NSV03} does get from a global sign, and what we must replace in the bilateral case, appears in the barrier construction of \S \ref{sec:barriers} below.
+The element-wise sets promote the nodal signs of Proposition \ref{prop:nodalsign} to pointwise ones (over points in the elements).  On $T \in \Thbot$ every vertex is lower-active, so $\sigma_h \ge 0$ at each vertex of $T$, whence $\sigma_h \ge 0$ throughout $T$ by Lemma \ref{lem:affine}; symmetrically $\sigma_h \le 0$ on each $T \in \Thtop$.  On $\Thplus$ elements no pointwise sign is claimed.
 
-However, Proposition~\ref{prop:separation}'s separation constant $r_0$ still matters for \emph{sharpness}.  One expects that once $h \lesssim r_0$, $\Thplus$ separates the discrete free boundaries, rather than swallowing-up contact elements that should have been classified into $\Thbot$ or $\Thtop$, but we do not prove this.
+No separation hypothesis, and no relation between $h$ and the geometry of the contact sets, enters any of this; see Remark \ref{rem:nodalglobal}.  Proposition~\ref{prop:separation}'s constant $r_0$ therefore plays no role in the correctness of what follows.
+
+However, $r_0$ still matters for \emph{sharpness}.  One expects that once $h \lesssim r_0$, $\Thplus$ separates the discrete free boundaries, rather than swallowing-up contact elements that should have been classified into $\Thbot$ or $\Thtop$, but we do not prove this.
 
 
 \subsection{The residual at boundary nodes}
@@ -499,6 +528,8 @@ Bound \eqref{eq:Ghbound} is \cite[formula (3.10)]{NSV03}.  As with the Galerkin 
 
 \section{Barriers} \label{sec:barriers}
 
+FIXME the following material has not been checked by Ed
+
 Following \cite[\S 4]{NSV03}, we now construct continuous barriers for $u$ from a correction $w$ solving a linear problem.  Let $w \in \mathring H^1(\Om)$ be the Riesz representation of the Galerkin functional $\Gh$,
 \begin{equation}
 \label{eq:w}
@@ -507,7 +538,7 @@ Following \cite[\S 4]{NSV03}, we now construct continuous barriers for $u$ from 
 As in \cite{NSV03} we assume here that $w$ is continuous; this is established, independently of the box constraint, in \S FIXME below.
 
 \begin{remark}[Why the unilateral barrier construction does not carry over directly]
-In the unilateral setting of \cite{NSV03}, in our sign convention, $\sigma_h \ge 0$ throughout $\bar\Om$ \emph{unconditionally}: testing the discrete VI with $v_h = u_h + t\phi_h^z$, $t \ge 0$, is feasible at \emph{any} interior node, since raising $u_h$ by a non-negative multiple of $\phi_h^z$ can never violate a one-sided lower bound.  This global sign is what powers \cite[Prop.~4.1, 4.2]{NSV03}: it makes $\tilde\sigma_h$ non-negative against any $v \ge 0$, with no restriction on the mesh.  In our box-constrained setting this mechanism is gone.  Testing with $t \ge 0$ at a node whose star meets $\Ctop$ risks violating the upper bound, so Proposition~\ref{prop:nodalsign} only grants $\sigma_h(z) \ge 0$ under the stronger hypothesis that $z$'s star is \emph{wholly} lower-active, and symmetrically $\sigma_h(z) \le 0$ only when wholly upper-active.  There is no bilateral analogue of the global sign.  Each barrier below therefore acquires a term which the unilateral construction does not need, namely the interpolation error of the obstacle \emph{opposite} to the one that barrier already handles.
+In the unilateral setting of \cite{NSV03}, in our sign convention, $\sigma_h \ge 0$ throughout $\bar\Om$ \emph{unconditionally}: testing the discrete VI with $v_h = u_h + t\phi_h^z$, $t \ge 0$, is feasible at \emph{any} interior node, since raising $u_h$ by a non-negative multiple of $\phi_h^z$ can never violate a one-sided lower bound.  This global sign is what powers \cite[Prop.~4.1, 4.2]{NSV03}: it makes $\tilde\sigma_h$ non-negative against any $v \ge 0$, with no restriction on the mesh.  In our box-constrained setting this mechanism is gone: testing with $t \ge 0$ at an upper-active node violates the upper bound, so $\sigma_h$ has no global sign.  What survives is the \emph{nodal} statement of Proposition~\ref{prop:nodalsign}, which is weaker in exactly the way that matters here, since $\tilde\sigma_h$ is no longer non-negative against an arbitrary $v \ge 0$.  Each barrier below therefore acquires a term which the unilateral construction does not need, namely the interpolation error of the obstacle \emph{opposite} to the one that barrier already handles.
 \end{remark}
 
 
@@ -554,9 +585,9 @@ Since $u^\top \ge u_h + \|(\psilo-u_h)^+\|_{0,\infty;\Om} \ge u_h + (\psilo-u_h)
   \left<\sigma,v\right> = -\int_\Om v\,d\mu_\top \ \le\ 0.
 \]
 
-For $\tilde\sigma_h$, definition \eqref{eq:sigmatilde} splits $\left<\tilde\sigma_h,v\right>$ into a sum over $\Thbot$, $\Thtop$, and $\Thplus$.  On $\Thbot$, Proposition~\ref{prop:nodalsign} gives $\sigma_h \ge 0$ at every vertex of every $T \in \Thbot$ (its star, hence each vertex's smaller star, lies in $\{u_h=\psiloh\}$), so $\sigma_h \ge 0$ throughout $T$ by Lemma~\ref{lem:affine}, and $\int_T \sigma_h v \ge 0$.  This is the term \cite{NSV03} also has, and it needs nothing further.
+For $\tilde\sigma_h$, definition \eqref{eq:sigmatilde} splits $\left<\tilde\sigma_h,v\right>$ into a sum over $\Thbot$, $\Thtop$, and $\Thplus$.  On $\Thbot$, every vertex of every $T \in \Thbot$ is lower-active, so Proposition~\ref{prop:nodalsign} gives $\sigma_h \ge 0$ at each of them, whence $\sigma_h \ge 0$ throughout $T$ by Lemma~\ref{lem:affine}, and $\int_T \sigma_h v \ge 0$.  This is the term \cite{NSV03} also has, and it needs nothing further.
 
-On $\Thtop$, symmetrically $\sigma_h \le 0$ throughout each $T$, which is the wrong sign, and this is the term with no unilateral counterpart.  Here the $E^\top$ term in \eqref{eq:ubarupper} does the work.  Each $T \in \Thtop$ has $u_h = \psiuph$ on $T$, and $w + \|w\|_{0,\infty;\Om} \ge 0$, so on $\Lamhtop$,
+On $\Thtop$ the $E^\top$ term in \eqref{eq:ubarupper} does the work.  Each $T \in \Thtop$ has $u_h = \psiuph$ on $T$, and $w + \|w\|_{0,\infty;\Om} \ge 0$, so on $\Lamhtop$,
 \[
   u^\top \ \ge\ u_h + E^\top \ =\ \psiuph + \|\psiup - \psiuph\|_{0,\infty;\Om} \ \ge\ \psiup \ \ge\ u.
 \]
