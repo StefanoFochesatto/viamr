@@ -504,14 +504,14 @@ For $1 \le p \le \infty$, with dual exponent $p' = p/(p-1)$, define the \emph{lo
 \end{equation}
 This is \cite[formula (3.7)]{NSV03}, again with the sign of $\sigma_h$ flipped: the first term is the usual interior-flux-jump contribution over $\partial T$, and the second is the residual magnitude $|f+\sigma_h|$ on wholly-active elements, matching the volume density of $\Rh$ in \eqref{eq:RhQh}, or the bare source term $|f|$ elsewhere.  Nothing here refers to the nature of the active obstacle, so \eqref{eq:Rp} is unchanged from the unilateral case.
 
-By the BV-approximation properties \eqref{eq:PihBV} of $\Pih$ and additivity of $|D^2\varphi|_{\mathrm{var}}$ over $\Th$, definition \eqref{eq:RhQh} of $\Rh$ gives
+By the BV-approximation properties \eqref{eq:PihBV} of $\Pih$, and because shape-regularity gives the patches $\Uh(T)$, $\Uh(S)$ finite overlap, so that $\sum_{T\in\Th} |D^2\varphi|_{\mathrm{var}}(\Uh(T)) \preceq |D^2\varphi|_{\mathrm{var}}(\Om)$ and likewise over sides, definition \eqref{eq:RhQh} of $\Rh$ gives
 \begin{equation}
 \label{eq:Rhbound}
   \bigl|\left<\Rh,\varphi-\Pih\varphi\right>\bigr| \ \preceq\ \|h^2 R_\infty\|_{0,\infty;\Om}\, |D^2\varphi|_{\mathrm{var}}(\Om)
 \end{equation}
 for $\varphi \in W$.  This is \cite[formula (3.8)]{NSV03}.
 
-The second term $\left<\Qh,\Pih\varphi\right>$ in the representation formula \eqref{eq:Gh-repn} accounts for the effect of quadrature.  It too is independent of obstacle type, and it already arises for an unconstrained linear problem.  Applying the first bound in \eqref{eq:Pihprops} together with the Sobolev-type inequality $\|\nabla\varphi\|_{0,d';\Om} \preceq |D^2\varphi|_{\mathrm{var}}(\Om)$, valid for $\varphi \in W$, gives \cite[formula (3.9)]{NSV03}, namely
+The second term $\left<\Qh,\Pih\varphi\right>$ in the representation formula \eqref{eq:Gh-repn} accounts for the effect of quadrature.  It too is independent of obstacle type, and it already arises for an unconstrained linear problem.  For $v_h,w_h$ affine on $T$ the mass-lumping error satisfies $\bigl|\int_T (v_h w_h - \Ih(v_h w_h))\bigr| \preceq h_T^2 \int_T |\nabla v_h| |\nabla w_h|$; applying this with $v_h = \sigma_h$ and $w_h = \Pih\varphi$, summing over $T \in \Thzero$, and using H\"older with the conjugate pair $(d,d')$ gives the first bound below.  Then applying the first bound in \eqref{eq:Pihprops} together with the Sobolev-type inequality $\|\nabla\varphi\|_{0,d';\Om} \preceq |D^2\varphi|_{\mathrm{var}}(\Om)$, valid for $\varphi \in W$, gives the second.  Altogether we have \cite[formula (3.9)]{NSV03}, namely
 \begin{equation}
 \label{eq:Qhbound}
   \bigl|\left<\Qh,\Pih\varphi\right>\bigr| \ \preceq\ \|h^2\nabla\sigma_h\|_{0,d;\Lamh}\, \|\nabla\Pih\varphi\|_{0,d';\Om}
