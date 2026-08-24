@@ -138,10 +138,9 @@ for method in methods:
             eff_dofs.append(dofs[-1])
             eff_vals.append(eff_br)
         else:
-            with PETSc.Log.Event("nsv.py_calls_nsvmark"):
-                (mark, etainf, sigmah, _, etad) = amr.nsvmark(
-                    uh, psih, g, f_ufl, g_ufl, theta=0.5, dualtol=dualtol
-                )
+            (mark, etainf, sigmah, _, etad) = amr.nsvmark(
+                uh, psih, g, f_ufl, g_ufl, theta=0.5, dualtol=dualtol, method="total"
+            )
             # effectivity index vs NSV03's own target norm: max_T eta_inf(T)
             # is the whole-domain (not inactive-set-restricted) quantity its
             # pointwise theory bounds ||u-u_h||_infty by, in contrast to
