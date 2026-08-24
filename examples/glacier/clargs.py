@@ -5,23 +5,19 @@ See README.md for examples and METHOD.md for documentation of the mathematics.
 The domain is a square [0,L]^2 with L = 1800.0 km, except that with option -bdata
 the domain is read from the file.
 
-By default (-prob cap) we use a random, but smooth, bed topography, while the
-surface mass balance is radially-symmetric and depends on horizontal location.
+The default problem (option -prob cap) uses a bumpy bed topography, while the
+surface mass balance is radially-symmetric (depends only on horizontal location).
 Option -prob range generates a different SMB, which results in a disconnected
 glacier.  Option -bdata reads the bed elevation from a NetCDF (.nc) file.
-
 An elevation-dependent surface mass balance model is turned on with -elevdepend.
 Set -sELA for equilibrium line altitude.
 
-We apply vinewtonrsls + mumps, a VI-adapted Newton method with direct solution of
-the step equations, as the PETSc solver.  Optionally (-picard), we can wrap an
-outer Picard iteration around it, which iterates on the surface elevation dependence
-of the SMB (if any).  Note that the solver is mostly Newton in the -picard case,
-actually.  Option -elevdepend only works with -picard.
+We apply vinewtonrsls + mumps, a VI-adapted direct-solver Newton method as the
+PETSc solver.  For -elevdepend runs add -picard, which wraps an outer Picard
+iteration around the Newton solver, to iterate on the surface-elevation dependence.
 
-We apply the UDO method for free-boundary refinement.  The default mode
-does n=1 UDO at the free boundary.  To this we add the weighted form of the BR78
-residual estimator in the inactive set, that is, the method from BV00.
+We apply the UDO (n=1 by default) method for free-boundary refinement.  To this
+we add the weighted "BV00" form of the BR78 residual estimator in the inactive set.
 
 For a flat-bed "dome" case with known exact solution, see dome.py instead.
 """
@@ -97,7 +93,7 @@ parser.add_argument(
     default="s",
     metavar="X",
     choices=["s", "u"],
-    help="choose primal variable: s (surface elevation) or u (transformed thickness) [default=s]",
+    help="primal variable: s (surface elevation) or u (transformed thickness) [default=s]",
 )
 parser.add_argument(
     "-prob",
@@ -105,7 +101,7 @@ parser.add_argument(
     default="cap",
     metavar="X",
     choices=["cap", "range"],
-    help="choose problem {cap, range} [default=cap]",
+    help="problem {cap, range} [default=cap; ignored for -bdata]",
 )
 parser.add_argument(
     "-refine",
@@ -126,7 +122,7 @@ parser.add_argument(
     type=float,
     default=0.5,
     metavar="X",
-    help="theta to use in fixed-rate marking strategy in inactive set [default=0.5]",
+    help="theta in fixed-rate marking strategy in inactive set [default=0.5]",
 )
 parser.add_argument(
     "-udo_n",

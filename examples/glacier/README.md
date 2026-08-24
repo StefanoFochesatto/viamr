@@ -42,9 +42,9 @@ pip install netCDF4
 ```
 Here is a recommended run:
 ```
-python3 steady.py -bdata eastgr.nc -primal u -picard -refine 5 -udo_n 0 -theta 0.8
+python3 steady.py -bdata eastgr.nc -primal u -picard -refine 4 -udo_n 0 -theta 0.8
 ```
-The options `-udo_n 0 -theta 0.8` yield more-balanced marking, with significant effort in the inactive set, even though resolving the nearly-fractal free boundary needs elements too.
+The options `-udo_n 0 -theta 0.8` yield balanced marking, with significant effort in the inactive set, even though resolving the nearly-fractal free boundary gets elements too.
 
 Variations could add an initial uniform refinement (`-uniform 0`), or stop marking for refinement as one approaches data level (`-hmin 5000`).  A significantly-higher resolution run would probably only be justified if the bed topography data was made higher resolution.
 

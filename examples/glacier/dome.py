@@ -3,15 +3,11 @@
 # known exact solution (see synthetic.py).
 #
 # Compares the two primal-variable formulations of the physics, either in
-# u = transformed thickness or s = surface elevation.
-#
-# The AMR strategy is UDO+BV00, so in the inactive set we use a weighted
-# norm and estimator.
+# u = transformed thickness or s = surface elevation.  The AMR strategy is
+# UDO+BV00 using the weighted estimator in the inactive set.  See steady.py
+# for a more general shallow ice approximation driver.
 #
 # This script has no command-line interface; edit the "major parameters" below.
-#
-# See steady.py for the general shallow ice approximation driver, with either
-# a synthetic bumpy bed or a bed read from data.
 #
 # Generates:
 #   result_dome_{u|s}.pvd          Paraview output, one per formulation
@@ -112,7 +108,7 @@ for primal in primals:
         vfb, _ = amr.freeboundarygraph2D(w, lb)
         drmax = dome_radiuserror(mesh, vfb)
         print(
-            f"  |u-uexact|_H1rel = {uerrH1rel:.3e};  |H-Hexact|_Linf = {HerrLinf:.3f} m;  |dr|_Linf = {drmax/1000.0:.3f} km"
+            f"  |u-uexact|_H1rel = {uerrH1rel:.3e};  |H-Hexact|_inf = {HerrLinf:.3f} m;  |dr|_inf = {drmax/1000.0:.3f} km"
         )
 
         dofs.append(V.dim())
@@ -185,6 +181,8 @@ for primal in primals:
 if mesh.comm.rank == 0:
     import matplotlib.pyplot as plt
 
+    print(f"generating convergence and effectivity figures dome_*.png ...")
+
     d = 2  # spatial dimension
     stylemap = {"u": "ko", "s": "bs"}
 
@@ -250,7 +248,7 @@ if mesh.comm.rank == 0:
             edofs,
             evals,
             stylemap[primal],
-            label=f"{primal}-form (own BV00 energy norm, inactive set)",
+            label=f"{primal}-form (inactive set BV00 energy norm)",
         )
     plt.axhline(1.0, color="k", linestyle=":", label="ideal eff=1")
     plt.legend()
