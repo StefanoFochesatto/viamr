@@ -283,7 +283,7 @@ This is the same observation already used above to see that $\Kh \ne \emptyset$.
   z \in \Nhtop \ &\implies\ \sigma_h(z) \le 0, \notag \\
   z \notin \Nhbot \cup \Nhtop \ &\implies\ \sigma_h(z) = 0. \notag
 \end{align}
-Contrapositively, $\sigma_h(z) > 0$ implies $z \in \Nhbot$, and $\sigma_h(z) < 0$ implies $z \in \Nhtop$.
+Combining these, $\sigma_h(z) > 0$ implies $z \in \Nhbot$, and $\sigma_h(z) < 0$ implies $z \in \Nhtop$.
 \end{proposition}
 
 \begin{proof}
@@ -303,7 +303,7 @@ Suppose $z \in \Nhbot$, so $u_h(z) = \psiloh(z)$.  Then $\psiuph(z) - u_h(z) \ge
 
 \begin{remark}[What replaces the unilateral global sign]
 \label{rem:nodalglobal}
-In the unilateral setting of \cite{NSV03}, in our sign convention, $\sigma_h \ge 0$ holds \emph{throughout} $\bar\Om$: raising $u_h$ by a non-negative multiple of any nodal basis function can never violate a one-sided lower bound, so \eqref{eq:tsigma} is available with $t > 0$ at every interior node.  With two obstacles that fails, and $\sigma_h$ has no global sign.  Proposition~\ref{prop:nodalsign} is what takes its place: a \emph{nodal} statement, which is precisely the discrete form of the complementarity structure \eqref{eq:sigmasign}.  Note that $\sigma_h$ vanishes identically at every strictly inactive interior node, so $\sigma_h$ can be non-zero only on the nodal active sets $\Nhbot \cup \Nhtop$.
+In the unilateral setting of \cite{NSV03}, in our sign convention, $\sigma_h \ge 0$ holds \emph{throughout} $\bar\Om$: raising $u_h$ by a non-negative multiple of any nodal basis function can never violate a one-sided lower bound, so \eqref{eq:tsigma} is available with $t > 0$ at every interior node.  With two obstacles that fails, and $\sigma_h$ has no global sign.  Proposition~\ref{prop:nodalsign} is what takes its place: a \emph{nodal} statement, which is precisely the discrete form of the complementarity structure \eqref{eq:sigmasign}.  Note that $\sigma_h$ vanishes at every strictly inactive interior node, so the nodal values of $\sigma_h$ can be non-zero only on the nodal active sets $\Nhbot \cup \Nhtop$.  (This is not a pointwise statement: $\sigma_h$ is piecewise linear, so it is generally non-zero throughout any element having an active vertex.)
 \end{remark}
 
 
@@ -327,6 +327,11 @@ The element sets $\Thbot$ and $\Thtop$ are exactly what the \texttt{VIAMR.thinel
 \Thbot &= \texttt{thinelemactive(uh, psiloh, boxside="lower")} \\
 \Thtop &= \texttt{thinelemactive(uh, psiuph, boxside="upper")}.
 \end{align*}
+
+\begin{remark}[The library tests a centroid value, against a tolerance]
+\label{rem:activetol}
+Both \texttt{elemactive()} and \texttt{thinelemactive()} decide activity by evaluating the gap at a single DG0 degree of freedom, the cell centroid, and comparing to a tolerance \texttt{activetol}, rather than by testing every vertex.  For piecewise-linear $u_h,\psiloh$ the centroid value of $u_h - \psiloh$ is the average of the vertex values, and this gap is non-negative because $u_h \in \Kh$, so at zero tolerance the two tests agree.  At a positive tolerance the centroid test is weaker: a triangle with vertex gaps $0,0,3\,\texttt{activetol}/2$ has centroid gap $\texttt{activetol}/2$ and is marked active, though one of its vertices is not.  The identifications above are therefore exact in the limit $\texttt{activetol}\to 0$.
+\end{remark}
 
 The element-wise sets promote the nodal signs of Proposition \ref{prop:nodalsign} to pointwise ones (over points in the elements).  Let $T \in \Thbot$ and let $z$ be a vertex of $T$, thus a lower-active node.  If $z$ is an interior node then $\sigma_h(z) \ge 0$ by Proposition \ref{prop:nodalsign}.  If instead $z$ is a boundary node then, because every element containing $z$ meets $T$, we have $\Uh(z) \subset \Uh(T) \subset \{u_h = \psiloh\}$, and the boundary-node definition \eqref{eq:sigmah-bnd} below gives $\sigma_h(z) = \hat\sigma_h(z)^+ \ge 0$.  Either way $\sigma_h \ge 0$ at each vertex of $T$, whence $\sigma_h \ge 0$ throughout $T$ by Lemma \ref{lem:affine}; symmetrically $\sigma_h \le 0$ on each $T \in \Thtop$.  On $\Thplus$ elements no pointwise sign is claimed.
 
