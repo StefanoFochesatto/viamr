@@ -74,6 +74,8 @@ However, for classical obstacle problems, namely unilateral problems where the o
 
 This Appendix extends \cite{NSV03}'s proof of reliability and efficiency to the bilateral case, that is, with continuous lower \emph{and upper} bounds.  The sequence of topics here, and much of the notation, generally follows the original.  Note that the operator must still be the ordinary linear Laplacian; this is not changed.
 
+We are not aware of any pointwise \emph{a posteriori} theory for the bilateral problem, which is why we write this out.  The nearest results are of two kinds.  First, the same authors sharpened \cite{NSV03} in \cite{NSV05}, where the estimator is \emph{fully localized}, in that it vanishes identically on the full-contact set and not merely on a subset of it, and where the pointwise bounds are converted into \emph{barrier sets}, that is, computable regions which are proven to contain the free boundary under a stability (nondegeneracy) condition.  Both refinements are for one obstacle; we return to their bilateral analogues in Remark~\ref{rem:localization}.  Second, Ot\'arola, Rankin, \& Salgado \cite{Otarolaetal2019} prove reliable and efficient maximum-norm \emph{a posteriori} bounds for a problem with genuine box constraints, using the machinery of \cite{NSV03}.  However, their constrained variable is the control in a linear-quadratic optimal control problem, and it is determined by a pointwise projection of the adjoint state.  There is consequently no free boundary of the present kind, no contact-set localization, and no barrier construction; the reduction in \S \ref{sec:barriers} has no analogue there.  Our constrained variable is the solution of the VI itself.
+
 
 \section{Continuum problem and setup} \label{sec:setup}
 
@@ -184,6 +186,8 @@ If $r < r_0$, then
 $L^\top r^\alpha < \delta_{\min}/2$ and $L_u r^\beta < \delta_{\min}/2$, by definition of $r_0$,  so $L^\top r^\alpha + L_u r^\beta < \delta_{\min}$, a contradiction. Thus
 $r \ge r_0$, and $\operatorname{dist}(\Cbot,\Ctop) \ge r_0$ follows.
 \end{proof}
+
+Separation hypotheses of this kind are expected in the bilateral setting.  For the displacement obstacle problem of clamped Kirchhoff plates, a fourth-order bilateral problem, Brenner et al.~\cite{Brenneretal2012} assume that the two obstacles are separated from each other and from the boundary values, and under that hypothesis obtain $L^\infty$ convergence rates and approximation of the coincidence set, though \emph{a priori} in both cases.  Here, by contrast, $\delta_{\min}$ in \eqref{eq:deltamin} and $r_0$ in \eqref{eq:r0} are computed from the data rather than assumed.
 
 Proposition~\ref{prop:separation} gives an explicit, data-determined lower bound $r_0$ on the spatial separation of the two contact sets  $\Cbot, \Ctop$.  The lower bound $r_0$ is controlled by the data functions $f,g,\psilo,\psiup$ through the regularity theory \cite{KinderlehrerStampacchia1980}.  As it turns out, \S \ref{sec:discretization} does \emph{not} need to impose $h < c\,r_0$ as a hypothesis for the estimator to be well-defined and correct.  Instead, $r_0$'s role is to bound the width of the transition band so that the discretization's classification tracks the true contact sets closely.
 
@@ -743,6 +747,11 @@ If the upper obstacle is absent then $\sigma_h \ge 0$ throughout $\bar\Om$, so $
 The local lower bounds of \cite[Prop.~6.3]{NSV03} for the localized term are stated for elements $T$ meeting $\{\sigma_h<0\}$, and already involve $\Uh(T)$ on the right-hand side.  Because our terms are measured over the star-dilated sets \eqref{eq:omegas}, the corresponding efficiency statement here will concern elements meeting $\ombot$ or $\omtop$, and should be expected to involve one further ring of elements.
 \end{remark}
 
+\begin{remark}[Full localization and barrier sets]
+\label{rem:localization}
+Our estimator localizes to the star-dilated sets \eqref{eq:omegas} and not to the contact sets themselves; see Remark~\ref{rem:unilateral}.  For the unilateral problem, \cite{NSV05} closes the corresponding gap, producing estimators which, apart from obstacle resolution, vanish identically within the full-contact set, and then uses the pointwise bounds to construct barrier sets, that is, computable regions containing the free boundary, under a stability condition there.  We regard the bilateral analogues of both refinements as open, and intend to pursue them.  Note that the bilateral problem has two free boundaries, so bilateral barrier sets would have to be shown disjoint before they localize either one; Proposition~\ref{prop:separation} is the natural tool, since $r_0$ bounds $\operatorname{dist}(\Cbot,\Ctop)$ from below in terms of the data.
+\end{remark}
+
 Bounding $\|w\|_{0,\infty;\Om}$ is a question about the linear problem \eqref{eq:w} only, and it is taken up next.
 
 
@@ -757,6 +766,9 @@ Bounding $\|w\|_{0,\infty;\Om}$ is a question about the linear problem \eqref{eq
 %%      (bubble functions), needed for both Thbot and Thtop.
 %%  (g) Still open: citation for Holder continuity of u in the
 %%      box-constrained case (see TODO(citation) in section 1 above).
+%%  (h) Bilateral analogues of NSV05: full localization within the
+%%      full-contact sets, and barrier sets for the two free boundaries.
+%%      See Remark \ref{rem:localization}.
 
 \bibliographystyle{siamplain}
 \bibliography{box}
