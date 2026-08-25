@@ -142,6 +142,17 @@ class VIAMR(OptionsManager, AVMMixin):
             op = MPI.MAX
         return w.function_space().mesh().comm.allreduce(local, op=op)
 
+    def _globalpnorm(self, w, p):
+        """Compute the collective (allreduce) l^p norm of a generic scalar field's
+        local dof values, that is, (sum_i |w_i|^p)^(1/p).  Correct in parallel,
+        including when a process owns no local dofs, because the Vec holds only
+        owned dofs.  Used for estimator terms whose global value accumulates as a
+        sum over elements rather than as a maximum; compare _globalextreme()."""
+        with w.dat.vec_ro as w_:
+            local = np.sum(np.abs(np.asarray(w_.array_r)) ** p)
+        total = w.function_space().mesh().comm.allreduce(local, op=MPI.SUM)
+        return float(total) ** (1.0 / p)
+
     def meshsizes(self, mesh):
         """Compute number of vertices, number of elements, and range of
         mesh diameters."""
@@ -368,6 +379,36 @@ class VIAMR(OptionsManager, AVMMixin):
         )
         return target
 
+    def _facetjump(self, uh):
+        """Compute the jump of the normal derivative of uh across mesh facets,
+        returned as a Function in the lowest-order facet ("HDiv Trace" degree 0)
+        space, which has exactly one degree of freedom per facet.  The sign
+        convention is
+
+            J_h = [[grad(u_h)]] . n     with n pointing from T^- to T^+,
+
+        which is the *negative* of UFL's jump(grad(uh), n).  The sign is
+        irrelevant to the present caller, nsvmark(), which uses only |J_h|, but it
+        is fixed here so that the convention is unambiguous.
+
+        Facet values are recovered by dividing an assembled facet integral by the
+        facet measure; this is exact because the trace space is elementwise
+        constant, so its mass matrix is diagonal.  Exterior facets get the value
+        zero, which is what NSV03 wants: the jump term in (3.7) is a norm over
+        dT \ dOmega, so boundary facets must not contribute."""
+        mesh = uh.function_space().mesh()
+        T0 = FunctionSpace(mesh, "HDiv Trace", 0)
+        w0 = TestFunction(T0)
+        n = FacetNormal(mesh)
+        Jh_ufl = -jump(grad(uh), n)
+        # facet measure on *all* facets, so the division below never divides by zero
+        areaS = assemble(w0("+") * dS + w0 * ds)
+        Jh = Function(T0, name="J_h (facet jump)")
+        Jh.dat.data[:] = (
+            assemble(Jh_ufl * w0("+") * dS).dat.data_ro / areaS.dat.data_ro
+        )
+        return Jh
+
     def countmark(self, mark):
         """Return count of number of elements marked."""
         mesh = mark.function_space().mesh()
@@ -527,7 +568,9 @@ class VIAMR(OptionsManager, AVMMixin):
           Differential Equations, Springer Basel.
         This is also the bulk/Doerfler marking criterion (W. Doerfler, 1996, SIAM J. Numer. Anal. 33(3)).  Here theta is a fraction of the total error, so the number of elements marked is an *increasing function of theta*.
 
-        Both strategies give identical results in parallel.  The 'total' strategy allgathers eta onto every process, so it may not scale to very-large meshes and process counts."""
+        Both strategies give identical results in parallel.  The 'total' strategy allgathers eta onto every process, so it may not scale to very-large meshes and process counts.
+
+        Returns (mark, ethresh, total_error_est).  The last is the l^2 norm of eta over the elements, which is the correct global estimator only when eta is an energy-norm indicator, as in gradrecinactivemark() and brinactivemark().  It is meaningless for a max-norm estimator such as nsvmark(), where the global quantity is a sup over elements; that method therefore ignores it and returns its own Eh."""
 
         with eta.dat.vec_ro as eta_:
             if method == "max":
@@ -740,9 +783,9 @@ class VIAMR(OptionsManager, AVMMixin):
 
           term 2:  Assumed to be zero because we take chi=chi_h here and assert strict admissibility.  [<-- FIXME could be improved]
 
-          term 3:  This "blocked gap" is gap = u_h - chi_h, but blocked according to the simplest discrete residual sigma_h, computed below.  (Note that we assert sigma_h > -dualtol below.)
+          term 3:  This "blocked gap" is gap = u_h - chi_h, but blocked according to the simplest discrete residual sigma_h, computed below.  (Note that we assert sigma_h > -dualtol below.)  The sup is over {sigma_h < 0} cap T, so an element contributes only if it lies in that set, i.e. only if *every* vertex has a strictly active multiplier.  Under the chi = chi_h assumption of term 2 this makes the term identically zero, since complementarity puts the gap at zero on exactly those nodes; see the comment at the code below.
 
-          term 4:  Estimates the boundary interpolation error, and we use a formula which is correct if g is in CG4.
+          term 4:  Estimates the boundary interpolation error, and we use a formula which is correct if g is in CG4.  Being a sup norm over partial Omega cap T, it is computed as the elementwise sup of |g - I_h g| over the elements touching the boundary.
 
           term eta_d:  Controls the mass-lumping/quadrature error incurred when computing sigma_h (see sec. 6.3 and 7.1 in NSV03).  sigma_h is CG1, so grad(sigma_h) is elementwise constant, and its L^d(T) norm is |grad(sigma_h)|_T * |T|^{1/d}.  Localized to Lambda_h (the discrete contact set, approximated here by tactive below, the same "neighborhood active" indicator used for term 1's X) because sigma = 0 off the contact set (see (1.2) in NSV03), so grad(sigma_h) there is quadrature noise rather than signal.  C_1=0.01 is the practical value used by NSV03 in (7.1).
 
@@ -754,6 +797,8 @@ class VIAMR(OptionsManager, AVMMixin):
         those elements *before* VIAMR.fixedratemark() applies its threshold
         strategy.  (Thus the eta_... fields are not merely filtered from
         the resulting mark afterward.)
+
+        Returns (mark, etainf, sigmah, Eh, etad).  Eh is the scalar estimator Etilde_h of (7.1) itself, so it is the quantity which bounds max(||u - u_h||_{0,inf;Omega}, ||sigma - sigmatilde_h||_{-2,inf;Omega}), and thus the right numerator for an effectivity index.  Each of its terms is accumulated in its own norm: the four sup-norm terms are maximized separately, since (7.1) adds the global norms rather than maximizing their elementwise sum eta_infty; and eta_d is accumulated as an L^d-type sum of d-th powers.  So Eh is *not* the l^2 norm of any single field, and in particular it is not what VIAMR.fixedratemark() returns, which is only meaningful for the energy-norm estimators of brinactivemark() and gradrecinactivemark().  The masking by safe= is a marking policy, so it is deliberately not applied when forming Eh.
         """
         # mesh quantities
         mesh = uh.function_space().mesh()
@@ -814,15 +859,17 @@ class VIAMR(OptionsManager, AVMMixin):
         #             i.e. infinity norm along interior edges
         #    [[z]] is the jump in z along an edge
         v0 = TestFunction(DG0)
-        # DG0 mass matrix is exactly diagonal (disjoint per-cell basis functions),
-        # so Riesz representation is just elementwise division by volT;
-        # avoids generic KSP solve inside riesz_representation()
-        volT = assemble(v0 * dx)
-        jumpu = Function(DG0)
-        jumpu.dat.data[:] = (
-            assemble(jump(grad(uh), n) * v0("-") * dS).dat.data_ro
-            / volT.dat.data_ro
-        )
+        # The jump must be a *sup over the facets of T of the jump value*, so it is
+        # recovered per facet by _facetjump(), which divides by the facet measure,
+        # and then maximized over each cell's own facets.  (A previous version
+        # divided an assembled facet integral by the cell volume instead, which
+        # scales like jump*h^(d-1)/h^d, i.e. a factor h_T too large.  That made
+        # C0*h_T^2*R_inf tend to C0*|jump| instead of to zero, so an element with a
+        # kink in chi -- where the jump does not vanish under refinement -- kept an
+        # O(1) indicator forever and permanently dominated the marking threshold.)
+        # _facetjump() gives exterior facets the value zero, which is exactly the
+        # "\setminus \partial \Omega" restriction wanted here.
+        jumpu = self._elemmaxabs(self._facetjump(uh))
         tactive = self.thinelemactive(uh, lb)
         X_ufl = abs(f_ufl + tactive * sigmah)
         # note pages 188-189 in NSV03 regarding use of DG7, to deal with the fact
@@ -833,7 +880,7 @@ class VIAMR(OptionsManager, AVMMixin):
         # BUT using DG7 this way is really slow because it is so big, so we drop
         # to DG3 by default; DG3.dim() = 10*DG0.dim(), while DG7.dim() ~= 40*DG0.dim()
         DGf = FunctionSpace(mesh, "DG", fdegree)
-        Rinf = Function(DGf).interpolate((abs(jumpu) / hT) + X_ufl)
+        Rinf = Function(DGf).interpolate((jumpu / hT) + X_ufl)
         Rinf = self._elemmaxabs(Rinf)
 
         # admissibility check; FIXME removes term 2 "(\chi - u_h)_+" from
@@ -842,23 +889,47 @@ class VIAMR(OptionsManager, AVMMixin):
         assert self._globalextreme(gaph, minimum=True) >= 0.0
 
         # term 3
-        # note that blockgap is nonzero in same cells as UDO n=0 fmark
-        blockgap_ufl = conditional(sigmah > dualtol, self._elemmaxabs(gaph), 0.0)
+        # The sup is over {sigma_h < 0} \cap T, so an element contributes only if it
+        # lies *in* that set, which is tested by requiring every vertex to have a
+        # strictly active multiplier.  (A previous version tested sigma_h at the DG0
+        # degree of freedom, i.e. at the centroid, where a P1 field takes the average
+        # of its vertex values.  A free-boundary border element with one contact
+        # vertex and two inactive ones then passed the test, and contributed the max
+        # of the gap over the *whole* element -- a value attained at an inactive
+        # vertex, which is not in {sigma_h < 0} at all.  On the pyramid example that
+        # pinned this term at g - chi = 1/5 on the boundary, at every level.)
+        # Note that under the chi = chi_h assumption asserted above, this term is now
+        # identically zero: complementarity makes the gap vanish at exactly the nodes
+        # where the multiplier is active.  That is the honest value here.  NSV03's
+        # Remark 5.8, where this term drives the initial refinement, relies on the
+        # *continuous* chi in (u_h - chi)^+, so the term regains its content only
+        # once the FIXME above is addressed.
+        elemincontact = self._elemextreme(
+            sigmah, minimum=True, defaultval=PETSc.INFINITY
+        )
+        blockgap_ufl = conditional(
+            elemincontact > dualtol, self._elemmaxabs(gaph), 0.0
+        )
         blockgap = Function(DG0).interpolate(blockgap_ufl)
 
         # term 4
-        # bdryerr is a DG0 function, with test function v0, but computed
-        # using high-res delta g along boundary; noted integral along boundary (ds vs dS)
+        # This is a sup norm over \partial \Omega \cap T, so it is computed as the
+        # elementwise sup of |g - I_h g| on the elements which touch the boundary.
+        # That overestimates the sup over the boundary facets themselves, but it is
+        # an upper bound and so keeps the estimator reliable.  (A previous version
+        # divided an assembled boundary integral by the cell volume, which has the
+        # units of |g - I_h g| / h rather than of a sup norm; compare term 1.)
         CG4 = FunctionSpace(mesh, "CG", 4)  # CG4.dim() ~ 9*DG0.dim()
         adg = self._elemmaxabs(Function(CG4).interpolate(g_ufl - g))
-        # same Riesz representation pattern for DG0 as above for term 1
-        bdryerr = Function(DG0)
-        bdryerr.dat.data[:] = (
-            assemble(adg * v0 * ds).dat.data_ro / volT.dat.data_ro
+        touchesbdry = Function(DG0)
+        touchesbdry.dat.data[:] = assemble(v0 * ds).dat.data_ro
+        bdryerr = Function(DG0).interpolate(
+            conditional(touchesbdry > 0.0, 1.0, 0.0) * adg
         )
 
         # finally compute eta_inf; see doc string above for formula
-        etainf_ufl = C0 * hT ** 2 * Rinf + blockgap + bdryerr
+        residterm = Function(DG0).interpolate(C0 * hT ** 2 * Rinf)
+        etainf_ufl = residterm + blockgap + bdryerr
         etainf = Function(DG0, name="eta_inf").interpolate(etainf_ufl)
 
         # mask out any certified-safe elements *before* thresholding, so they
@@ -867,7 +938,7 @@ class VIAMR(OptionsManager, AVMMixin):
         etainf_eff = self._maskexclude(etainf, notsafe)
 
         # first marking pass: eta_infty over the whole domain
-        mark, _, total_error_inf = self.fixedratemark(etainf_eff, theta, method)
+        mark, _, _ = self.fixedratemark(etainf_eff, theta, method)
 
         # term eta_d
         d = mesh.cell_dimension()
@@ -882,16 +953,26 @@ class VIAMR(OptionsManager, AVMMixin):
 
         # second marking pass: eta_d, but only when "quadrature dominates the
         # estimator" (NSV03 section 7.1)
-        total_error_d = 0.0
         etainf_max = self._globalextreme(etainf_eff, minimum=False)
         etad_max = self._globalextreme(etad_eff, minimum=False)
         if etad_max > etadratio * etainf_max:
-            markd, _, total_error_d = self.fixedratemark(etad_eff, theta, method)
+            markd, _, _ = self.fixedratemark(etad_eff, theta, method)
             mark = self.unionmarks(mark, markd)
 
-        # total error estimate, and return
-        total_error_est = sqrt(total_error_inf ** 2 + total_error_d ** 2)
-        return (mark, etainf, sigmah, total_error_est, etad)
+        # the estimator Etilde_h of (7.1), accumulating each term in its own norm;
+        # see doc string above.  The four sup-norm terms are maximized separately,
+        # because (7.1) adds the global norms rather than maximizing their
+        # elementwise sum eta_inf; and eta_d, being an L^d(Lambda_h) norm, is
+        # accumulated as a sum of d-th powers.  Note the masking by safe= is a
+        # marking policy and does not belong in a reliability bound, so the
+        # unmasked fields are used here.
+        Eh = (
+            self._globalextreme(residterm, minimum=False)
+            + self._globalextreme(blockgap, minimum=False)
+            + self._globalextreme(bdryerr, minimum=False)
+            + self._globalpnorm(etad, d)
+        )
+        return (mark, etainf, sigmah, Eh, etad)
 
     def _dmplextransform(self, mesh, transform_type, indicator=None):
         """Apply a PETSc DMPlexTransform of the given type to mesh's topology_dm,

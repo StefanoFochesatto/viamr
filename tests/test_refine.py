@@ -303,6 +303,83 @@ def test_nsvmark_nontrivial():
     _nsvmark_nontrivial(VIAMR(debug=True))
 
 
+def _nsvmark_kink_soln(amr, m):
+    """Solve an obstacle problem whose obstacle has kinks *inside* the contact set:
+    the pyramid chi = dist(x, boundary of Omega) - 1/5 on Omega = (-1,1)^2, with
+    f = -5 and g = 0.  This is the example of section 3.2 of NSV05.  The load
+    pushes the solution down onto the pyramid over a genuine two-dimensional
+    contact region, and chi is concave and piecewise affine with ridges along the
+    diagonals |x| = |y|.  A "crossed" RectangleMesh puts element edges exactly on
+    those diagonals, so I_h chi = chi and the jump [[d_n u_h]] along a ridge is the
+    fixed kink in grad(chi), which does *not* vanish under refinement.  Returns
+    (max_T etainf, Eh)."""
+    mesh = RectangleMesh(
+        m,
+        m,
+        1.0,
+        1.0,
+        originX=-1.0,
+        originY=-1.0,
+        diagonal="crossed",
+        distribution_parameters=VIAMR.PARALLEL_OVERLAP,
+    )
+    CG1, _ = amr.spaces(mesh)
+    x, y = SpatialCoordinate(mesh)
+    f_ufl = Constant(-5.0)
+    g_ufl = Constant(0.0)
+    lb = Function(CG1).interpolate(min_value(1.0 - abs(x), 1.0 - abs(y)) - 0.2)
+
+    uh = Function(CG1, name="uh").interpolate(max_value(Constant(0.0), lb))
+    vh = TestFunction(CG1)
+    F = inner(grad(uh), grad(vh)) * dx - f_ufl * vh * dx
+    g = Function(CG1).interpolate(g_ufl)
+    problem = NonlinearVariationalProblem(F, uh, DirichletBC(CG1, g, "on_boundary"))
+    ub = Function(CG1).interpolate(Constant(1.0e10))
+    sp = {
+        "snes_type": "vinewtonrsls",
+        "snes_atol": 1.0e-12,
+        "ksp_type": "preonly",
+        "pc_type": "lu",
+        "pc_factor_mat_solver_type": "mumps",
+    }
+    NonlinearVariationalSolver(
+        problem, solver_parameters=sp, options_prefix="s"
+    ).solve(bounds=(lb, ub))
+    assert amr.checkadmissible(uh, lb)
+    # the contact set must be nonempty, or the kink is not exercised at all
+    assert amr.countmark(amr.elemactive(uh, lb)) > 0
+
+    _, etainf, _, Eh, _ = amr.nsvmark(uh, lb, g, f_ufl, g_ufl)
+    return amr.scalarrange(etainf)[1], Eh
+
+
+def _nsvmark_kink_decay(amr):
+    """Regression for the scaling of the jump term in nsvmark()'s R_infty.
+
+    NSV03 (3.7) with p=infty gives R_infty|_T = h_T^{-1} ||[[d_n u_h]]||_{0,inf;dT}
+    plus the interior residual, so the estimator term C_0 h_T^2 R_infty is O(h_T)
+    on an element carrying a kink, and must decay under refinement.  A previous
+    version recovered the jump by dividing an assembled facet integral by the
+    *cell volume*, which scales like jump*h^(d-1)/h^d, i.e. one factor of h_T too
+    large.  That left C_0 h_T^2 R_infty tending to C_0 |jump|, a nonzero constant.
+    The estimator then stalled at an O(1) value no matter how fine the mesh, and
+    elements carrying a kink in chi permanently dominated the marking threshold.
+
+    Halving h must therefore cut both max_T etainf and Eh substantially.  The bug
+    gave a ratio of essentially 1; the threshold 0.7 below sits far from both that
+    and the correct behavior.  Shared by test_nsvmark_kink_decay() here and
+    tests/test_parallel.py::test_nsvmark_kink_decay_par()."""
+    coarse_eta, coarse_Eh = _nsvmark_kink_soln(amr, 8)
+    fine_eta, fine_Eh = _nsvmark_kink_soln(amr, 16)
+    assert coarse_eta > 0.0 and coarse_Eh > 0.0
+    assert fine_eta < 0.7 * coarse_eta
+    assert fine_Eh < 0.7 * coarse_Eh
+
+
+def test_nsvmark_kink_decay():
+    _nsvmark_kink_decay(VIAMR(debug=True))
+
+
 def _nsvmark_active_boundary_soln(amr):
     """Solve examples/aol.py's obstacle problem: -Delta u = -1, u >= 0, on the
     rectangle [0,0.5]x[0,1], with Dirichlet data equal to the exact solution

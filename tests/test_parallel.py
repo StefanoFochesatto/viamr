@@ -10,6 +10,7 @@ from test_basic import (
 )
 from test_refine import (
     _fixedrate_total_case,
+    _nsvmark_kink_decay,
     _nsvmark_nontrivial,
     _udomark_nontrivial,
     _udomark_nontrivial_lb,
@@ -123,6 +124,15 @@ def test_nsvmark_nontrivial_par():
     _nsvmark_nontrivial(VIAMR(debug=True))
 
 
+@pytest.mark.parallel(nprocs=2)
+def test_nsvmark_kink_decay_par():
+    # Confirms tests/test_refine.py::_nsvmark_kink_decay() gives the same result
+    # regardless of process count.  This exercises VIAMR._facetjump(), and the
+    # gather of a facet ("HDiv Trace") field to cells by _elemextreme(), which
+    # nsvmark() uses for the jump in R_infty.
+    _nsvmark_kink_decay(VIAMR(debug=True))
+
+
 @pytest.mark.parallel(nprocs=3)
 def test_freeboundarygraph2D_par():
     # Confirms tests/test_basic.py::_freeboundarygraph2D_circle_case() gives
@@ -157,6 +167,7 @@ if __name__ == "__main__":
     test_udomark_nontrivial_par()
     test_fixedrate_total_par()
     test_nsvmark_nontrivial_par()
+    test_nsvmark_kink_decay_par()
     test_freeboundarygraph2D_par()
     test_hausdorff2D_par()
     test_udomark_restrict_par()

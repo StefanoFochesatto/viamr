@@ -136,16 +136,15 @@ for method in methods:
             eff_dofs.append(dofs[-1])
             eff_vals.append(eff_br)
         else:
-            (mark, etainf, sigmah, _, etad) = amr.nsvmark(
+            (mark, etainf, sigmah, Eh, etad) = amr.nsvmark(
                 uh, psih, g, f_ufl, g_ufl, theta=0.5, dualtol=dualtol, method="total"
             )
-            # effectivity index vs NSV03's own target norm: max_T eta_inf(T)
-            # is the whole-domain (not inactive-set-restricted) quantity its
-            # pointwise theory bounds ||u-u_h||_infty by, in contrast to
-            # BR78/BV00's energy-norm estimator above
+            # effectivity index vs NSV03's own target norm: Eh is the estimator
+            # Etilde_h of (7.1), the whole-domain (not inactive-set-restricted)
+            # quantity its pointwise theory bounds ||u-u_h||_infty by, in contrast
+            # to BR78/BV00's energy-norm estimator above
             errLinf = errornorm_Linf(amr, u_ufl, uh)
-            maxetainf = amr.scalarrange(etainf)[1]
-            eff_nsv = maxetainf / errLinf if errLinf > 0 else float("nan")
+            eff_nsv = Eh / errLinf if errLinf > 0 else float("nan")
             print(f"  eff_NSV (sup norm) = {eff_nsv:.3f}")
             eff_dofs.append(dofs[-1])
             eff_vals.append(eff_nsv)

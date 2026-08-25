@@ -669,16 +669,15 @@ for amrtype in refinetypes:
                 safe = amr.safeactiveunmark(uh, lb, F_strong, psi_expr, Constant(args.fconst))
                 print(f"  safeactiveunmark() excludes {amr.countmark(safe)} "
                       "active elements from the nsvmark() threshold")
-            (mark, etainf, _, _, _) = amr.nsvmark(
+            (mark, etainf, _, Eh, _) = amr.nsvmark(
                 uh, lb, g, Constant(args.fconst), g_ufl, safe=safe
             )
             t_mark1 = time.time()
             if exact_known:
-                # effectivity index vs NSV03's own target norm: max_T eta_inf(T)
-                # is the whole-domain (not inactive-set-restricted) bound which the
-                # pointwise theory gives for ||u-u_h||_infty
-                maxetainf = amr.scalarrange(etainf)[1]
-                eff_nsv = maxetainf / errnorm_Linf if errnorm_Linf > 0 else np.nan
+                # effectivity index vs NSV03's own target norm: Eh is the estimator
+                # Etilde_h of (7.1), the whole-domain (not inactive-set-restricted)
+                # bound which the pointwise theory gives for ||u-u_h||_infty
+                eff_nsv = Eh / errnorm_Linf if errnorm_Linf > 0 else np.nan
                 print(f"  eff_{amrtype.upper()} (sup norm) = {eff_nsv:.3f}")
                 eff_dofs.append(Nv)
                 eff_vals.append(eff_nsv)
