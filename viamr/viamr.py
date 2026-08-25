@@ -43,7 +43,9 @@ class VIAMR(OptionsManager, AVMMixin):
 
       nsvmark():  mark using the "practical estimator" from Nochetto, Siebert, & Veeser (2003) = NSV03
 
-      fixedratemark():  general-purpose thresholding of an elementwise DG0 estimator field by a fixed-rate ('max' or 'total'/bulk/Doerfler) criterion; used internally by gradrecinactivemark(), brinactivemark(), and nsvmark(), but also usable directly
+      nsv05mark():  mark using the fully-localized, star-based estimator from Nochetto, Siebert, & Veeser (2005) = NSV05, the successor of NSV03
+
+      fixedratemark():  general-purpose thresholding of an elementwise DG0 estimator field by a fixed-rate ('max' or 'total'/bulk/Doerfler) criterion; used internally by gradrecinactivemark(), brinactivemark(), nsvmark(), and nsv05mark(), but also usable directly
 
       unionmark():  a method for combining existing marks
 
@@ -76,6 +78,7 @@ class VIAMR(OptionsManager, AVMMixin):
       imark, _, _ = amr.brinactivemark(uh, lb, res_ufl)        # classical BR78 estimator in inactive set
       imark, _, _ = amr.brinactivemark(uh, lb, res_ufl, Z=Z)   # weighted estimator (BV00) in inactive set
       mark, _, _, _, _ = amr.nsvmark(uh, lb, g, f_ufl, g_ufl)  # method from NSV03
+      mark, _, _, _, _ = amr.nsv05mark(uh, lb, g, f_ufl, g_ufl)  # method from NSV05
       mark, ethresh, _ = amr.fixedratemark(eta, theta=0.5, method="total")  # threshold a DG0 estimator eta
       mark = amr.unionmarks(fbmark, imark)                     # mark if either is marked
       rmesh = amr.refinesbr2D(mesh, mark)                      # PETSc DMPlexTransform for skeleton-based refinement
@@ -379,28 +382,68 @@ class VIAMR(OptionsManager, AVMMixin):
         )
         return target
 
-    def _facetjump(self, uh):
+    def _elemtonodeextreme(self, elemfield, nodalspace, minimum=False, defaultval=None):
+        """Scatter a DG0 element field into nodalspace (e.g. CG1), broadcasting each
+        cell's value to all of its local nodes and taking the extreme value where
+        multiple cells share a node.  Thus the node value is the extreme over the
+        star U_h(z) of the element values.  Either computes the maximum or (optionally)
+        the minimum; the user must set the default value, which initializes the
+        reduction.  (In contrast, _elemtonodemax() always initializes to 0.0, so it
+        is only correct for nonnegative fields.)  Applies a PyOP2 parallel loop;
+        correct in parallel via Firedrake's own halo exchange, with no DMPlex access
+        needed."""
+        assert defaultval is not None
+        target = Function(nodalspace).assign(defaultval)
+        kernel = op2.Kernel(
+            """
+        void elem_to_node_extreme(double *target, double const *source)
+        {
+        for (int i = 0; i < %(ndofs)s; i++) {
+            target[i] = source[0];
+        }
+        }"""
+            % {"ndofs": nodalspace.finat_element.space_dimension()},
+            "elem_to_node_extreme",
+        )
+        op2.par_loop(
+            kernel,
+            nodalspace.mesh().cell_set,
+            target.dat(op2.MIN if minimum else op2.MAX, target.cell_node_map()),
+            elemfield.dat(op2.READ, elemfield.cell_node_map()),
+        )
+        return target
+
+    def _facetjump(self, uh, mask=None):
         """Compute the jump of the normal derivative of uh across mesh facets,
         returned as a Function in the lowest-order facet ("HDiv Trace" degree 0)
         space, which has exactly one degree of freedom per facet.  The sign
-        convention is
+        convention is the one in Nochetto, Siebert, & Veeser (2005), namely
 
             J_h = [[grad(u_h)]] . n     with n pointing from T^- to T^+,
 
-        which is the *negative* of UFL's jump(grad(uh), n).  The sign is
-        irrelevant to the present caller, nsvmark(), which uses only |J_h|, but it
-        is fixed here so that the convention is unambiguous.
+        which is the *negative* of UFL's jump(grad(uh), n).  (The convention is
+        fixed by requiring that the nodal multiplier s_z of NSV05 (2.5) satisfy
+        s_z = <f,phi_z> - <grad u_h, grad phi_z>; see _nodalmultiplier().)  The
+        sign matters here, in contrast to nsvmark(), which only uses |J_h|.
 
         Facet values are recovered by dividing an assembled facet integral by the
         facet measure; this is exact because the trace space is elementwise
         constant, so its mass matrix is diagonal.  Exterior facets get the value
-        zero, which is what NSV03 wants: the jump term in (3.7) is a norm over
-        dT \ dOmega, so boundary facets must not contribute."""
+        zero, which is what the NSV05 theory wants: its facet set Gamma consists
+        of interior facets only.
+
+        The optional input mask is a DG0 {0,1} indicator.  When given, a facet
+        gets a nonzero value only if *both* of its neighboring elements are in
+        the mask.  This computes the restriction to Gamma_h^+ in NSV05, noting
+        that Omega_h^+ is open, so a facet lying in the boundary of the
+        full-contact set Omega_h^0 contributes nothing."""
         mesh = uh.function_space().mesh()
         T0 = FunctionSpace(mesh, "HDiv Trace", 0)
         w0 = TestFunction(T0)
         n = FacetNormal(mesh)
         Jh_ufl = -jump(grad(uh), n)
+        if mask is not None:
+            Jh_ufl = Jh_ufl * mask("+") * mask("-")
         # facet measure on *all* facets, so the division below never divides by zero
         areaS = assemble(w0("+") * dS + w0 * ds)
         Jh = Function(T0, name="J_h (facet jump)")
@@ -408,6 +451,93 @@ class VIAMR(OptionsManager, AVMMixin):
             assemble(Jh_ufl * w0("+") * dS).dat.data_ro / areaS.dat.data_ro
         )
         return Jh
+
+    def _tracetonodeextreme(
+        self, tracefield, nodalspace, minimum=False, absolute=False, defaultval=None
+    ):
+        """Gather a facet ("HDiv Trace" degree 0) field to the nodes of nodalspace
+        (e.g. CG1), giving each node z the extreme value of tracefield over the
+        facets which *contain* z.  Either computes the maximum or (optionally) the
+        minimum, and optionally applies the absolute value; the user must set the
+        default value, which initializes the reduction.
+
+        The facets containing z are exactly the set gamma_z of NSV05, that is,
+        Gamma cap int(omega_z), the interior facets lying in the interior of the
+        star of z.  The remaining facets of the star are those opposite z in some
+        element of the star, and they lie in the *boundary* of the star, not its
+        interior.  Consistently, phi_z vanishes identically on them, while on the
+        facets which do contain z it attains its maximum value of 1 at z itself.
+        This is what makes the NSV05 facet term ||J_h phi_z||_{0,inf;gamma_z}
+        exactly computable for piecewise linears, as a maximum of |J_h| over the
+        facets containing z.
+
+        The implementation relies on the simplex convention, which holds in
+        FIAT/FInAT numbering, that local facet i is opposite local vertex i.
+
+        Applies a PyOP2 parallel loop; correct in parallel via Firedrake's own halo
+        exchange, with no DMPlex access needed."""
+        assert defaultval is not None
+        target = Function(nodalspace).assign(defaultval)
+        kernel = op2.Kernel(
+            """
+        void trace_to_node_extreme(double *target, double const *source)
+        {
+        for (int j = 0; j < %(nnodes)s; j++) {
+            double tmp = %(dval)s;
+            for (int i = 0; i < %(nfacets)s; i++) {
+                /* local facet i is opposite local vertex i, thus not in gamma_z */
+                if (i == j) continue;
+                double a = %(src)s;
+                tmp = tmp %(compare)s a ? tmp : a;
+            }
+            target[j] = tmp;
+        }
+        }"""
+            % {
+                "nnodes": nodalspace.finat_element.space_dimension(),
+                "nfacets": tracefield.function_space().finat_element.space_dimension(),
+                "dval": float(defaultval),
+                "compare": "<" if minimum else ">",
+                "src": "fabs(source[i])" if absolute else "source[i]",
+            },
+            "trace_to_node_extreme",
+        )
+        op2.par_loop(
+            kernel,
+            nodalspace.mesh().cell_set,
+            target.dat(op2.MIN if minimum else op2.MAX, target.cell_node_map()),
+            tracefield.dat(op2.READ, tracefield.cell_node_map()),
+        )
+        return target
+
+    def _nodalmultiplier(self, uh, f_ufl):
+        """Compute the nodal multiplier s_z of NSV05 (2.5), namely
+
+            s_z = int_Omega f phi_z + int_Gamma J_h phi_z,
+
+        returned as a CG1 Function.  Integrating by parts elementwise, and using
+        the sign convention of _facetjump(), this equals
+
+            s_z = <f, phi_z> - <grad u_h, grad phi_z>,
+
+        where the second term keeps its boundary flux contribution, so the formula
+        is valid at boundary nodes too.  NSV05 shows s_z <= 0 for z in the interior
+        nodes union the full-contact nodes C_h.
+
+        Note s_z is *not* scaled by int phi_z, so it is the value of a functional
+        rather than a nodal function value.  This is the NSV05 convention, and it
+        is the opposite sign from nsvmark()'s sigma_h: s_z < 0 there corresponds to
+        sigma_h > 0 here."""
+        CG1, _ = self.spaces(uh.function_space().mesh())
+        phi = TestFunction(CG1)
+        n = FacetNormal(CG1.mesh())
+        res = assemble(
+            (inner(grad(uh), grad(phi)) - f_ufl * phi) * dx
+            - inner(grad(uh), n) * phi * ds
+        )  # cofunction
+        sz = Function(CG1, name="s_z (nodal multiplier)")
+        sz.dat.data[:] = -res.dat.data_ro
+        return sz
 
     def countmark(self, mark):
         """Return count of number of elements marked."""
@@ -570,7 +700,7 @@ class VIAMR(OptionsManager, AVMMixin):
 
         Both strategies give identical results in parallel.  The 'total' strategy allgathers eta onto every process, so it may not scale to very-large meshes and process counts.
 
-        Returns (mark, ethresh, total_error_est).  The last is the l^2 norm of eta over the elements, which is the correct global estimator only when eta is an energy-norm indicator, as in gradrecinactivemark() and brinactivemark().  It is meaningless for a max-norm estimator such as nsvmark(), where the global quantity is a sup over elements; that method therefore ignores it and returns its own Eh."""
+        Returns (mark, ethresh, total_error_est).  The last is the l^2 norm of eta over the elements, which is the correct global estimator only when eta is an energy-norm indicator, as in gradrecinactivemark() and brinactivemark().  It is meaningless for a max-norm estimator such as nsvmark() or nsv05mark(), where the global quantity is a sup over elements; those methods therefore ignore it and return their own Eh."""
 
         with eta.dat.vec_ro as eta_:
             if method == "max":
@@ -903,7 +1033,9 @@ class VIAMR(OptionsManager, AVMMixin):
         # where the multiplier is active.  That is the honest value here.  NSV03's
         # Remark 5.8, where this term drives the initial refinement, relies on the
         # *continuous* chi in (u_h - chi)^+, so the term regains its content only
-        # once the FIXME above is addressed.
+        # once the FIXME above is addressed.  Compare nsv05mark(), whose Lambda_h of
+        # (2.20) is a union of whole stars, so there the analogous term does not
+        # degenerate.
         elemincontact = self._elemextreme(
             sigmah, minimum=True, defaultval=PETSc.INFINITY
         )
@@ -973,6 +1105,255 @@ class VIAMR(OptionsManager, AVMMixin):
             + self._globalpnorm(etad, d)
         )
         return (mark, etainf, sigmah, Eh, etad)
+
+    def nsv05mark(
+        self,
+        uh,
+        lb,
+        g,
+        f_ufl,
+        g_ufl,
+        method="max",
+        theta=0.5,
+        C0=0.02,
+        fdegree=3,
+        rhotol=1.0e-8,
+        signtol=1.0e-10,
+        dualtol=1.0e-10,
+    ):
+        """For classical obstacle problems, with the Laplacian as the operator, compute marking on the entire domain according to the *fully localized* estimator from NSV05:
+
+            Nochetto, R. H., Siebert, K. G., & Veeser, A. (2005). Fully localized
+            a posteriori error estimators and barrier sets for contact problems.
+            SIAM Journal on Numerical Analysis, 42(5), 2118-2135.
+
+        This is the successor of the NSV03 estimator implemented by nsvmark(); see that method for the earlier version, and see the comparison at the end of this doc string.
+
+        The estimator E_h of Theorem 2.7 in NSV05 is
+
+            E_h =   C_* |log h_min|^2 max_{z in N_h} eta_z    localized residual
+                  + ||(chi - u_h)^+||_{inf; Omega}            localized obstacle approx.
+                  + ||(u_h - chi)^+||_{inf; Lambda_h}
+                  + ||g - I_h g||_{inf; partial Omega}        boundary datum approx.
+
+        where the star-based residual indicator (2.15) is
+
+            eta_z = h_z^2 ||(f - fhat_z) phi_z||_{inf; omega_z^+}
+                    + h_z ||J_h phi_z||_{inf; gamma_z^+}.
+
+        Here phi_z is the hat function at node z, omega_z = supp(phi_z) is the star, and gamma_z = Gamma \cap int(omega_z) is the set of interior facets lying in the *interior* of the star, which for simplices is exactly the set of interior facets which contain z.  (The other facets of the star lie in its boundary, and phi_z vanishes identically on them.)  Following section 3 of NSV05, the unknown constant and the logarithmic factor are replaced by the single practical constant C_* = 0.02 = C0.
+
+        Meaning of the pieces:
+
+          Full-contact nodes and set:  The set of full-contact nodes is
+
+            C_h = {z in N_h : u_h = chi_h at z, and f <= 0 in omega_z, and J_h <= 0 on gamma_z},
+
+          and the discrete full-contact set Omega_h^0 is the union of the elements all of whose vertices lie in C_h, with Omega_h^+ = Omega \setminus Omega_h^0 its (open) complement.  The residual indicator is restricted to omega_z^+ = omega_z cap Omega_h^+ and gamma_z^+ = gamma_z cap Omega_h^+, so it *vanishes identically* on Omega_h^0.  This is the "full localization" which distinguishes NSV05 from NSV03; it is why the mesh can stay coarse inside the contact set.  Note Omega_h^+ is open, so a facet lying in the boundary of Omega_h^0 is not in Gamma_h^+, i.e. a facet counts only if *both* its elements are outside the full-contact set.
+
+          Element residual:  Only the *oscillation* f - fhat_z of the load enters, not f itself, where by (2.9)
+
+            fhat_z = (1/2)(min_{omega_z^+} f + max_{omega_z^+} f)   if rho_z = 0,
+                     0                                              otherwise,
+
+          with rho_z = int_{Omega_h^+} f phi_z + int_{Gamma_h^+} J_h phi_z the restriction of the nodal multiplier s_z to Omega_h^+.  By (2.2), rho_z = s_z = 0 at every node which is not a full-contact node, so the test only bites inside the contact set.  Since it is an exact equality in the theory but a floating-point comparison here, rho_z is tested against rhotol times the local scale int |f| phi_z.
+
+          Weight phi_z:  On the facet term the hat function is handled exactly; see _tracetonodemaxabs().  On the element term the bound phi_z <= 1 is used instead, which overestimates and so preserves reliability while giving the clean closed form
+
+            ||f - fhat_z||_{inf; omega_z^+} = (1/2)(max_{omega_z^+} f - min_{omega_z^+} f)   if rho_z = 0,
+                                              max_{omega_z^+} |f|                           otherwise,
+
+          i.e. exactly half the oscillation of f over the star, computable from elementwise extremes of f.
+
+          Obstacle approximation:  ||(chi - u_h)^+|| is assumed to be zero because we take chi = chi_h here and assert admissibility.  [<-- FIXME same limitation as nsvmark()]
+
+          The "blocked gap" ||(u_h - chi)^+|| is restricted to the set Lambda_h of (2.20), which is the union of the stars omega_z over nodes z with s_z < 0, where z is an interior node or a full-contact boundary node.  Compare nsvmark(), which restricts the same quantity to {sigma_h < 0} elementwise, without dilating to stars.
+
+          Boundary datum:  ||g - I_h g||_{inf; partial Omega} is computed with a formula which is correct if g is in CG4.  It is localized here as the elementwise sup over boundary-touching elements, which overestimates the sup over the boundary facets themselves.  (nsvmark() instead divides an assembled boundary integral by the cell volume, which does not have the units of a sup norm.)
+
+        Marking.  E_h is a single number: a max over nodes plus global sup norms.  Localizing it to elements for marking purposes is not spelled out in NSV05, so we follow what section 7.1 of NSV03 does for its own estimator, and use
+
+            eta_T = C0 max_{z a vertex of T} eta_z + ||(u_h - chi)^+||_{inf; Lambda_h cap T} + ||g - I_h g||_{inf; partial Omega cap T}.
+
+        Under the default 'max' strategy, taking the max over the vertices of T is exactly equivalent to marking the whole star omega_z of every marked node z.  Note there is only *one* marking pass, in contrast to nsvmark(): NSV05's multiplier sigma_h is a functional defined by (2.3), built without mass lumping, so the quadrature estimator ||h^2 grad(sigma_h)||_{d; Lambda_h} of NSV03 and its separate marking loop have no counterpart here.
+
+        There is no safe= argument, in contrast to nsvmark().  The two sign conditions defining C_h are a discrete version of safeactiveunmark()'s certificate sigma_psi = L(psi) - f > 0, so full localization already switches the estimator off where that method would certify it, while masking anywhere else would break the reliability of Theorem 2.7.
+
+        Returns (mark, eta, sz, fullcontact, Eh), where eta is the DG0 elementwise estimator, sz is the CG1 nodal multiplier of (2.5), and fullcontact is the DG0 indicator of Omega_h^0.  Eh is the scalar estimator E_h of Theorem 2.7 itself, so it is the quantity which bounds ||u - u_h||_{0,inf;Omega}, and thus the right numerator for an effectivity index.  Its three terms are separate global sup norms, so each is maximized on its own; this makes Eh >= max_T eta_T, with equality only if the three maxima happen to fall on one element.  Note eta exists for marking, and is *not* a field whose l^2 norm means anything here.
+
+        Summary of the differences from nsvmark() (= NSV03):
+          * the indicator is star-based (per node z), not element-based;
+          * the residual is switched off entirely on Omega_h^0, instead of having sigma_h subtracted from f on the discrete contact set;
+          * the load enters only through its oscillation f - fhat_z;
+          * there is no quadrature estimator and no second marking pass;
+          * the blocked gap is restricted to a union of stars, not to elements;
+          * one constant C0 = 0.02, versus C0 = 0.1 and C1 = 0.01.
+        """
+        # mesh quantities
+        mesh = uh.function_space().mesh()
+        CG1, DG0 = self.spaces(mesh)
+        hT = project(CellSize(mesh), DG0)  # versus mesh.cell_sizes(), which is in CG1
+        phi = TestFunction(CG1)
+        v0 = TestFunction(DG0)
+
+        # sample the (generally non-polynomial) load, then get its elementwise
+        # extremes; note pages 188-189 in NSV03 regarding the use of DG7, and
+        # see nsvmark() for why we drop to DG3 by default
+        DGf = FunctionSpace(mesh, "DG", fdegree)
+        fs = Function(DGf).interpolate(f_ufl)
+        fmaxT = self._elemextreme(fs, minimum=False, defaultval=PETSc.NINFINITY)
+        fminT = self._elemextreme(fs, minimum=True, defaultval=PETSc.INFINITY)
+        fscale = self._globalextreme(
+            Function(DGf).interpolate(abs(f_ufl)), minimum=False
+        )
+
+        # nodal multiplier s_z of (2.5), and the unrestricted facet jump J_h
+        sz = self._nodalmultiplier(uh, f_ufl)
+        Jh = self._facetjump(uh)
+
+        # full-contact nodes C_h: nodally in contact, and both sign conditions
+        # hold over the whole star.  The sign tests use tolerances relative to
+        # the data scale, because in a flat contact region J_h is zero only up
+        # to roundoff, and a spurious positive value there would cost us the
+        # full localization we are after.
+        ftol = signtol * fscale
+        jtol = signtol * self._globalextreme(
+            Function(DG0).interpolate(abs(self._elemmaxabs(Jh))), minimum=False
+        )
+        fmaxstar = self._elemtonodeextreme(
+            fmaxT, CG1, minimum=False, defaultval=PETSc.NINFINITY
+        )
+        # max of J_h over gamma_z, which is the set of facets *containing* z; see
+        # _tracetonodeextreme().  Exterior facets carry the value zero from
+        # _facetjump(), which passes the "<= 0" test and so correctly does not
+        # exclude boundary-adjacent nodes.
+        Jmaxgamma = self._tracetonodeextreme(
+            Jh, CG1, minimum=False, defaultval=PETSc.NINFINITY
+        )
+        Ch = Function(CG1, name="C_h (full-contact nodes)").interpolate(
+            self._nodalactive(uh, lb)
+            * conditional(fmaxstar <= ftol, 1.0, 0.0)
+            * conditional(Jmaxgamma <= jtol, 1.0, 0.0)
+        )
+
+        # discrete full-contact set Omega_h^0 = union of elements whose vertices
+        # are all in C_h, and its complement Omega_h^+
+        fullcontact = self._elemextreme(Ch, minimum=True, defaultval=1.0)
+        fullcontact.rename("Omega_h^0 (full contact)")
+        fullplus = Function(DG0).interpolate(1.0 - fullcontact)
+
+        # restrictions to Omega_h^+: the facet jump on Gamma_h^+, and the
+        # elementwise extremes of f on omega_z^+.  Full-contact elements are
+        # given finite sentinel values which can never win the reductions below;
+        # hasplus records whether the star meets Omega_h^+ at all.
+        Jplus = self._facetjump(uh, mask=fullplus)
+        fbig = 1.0 + fscale
+        fmaxplus = Function(DG0).interpolate(
+            fullplus * fmaxT - (1.0 - fullplus) * fbig
+        )
+        fminplus = Function(DG0).interpolate(
+            fullplus * fminT + (1.0 - fullplus) * fbig
+        )
+        fmaxplusz = self._elemtonodeextreme(
+            fmaxplus, CG1, minimum=False, defaultval=-fbig
+        )
+        fminplusz = self._elemtonodeextreme(
+            fminplus, CG1, minimum=True, defaultval=fbig
+        )
+        hasplus = self._elemtonodeextreme(fullplus, CG1, minimum=False, defaultval=0.0)
+
+        # rho_z of (2.9), i.e. s_z with both integrals restricted to Omega_h^+;
+        # phi_z is continuous, so avg(phi) is its value on the facet
+        rho = Function(CG1)
+        rho.dat.data[:] = assemble(
+            fullplus * f_ufl * phi * dx
+            - jump(grad(uh), FacetNormal(mesh))
+            * fullplus("+")
+            * fullplus("-")
+            * avg(phi)
+            * dS
+        ).dat.data_ro
+        rhoscale = Function(CG1)
+        rhoscale.dat.data[:] = assemble(abs(f_ufl) * phi * dx).dat.data_ro
+
+        # star-based residual indicator eta_z of (2.15); see doc string for the
+        # closed form of the oscillation term, and _tracetonodemaxabs() for the
+        # exact treatment of phi_z on the facets
+        hz = self._elemtonodeextreme(hT, CG1, minimum=False, defaultval=0.0)
+        osc_ufl = conditional(
+            abs(rho) <= rhotol * rhoscale,
+            0.5 * (fmaxplusz - fminplusz),
+            max_value(abs(fmaxplusz), abs(fminplusz)),
+        )
+        Jgamma = self._tracetonodeextreme(
+            Jplus, CG1, minimum=False, absolute=True, defaultval=0.0
+        )
+        etaz = Function(CG1, name="eta_z (star residual)").interpolate(
+            hasplus * (hz ** 2 * osc_ufl + hz * Jgamma)
+        )
+        etaR = self._elemextreme(etaz, minimum=False, defaultval=0.0)
+
+        # admissibility check; FIXME removes the "(chi - u_h)^+" term from the
+        #   estimator *only when* chi=lb is representable in u_h's space
+        gaph = Function(CG1).interpolate(uh - lb)
+        assert self._globalextreme(gaph, minimum=True) >= 0.0
+
+        # dual admissibility (up to tolerance): NSV05 gives s_z <= 0 at interior
+        # nodes.  The scale for s_z is that of int f phi_z.
+        interior = Function(CG1).assign(1.0)
+        DirichletBC(CG1, Constant(0.0), "on_boundary").apply(interior)
+        szscale = max(
+            self._globalextreme(Function(CG1).interpolate(abs(sz)), minimum=False),
+            self._globalextreme(rhoscale, minimum=False),
+        )
+        sztol = dualtol * szscale
+        assert (
+            self._globalextreme(
+                Function(CG1).interpolate(interior * sz), minimum=False
+            )
+            <= sztol
+        )
+
+        # blocked gap, restricted to Lambda_h of (2.20): the union of the stars
+        # of the nodes with s_z < 0, taking interior nodes and full-contact
+        # boundary nodes
+        lamz = Function(CG1).interpolate(
+            conditional(sz < -sztol, 1.0, 0.0) * max_value(interior, Ch)
+        )
+        blockgap = Function(DG0).interpolate(
+            self._elemextreme(lamz, minimum=False, defaultval=0.0)
+            * self._elemmaxabs(gaph)
+        )
+
+        # boundary datum approximation, as an elementwise sup over the elements
+        # which touch the boundary; the CG4 sample is exact if g is in CG4
+        CG4 = FunctionSpace(mesh, "CG", 4)  # CG4.dim() ~ 9*DG0.dim()
+        touchesbdry = Function(DG0)
+        touchesbdry.dat.data[:] = assemble(v0 * ds).dat.data_ro
+        bdryerr = Function(DG0).interpolate(
+            conditional(touchesbdry > 0.0, 1.0, 0.0)
+            * self._elemmaxabs(Function(CG4).interpolate(g_ufl - g))
+        )
+
+        # elementwise estimator; see doc string above for the formula
+        residterm = Function(DG0).interpolate(C0 * etaR)
+        eta = Function(DG0, name="eta (NSV05)").interpolate(
+            residterm + blockgap + bdryerr
+        )
+
+        # the estimator E_h of Theorem 2.7, whose three terms are separate global
+        # sup norms, so each is maximized on its own rather than maximizing their
+        # elementwise sum eta.  This is the quantity the reliability theorem bounds
+        # ||u - u_h||_{0,inf;Omega} by, hence the right numerator for an
+        # effectivity index; it is >= max_T eta_T.
+        Eh = (
+            self._globalextreme(residterm, minimum=False)
+            + self._globalextreme(blockgap, minimum=False)
+            + self._globalextreme(bdryerr, minimum=False)
+        )
+
+        mark, _, _ = self.fixedratemark(eta, theta, method)
+        return (mark, eta, sz, fullcontact, Eh)
 
     def _dmplextransform(self, mesh, transform_type, indicator=None):
         """Apply a PETSc DMPlexTransform of the given type to mesh's topology_dm,
