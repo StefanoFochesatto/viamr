@@ -137,7 +137,7 @@ for amrtype in typelist:
         fields += [mark, fbmark, imark]
     else:
         # for output file, compute fields on final mesh
-        (mark, etainf, sigmah, _, etad) = amr.nsvmark(
+        (mark, etainf, etad, sigmah, _) = amr.nsvmark(
             uh,
             lb,
             Constant(0.0),

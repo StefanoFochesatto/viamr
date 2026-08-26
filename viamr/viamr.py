@@ -807,8 +807,7 @@ class VIAMR(OptionsManager, AVMMixin):
         strategy.  (Thus the eta_... fields are not merely filtered from
         the resulting mark afterward.)
 
-        TODO: reorder to (mark, etainf, etad, sigmah, Eh) which is more sensible
-        Returns (mark, etainf, sigmah, Eh, etad).  Eh is the scalar estimator Etilde_h of (7.1) itself, so it is the quantity which bounds max(||u - u_h||_{0,inf;Omega}, ||sigma - sigmatilde_h||_{-2,inf;Omega}), and thus the right numerator for an effectivity index.  Each of its terms is accumulated in its own norm: the four sup-norm terms are maximized separately, since (7.1) adds the global norms rather than maximizing their elementwise sum eta_infty; and eta_d is accumulated as an L^d-type sum of d-th powers.  Eh is formed from the unmasked etainf and etad terms, because masking by safe= is a marking policy while Eh is a reliability bound.
+        Returns (mark, etainf, etad, sigmah, Eh).  Eh is the scalar estimator Etilde_h of (7.1) itself, so it is the quantity which bounds max(||u - u_h||_{0,inf;Omega}, ||sigma - sigmatilde_h||_{-2,inf;Omega}), and thus the right numerator for an effectivity index.  Each of its terms is accumulated in its own norm: the four sup-norm terms are maximized separately, since (7.1) adds the global norms rather than maximizing their elementwise sum eta_infty; and eta_d is accumulated as an L^d-type sum of d-th powers.  Eh is formed from the unmasked etainf and etad terms, because masking by safe= is a marking policy while Eh is a reliability bound.
         """
         # mesh quantities
         mesh = uh.function_space().mesh()
@@ -969,7 +968,7 @@ class VIAMR(OptionsManager, AVMMixin):
             + self._globalextreme(bdryerr, minimum=False)
             + self._globalpnorm(etad, d)
         )
-        return (mark, etainf, sigmah, Eh, etad)
+        return (mark, etainf, etad, sigmah, Eh)
 
     def _dmplextransform(self, mesh, transform_type, indicator=None):
         """Apply a PETSc DMPlexTransform of the given type to mesh's topology_dm,

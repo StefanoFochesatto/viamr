@@ -669,7 +669,7 @@ for amrtype in refinetypes:
                 safe = amr.safeactiveunmark(uh, lb, F_strong, psi_expr, Constant(args.fconst))
                 print(f"  safeactiveunmark() excludes {amr.countmark(safe)} "
                       "active elements from the nsvmark() threshold")
-            (mark, etainf, _, Eh, _) = amr.nsvmark(
+            (mark, etainf, _, _, Eh) = amr.nsvmark(
                 uh, lb, g, Constant(args.fconst), g_ufl, safe=safe
             )
             t_mark1 = time.time()
@@ -753,7 +753,7 @@ for amrtype in refinetypes:
         if amrtype == "nsvsafe":
             safe = amr.safeactiveunmark(uh, lb, F_strong, psi_expr, Constant(args.fconst))
             safe.rename("safe active unmarked")
-        (mark, etainf, sigmah, _, etad) = amr.nsvmark(
+        (mark, etainf, etad, sigmah, _) = amr.nsvmark(
             uh, lb, g, Constant(args.fconst), g_ufl, safe=safe
         )
         mark.rename("mark")
