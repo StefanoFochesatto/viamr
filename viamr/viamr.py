@@ -76,7 +76,7 @@ class VIAMR(OptionsManager, AVMMixin):
       imark, _, _ = amr.brinactivemark(uh, lb, res_ufl)        # classical BR78 estimator in inactive set
       imark, _, _ = amr.brinactivemark(uh, lb, res_ufl, Z=Z)   # weighted estimator (BV00) in inactive set
       mark, _, _, _, _ = amr.nsvmark(uh, lb, g, f_ufl, g_ufl)  # method from NSV03
-      mark, ethresh, _ = amr.fixedratemark(eta, theta=0.5, method="total")  # threshold a DG0 estimator eta
+      mark, ethresh = amr.fixedratemark(eta, theta=0.5, method="total")  # threshold a DG0 estimator eta
       mark = amr.unionmarks(fbmark, imark)                     # mark if either is marked
       rmesh = amr.refinesbr2D(mesh, mark)                      # PETSc DMPlexTransform for skeleton-based refinement
 
@@ -557,44 +557,51 @@ class VIAMR(OptionsManager, AVMMixin):
     def fixedratemark(self, eta, theta, method):
         """Marks elements according to the values of estimator eta in DG0 and a threshold which depends on the scalar theta.
 
-        The default 'max' strategy marks all elements with eta greater than
+        Allowed values are method in {'max', 'total'}.  Both methods mark all elements with eta greater than ethresh.
+
+        The default 'max' strategy sets
           ethresh = theta * max eta
         Here theta is a relative threshold, and the number of elements marked is a *decreasing function of theta*: theta near 1 marks only the worst elements, theta near 0 marks nearly all of them.  (See Verfuerth (2013). A Posteriori Error Estimation Techniques for Finite Element Methods, Oxford University Press, section 4.2.)
 
         The 'total' strategy sorts all elements (globally, across processes) by decreasing eta value.  Then the threshold
           ethresh = eta(index)
-        equals the eta value where theta times the total sum of eta is equal to the sum of the eta values above ethresh.  (I.e. theta gives the fraction of the total eta sum.)  The 'total' strategy is the refine-only version of the "fixed-rate" strategy, with X=theta and Y=0, described in section 4.2 of
+        equals the eta value where
+          theta * (sum_i eta_i) = sum_{eta_i > ethresh} eta_i
+        (I.e. theta gives the fraction of the total eta sum.)  This strategy is the refine-only version of the "fixed-rate" strategy, with X=theta and Y=0, described in section 4.2 of
           W. Bangerth & R. Rannacher (2003).  Adaptive Finite Element Methods for
           Differential Equations, Springer Basel.
-        This is also the bulk/Doerfler marking criterion (W. Doerfler, 1996, SIAM J. Numer. Anal. 33(3)).  Here theta is a fraction of the total error, so the number of elements marked is an *increasing function of theta*.
+        It is also the bulk/Doerfler marking criterion (W. Doerfler, 1996, SIAM J. Numer. Anal. 33(3)).  Here theta is a fraction of the total error, so the number of elements marked is an *increasing function of theta*: theta near 0 marks only the worst elements, theta near 1 marks nearly all of them.
 
         Both strategies give identical results in parallel.  The 'total' strategy allgathers eta onto every process, so it may not scale to very-large meshes and process counts.
 
-        Returns (mark, ethresh, total_error_est).  The last is the l^2 norm of eta over the elements, which is the correct global estimator only when eta is an energy-norm indicator, as in gradrecinactivemark() and brinactivemark().  It is meaningless for a max-norm estimator such as nsvmark(), where the global quantity is a sup over elements; that method therefore ignores it and returns its own Eh."""
+        Returns (mark, ethresh)."""
+
+        DG0 = eta.function_space()
+        if self.debug:
+            _, _DG0 = self.spaces(DG0.mesh())
+            assert DG0.ufl_element() == _DG0.ufl_element()
 
         with eta.dat.vec_ro as eta_:
             if method == "max":
                 ethresh = theta * eta_.max()[1]  # process independent
             elif method == "total":
-                comm = eta.function_space().mesh().comm
+                comm = DG0.mesh().comm
                 values = np.concatenate(comm.allgather(eta_.array_r))
                 if values.size == 0:  # global mesh has no elements
                     ethresh = PETSc.INFINITY
                 else:
                     sorted_values = np.sort(values)[::-1]  # sort in descending order
-                    cumsum = np.cumsum(sorted_values)
-                    target = np.sum(values) * theta  # proportion of total error
-                    idx = np.argmax(cumsum >= target)
+                    cumsum = np.cumsum(sorted_values)  # array
+                    target = np.sum(values) * theta  # scalar
+                    idx = np.argmax(cumsum >= target)  # first index so that cumsum_i >= target
                     ethresh = sorted_values[idx]
             else:
                 raise ValueError("unknown method for VIAMR.fixedratemark()")
-            total_error_est = sqrt(eta_.dot(eta_))  # l^2 norm of eta as Vec
 
-        DG0 = eta.function_space()
         mark = Function(DG0, name="mark (fixedratemark)").interpolate(
             conditional(gt(eta, ethresh), 1.0, 0.0)
         )
-        return mark, ethresh, total_error_est
+        return mark, ethresh
 
     def _maskexclude(self, eta, mask):
         """Return eta zeroed outside of mask (a DG0 {0,1} indicator), or eta
@@ -639,7 +646,8 @@ class VIAMR(OptionsManager, AVMMixin):
         mask = imark if safe is None else Function(DG0).interpolate(imark * (1.0 - safe))
         ieta = self._maskexclude(eta, mask)
         # compute mark in inactive set
-        mark, _, total_error_est = self.fixedratemark(ieta, theta, method)
+        mark, _ = self.fixedratemark(ieta, theta, method)
+        total_error_est = self._globalpnorm(ieta, 2.0)
         return (mark, ieta, total_error_est)
 
     def brinactivemark(
@@ -743,7 +751,8 @@ class VIAMR(OptionsManager, AVMMixin):
         imark = self.eleminactive(uh, bound, boxside=boxside, strong=True)
         mask = imark if safe is None else Function(DG0).interpolate(imark * (1.0 - safe))
         ieta = self._maskexclude(eta, mask)
-        mark, _, total_error_est = self.fixedratemark(ieta, theta, method)
+        mark, _ = self.fixedratemark(ieta, theta, method)
+        total_error_est = self._globalpnorm(ieta, 2.0)
         return (mark, ieta, total_error_est)
 
     def nsvmark(
@@ -938,7 +947,7 @@ class VIAMR(OptionsManager, AVMMixin):
         etainf_eff = self._maskexclude(etainf, notsafe)
 
         # first marking pass: eta_infty over the whole domain
-        mark, _, _ = self.fixedratemark(etainf_eff, theta, method)
+        mark, _ = self.fixedratemark(etainf_eff, theta, method)
 
         # term eta_d
         d = mesh.cell_dimension()
@@ -956,7 +965,7 @@ class VIAMR(OptionsManager, AVMMixin):
         etainf_max = self._globalextreme(etainf_eff, minimum=False)
         etad_max = self._globalextreme(etad_eff, minimum=False)
         if etad_max > etadratio * etainf_max:
-            markd, _, _ = self.fixedratemark(etad_eff, theta, method)
+            markd, _ = self.fixedratemark(etad_eff, theta, method)
             mark = self.unionmarks(mark, markd)
 
         # the estimator Etilde_h of (7.1), accumulating each term in its own norm;

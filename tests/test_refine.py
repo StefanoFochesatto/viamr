@@ -459,7 +459,8 @@ def _fixedrate_total_case(amr):
     assert DG0.dim() == 8
     x, y = SpatialCoordinate(mesh)
     eta = Function(DG0).interpolate(x + 2 * y)
-    mark, ethresh, total_error_est = amr.fixedratemark(eta, theta=0.5, method="total")
+    mark, ethresh = amr.fixedratemark(eta, theta=0.5, method="total")
+    total_error_est = amr._globalpnorm(eta, 2.0)
     assert abs(ethresh - 1.75) < 1.0e-10
     assert amr.countmark(mark) == 2
     assert abs(total_error_est - 4.444097208657794) < 1.0e-10
