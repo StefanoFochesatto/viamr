@@ -136,7 +136,7 @@ for method in methods:
             eff_dofs.append(dofs[-1])
             eff_vals.append(eff_br)
         else:
-            (mark, etainf, sigmah, Eh, etad) = amr.nsvmark(
+            (mark, etainf, etad, sigmah, Eh) = amr.nsvmark(
                 uh, psih, g, f_ufl, g_ufl, theta=0.5, dualtol=dualtol, method="total"
             )
             # effectivity index vs NSV03's own target norm: Eh is the estimator

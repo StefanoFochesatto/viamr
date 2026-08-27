@@ -1,17 +1,15 @@
-# This example attempts to do apples-to-apples comparisons of 5 algorithms
+# This example attempts to do apples-to-apples comparisons of 4 algorithms
 # on a classical obstacle problem with a hemispherical obstacle:
 #
 #   1. UDOBR = unstructured dilation operator plus Babuska & Rheinboldt (1989)
 #              in the inactive set
 #   2. NSV = Nochetto, Siebert, and Veeser (2003)
-#   3. NSVSAFE = NSV plus VIAMR.safeactiveunmark(), excluding certified-safe
-#                active elements from fixedratemark()'s marking threshold
-#   4. UNI = uniform refinement
-#   5. AVM = averaged-metric mesh adaptation
+#   3. UNI = uniform refinement
+#   4. AVM = averaged-metric mesh adaptation
 #
 # The AVM method only runs if "import animate" succeeds.
 #
-# We generate .pvd files: result_sphere_{udobr,nsv,nsvsafe,uni,avm}.pvd
+# We generate .pvd files: result_sphere_{udobr,nsv,uni,avm}.pvd
 #
 # For the default mode the exact solution is known and so we can compute
 # norm convergence rates.  We generate ten .png convergence figures comparing
@@ -42,9 +40,8 @@
 # the degenerate porous-media operator Lu = -div((u-psi)^{gamma-1} grad(u)).
 # The degenerating coefficient is regularized by eps-continuation.  There is
 # no closed-form exact solution for this operator, so norm/effectivity figures
-# are skipped.  Also, NSV and NSVSAFE assume the Laplacian internally (see
-# nsvmark()) and so are not meaningful here; only UDOBV, UNI, and AVM are
-# compared.
+# are skipped.  Also, NSV assumes the Laplacian internally (see nsvmark())
+# and so is not meaningful here; only UDOBV, UNI, and AVM are compared.
 #
 # Three suggested runs to get familiar with the major cases:
 #   python3 sphere.py                        exact soln known; Laplacian
@@ -140,7 +137,7 @@ parser.add_argument(
     default=False,
     help="use the degenerate porous-media operator -div((u-psi)^(gamma-1) grad(u)) - f, "
     "via eps-continuation, in place of the classical Laplacian; restricts the comparison "
-    "to udobr (weighted BV00)/uni/avm, since nsv/nsvsafe require the Laplacian [default=False]",
+    "to udobr (weighted BV00)/uni/avm, since nsv requires the Laplacian [default=False]",
 )
 parser.add_argument(
     "-targetelements",
@@ -194,7 +191,7 @@ from netgen.geom2d import SplineGeometry
 # what methods of adaptive refinement do we test
 refinetypes = ["udobr", "uni"]
 if not args.porous:
-    refinetypes += ["nsv", "nsvsafe"]  # need Laplacian operator
+    refinetypes += ["nsv"]  # needs Laplacian operator
 try:
     import animate
 except:
@@ -316,13 +313,6 @@ def uexactUFL(r):
     return conditional(le(r, afree), psiUFL(r), -A * ln(r) + B)
 
 
-def F_strong(u, f):
-    """Strong form of the classical obstacle problem operator: L(u) - f.
-    Used by VIAMR.safeactiveunmark() for the NSVSAFE method.  Not used
-    if -porous option is set."""
-    return -div(grad(u)) - f
-
-
 def porous_residual_Z(uh, lb):
     """Strong-form residual and BV00 weight for the degenerate porous-type
     operator -div((u-psi)^{gamma-1} grad(u)) - f.  The residual is
@@ -386,8 +376,8 @@ def errornorm_Linf(amr, u, uh, pdegree=4):
 def errornorm_Linf_reconstructed(amr, r, uh, activeh, pdegree=4):
     """Sup-norm (L^infty) error against the reconstructed-uh form of the
     numerical solution (see errornorm_reconstructed_deg), rather than against
-    the plain uh.  This is the right comparison for methods (e.g. UDOBR,
-    NSVSAFE) that deliberately leave the active-set interior coarse, since
+    the plain uh.  This is the right comparison for methods (e.g. UDOBR)
+    that deliberately leave the active-set interior coarse, since
     u=psi there regardless of resolution: the plain sup norm is then
     dominated by the (known, not-actually-erroneous) gap between the coarse
     uh and the true psi, rather than by genuine solution error.  Uses the
@@ -460,7 +450,7 @@ for amrtype in refinetypes:
     cummarktime = 0.0
     meshbuildtimes = []  # cumulative wall time spent in the external mesh-construction backend
     cummeshbuildtime = 0.0
-    eff_dofs, eff_vals = [], []  # effectivity index vs DOFs; udobr/nsv/nsvsafe only
+    eff_dofs, eff_vals = [], []  # effectivity index vs DOFs; udobr/nsv only
     activefracs = []  # active-element fraction vs level; used only if not exact_known
     dimpleinactivecounts = []  # inactive elements found inside dimples; -dimples & not exact_known only
 
@@ -659,18 +649,11 @@ for amrtype in refinetypes:
             t_meshbuild1 = time.time()
             marktime_local = t_mark1 - t_mark0
             meshbuildtime_local = t_meshbuild1 - t_mark1
-        elif amrtype in ("nsv", "nsvsafe"):
+        elif amrtype == "nsv":
             t_mark0 = time.time()
             g = Function(V).interpolate(g_ufl)
-            safe = None
-            if amrtype == "nsvsafe":
-                # compute safe *before* nsvmark(), so its eta values are
-                # excluded from the marking threshold process
-                safe = amr.safeactiveunmark(uh, lb, F_strong, psi_expr, Constant(args.fconst))
-                print(f"  safeactiveunmark() excludes {amr.countmark(safe)} "
-                      "active elements from the nsvmark() threshold")
-            (mark, etainf, _, Eh, _) = amr.nsvmark(
-                uh, lb, g, Constant(args.fconst), g_ufl, safe=safe
+            (mark, etainf, _, _, Eh) = amr.nsvmark(
+                uh, lb, g, Constant(args.fconst), g_ufl
             )
             t_mark1 = time.time()
             if exact_known:
@@ -747,19 +730,13 @@ for amrtype in refinetypes:
         imark.rename("imark (BR)")
         mark.rename("mark")
         fields += [mark, imark]
-    elif amrtype in ("nsv", "nsvsafe"):
+    elif amrtype == "nsv":
         g = Function(V).interpolate(g_ufl)
-        safe = None
-        if amrtype == "nsvsafe":
-            safe = amr.safeactiveunmark(uh, lb, F_strong, psi_expr, Constant(args.fconst))
-            safe.rename("safe active unmarked")
-        (mark, etainf, sigmah, _, etad) = amr.nsvmark(
-            uh, lb, g, Constant(args.fconst), g_ufl, safe=safe
+        (mark, etainf, etad, sigmah, _) = amr.nsvmark(
+            uh, lb, g, Constant(args.fconst), g_ufl
         )
         mark.rename("mark")
         fields += [mark, sigmah, etainf, etad]
-        if amrtype == "nsvsafe":
-            fields.append(safe)
     VTKFile(outfile).write(*fields)
     print("")
 
@@ -772,7 +749,7 @@ if mesh.comm.rank == 0:
     import matplotlib.pyplot as plt
 
     d = 2  # spatial dimension
-    stylemap = {"udobr": "ko", "nsv": "bs", "nsvsafe": "md", "uni": "rs", "avm": "g^"}
+    stylemap = {"udobr": "ko", "nsv": "bs", "uni": "rs", "avm": "g^"}
 
     if exact_known:
 
@@ -850,9 +827,9 @@ if mesh.comm.rank == 0:
             "DOFs^(-2/d)",
         )
         # reconstructed-uh companion to the plain sup-norm figure above (see
-        # errornorm_Linf_reconstructed()): the right comparison for UDOBR and
-        # NSVSAFE, which deliberately leave the active-set interior coarse.
-        # Included for all methods, not just those two, for consistency.
+        # errornorm_Linf_reconstructed()): the right comparison for UDOBR,
+        # which deliberately leaves the active-set interior coarse.
+        # Included for all methods, not just that one, for consistency.
         # NSV/UNI/AVM refine the active set, so their curves should match
         # ||u-u_h||_2 earlier.
         _convergence_plot(
@@ -918,9 +895,8 @@ if mesh.comm.rank == 0:
         # a reliable and efficient estimator should stay O(1) as DOFs grow
         plt.figure()
         effstylemap = {"udobr": ("ko", "BR78 (inactive-set energy norm)"),
-                        "nsv": ("bs", "NSV03 (sup norm)"),
-                        "nsvsafe": ("md", "NSV03+safe (sup norm)")}
-        for amrtype in ("udobr", "nsv", "nsvsafe"):
+                        "nsv": ("bs", "NSV03 (sup norm)")}
+        for amrtype in ("udobr", "nsv"):
             if amrtype not in effs or len(effs[amrtype][0]) == 0:
                 continue
             edofs, evals = np.array(effs[amrtype][0]), np.array(effs[amrtype][1])

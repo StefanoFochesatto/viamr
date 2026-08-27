@@ -204,7 +204,7 @@ def test_nsvmark_allinactive():
     solver.solve(bounds=(lb, ub))
     assert amr.checkadmissible(u, lb)
 
-    mark, etainf, sigmah, total_err, etad = amr.nsvmark(u, lb, g, f, g)
+    mark, etainf, etad, sigmah, total_err = amr.nsvmark(u, lb, g, f, g)
     assert mark.function_space().ufl_element() == DG0.ufl_element()
     assert etad.function_space().ufl_element() == DG0.ufl_element()
     assert 0 <= amr.countmark(mark) <= DG0.dim()
@@ -270,7 +270,7 @@ def _nsvmark_nontrivial(amr):
     CG1, DG0 = amr.spaces(mesh)
     assert amr.checkadmissible(uh, lb)
 
-    mark, etainf, sigmah, total_err, etad = amr.nsvmark(
+    mark, etainf, etad, sigmah, total_err = amr.nsvmark(
         uh, lb, g, f_ufl, g_ufl, dualtol=1.0e-8
     )
     assert mark.function_space().ufl_element() == DG0.ufl_element()
@@ -349,7 +349,7 @@ def _nsvmark_kink_soln(amr, m):
     # the contact set must be nonempty, or the kink is not exercised at all
     assert amr.countmark(amr.elemactive(uh, lb)) > 0
 
-    _, etainf, _, Eh, _ = amr.nsvmark(uh, lb, g, f_ufl, g_ufl)
+    _, etainf, _, _, Eh = amr.nsvmark(uh, lb, g, f_ufl, g_ufl)
     return amr.scalarrange(etainf)[1], Eh
 
 
@@ -436,7 +436,7 @@ def test_nsvmark_active_boundary():
     assert amr.scalarrange(Function(CG1).interpolate(gap * isbdry))[1] > amr.activetol
     # ... and some node inactive
 
-    mark, etainf, sigmah, total_err, etad = amr.nsvmark(uh, lb, g, f_ufl, g_ufl)
+    mark, etainf, etad, sigmah, total_err = amr.nsvmark(uh, lb, g, f_ufl, g_ufl)
     assert sigmah.function_space().ufl_element() == CG1.ufl_element()
 
     # the point of the fix: sigma_h must respect the sign convention (also
@@ -459,7 +459,8 @@ def _fixedrate_total_case(amr):
     assert DG0.dim() == 8
     x, y = SpatialCoordinate(mesh)
     eta = Function(DG0).interpolate(x + 2 * y)
-    mark, ethresh, total_error_est = amr.fixedratemark(eta, theta=0.5, method="total")
+    mark, ethresh = amr.fixedratemark(eta, theta=0.5, method="total")
+    total_error_est = amr._globalpnorm(eta, 2.0)
     assert abs(ethresh - 1.75) < 1.0e-10
     assert amr.countmark(mark) == 2
     assert abs(total_error_est - 4.444097208657794) < 1.0e-10

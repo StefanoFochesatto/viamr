@@ -114,7 +114,7 @@ for method in ["NSV05", "NSV03"]:
         # each term as a sup over elements, not as an l^2 sum.
         _, nelements, _, _ = amr.meshsizes(mesh)
         if method == "NSV03":
-            (mark, etainf, sigmah, Eh, etad) = amr.nsvmark(
+            (mark, etainf, etad, sigmah, Eh) = amr.nsvmark(
                 uh, lb, g, f_ufl, g_ufl, theta=theta, method="max"
             )
             print(
