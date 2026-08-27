@@ -329,11 +329,16 @@ def _pyramid_soln(amr, m):
         diagonal="crossed",
         distribution_parameters=VIAMR.PARALLEL_OVERLAP,
     )
+    return (mesh,) + _pyramid_solve(amr, mesh)
+
+
+def _pyramid_solve(amr, mesh):
+    """Solve the pyramid problem of _pyramid_soln() on the given mesh, which need
+    not be the initial crossed one; returns (uh, lb, f_ufl, g, g_ufl)."""
     CG1, _ = amr.spaces(mesh)
-    x, y = SpatialCoordinate(mesh)
     f_ufl = Constant(-5.0)
     g_ufl = Constant(0.0)
-    lb = Function(CG1).interpolate(min_value(1.0 - abs(x), 1.0 - abs(y)) - 0.2)
+    lb = Function(CG1).interpolate(_pyramid_chi_ufl(mesh))
 
     uh = Function(CG1, name="uh").interpolate(max_value(Constant(0.0), lb))
     vh = TestFunction(CG1)
@@ -354,7 +359,7 @@ def _pyramid_soln(amr, m):
     assert amr.checkadmissible(uh, lb)
     # the contact set must be nonempty, or the kink is not exercised at all
     assert amr.countmark(amr.elemactive(uh, lb)) > 0
-    return mesh, uh, lb, f_ufl, g, g_ufl
+    return uh, lb, f_ufl, g, g_ufl
 
 
 def _nsv03mark_kink_soln(amr, m):
@@ -619,29 +624,55 @@ def _pyramid_chi_ufl(mesh):
 
 
 def _nsvmark_chiufl_null(amr):
-    """Supplying chi_ufl must cost nothing when chi really is in CG1.
+    """Supplying chi_ufl must cost nothing when chi really is in CG1, and it must
+    stay that way under adaptive refinement.
 
     The pyramid obstacle is piecewise affine with ridges on element edges, so
     chi = I_h chi = lb pointwise.  Then ||(chi - u_h)^+|| is zero and the blocked
-    gap against continuum chi coincides with the one against chi_h, and both
-    estimators must return bit-for-bit what they return with chi_ufl=None.  This
-    pins the claim that the kwarg only adds what the discrete obstacle misses.
+    gap against continuum chi coincides with the one against chi_h, so both
+    estimators must return what they return with chi_ufl=None.  This is what lets
+    examples/pyramid.py leave chi_ufl off.
+
+    That example refines adaptively, though, so checking only the initial crossed
+    mesh would not cover it.  The ridges survive SBR because bisection splits an
+    edge at its midpoint, so a ridge which is a union of edges stays one, and the
+    new edges it adds lie inside old elements.  Rather than rely on that argument,
+    the loop below re-checks chi = I_h chi and the estimator equivalence on each
+    of several SBR-refined meshes.  The chi = I_h chi check samples at CG4 nodes,
+    whose element-interior points are exactly where a ridge cutting through a cell
+    would show up.
 
     Shared by test_nsvmark_chiufl_null() here and
     tests/test_parallel.py::test_nsvmark_chiufl_null_par()."""
     mesh, uh, lb, f_ufl, g, g_ufl = _pyramid_soln(amr, 16)
-    chi_ufl = _pyramid_chi_ufl(mesh)
+    for level in range(3):
+        chi_ufl = _pyramid_chi_ufl(mesh)
+        CG4 = FunctionSpace(mesh, "CG", 4)
+        chierr = amr.scalarrange(
+            Function(CG4).interpolate(abs(chi_ufl - lb))
+        )[1]
+        assert chierr < 1.0e-14  # chi is still exactly representable in CG1
 
-    mark5a, _, _, fc5a, Eh5a = amr.nsv05mark(uh, lb, g, f_ufl, g_ufl)
-    mark5b, _, _, fc5b, Eh5b = amr.nsv05mark(uh, lb, g, f_ufl, g_ufl, chi_ufl=chi_ufl)
-    assert amr.countmark(mark5a) == amr.countmark(mark5b)
-    assert amr.countmark(fc5a) == amr.countmark(fc5b)
-    assert abs(Eh5b - Eh5a) <= 1.0e-12 * Eh5a
+        mark5a, _, _, fc5a, Eh5a = amr.nsv05mark(uh, lb, g, f_ufl, g_ufl)
+        mark5b, _, _, fc5b, Eh5b = amr.nsv05mark(
+            uh, lb, g, f_ufl, g_ufl, chi_ufl=chi_ufl
+        )
+        assert amr.countmark(mark5a) == amr.countmark(mark5b)
+        assert amr.countmark(fc5a) == amr.countmark(fc5b)
+        assert abs(Eh5b - Eh5a) <= 1.0e-12 * Eh5a
 
-    mark3a, _, _, _, Eh3a = amr.nsv03mark(uh, lb, g, f_ufl, g_ufl)
-    mark3b, _, _, _, Eh3b = amr.nsv03mark(uh, lb, g, f_ufl, g_ufl, chi_ufl=chi_ufl)
-    assert amr.countmark(mark3a) == amr.countmark(mark3b)
-    assert abs(Eh3b - Eh3a) <= 1.0e-12 * Eh3a
+        mark3a, _, _, _, Eh3a = amr.nsv03mark(uh, lb, g, f_ufl, g_ufl)
+        mark3b, _, _, _, Eh3b = amr.nsv03mark(
+            uh, lb, g, f_ufl, g_ufl, chi_ufl=chi_ufl
+        )
+        assert amr.countmark(mark3a) == amr.countmark(mark3b)
+        assert abs(Eh3b - Eh3a) <= 1.0e-12 * Eh3a
+
+        if level < 2:
+            # refine the way examples/pyramid.py does, on nsv05mark()'s own
+            # marking, and re-solve on the result
+            mesh = amr.refinesbr2D(mesh, mark5a)
+            uh, lb, f_ufl, g, g_ufl = _pyramid_solve(amr, mesh)
 
 
 def test_nsvmark_chiufl_null():
