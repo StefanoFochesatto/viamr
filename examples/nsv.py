@@ -59,7 +59,7 @@ def errornorm_Linf(amr, u, uh):
     """Approximate sup-norm (L^infty) error, via interpolation of the
     (generally non-polynomial) exact-minus-computed difference into a
     higher-degree CG space, then VIAMR.scalarrange() for a parallel-safe
-    max; same technique nsvmark() itself uses internally for non-polynomial
+    max; same technique nsv03mark() itself uses internally for non-polynomial
     data (e.g. its bdryerr term).  This is the norm NSV03's "pointwise a
     posteriori error control" theory targets, in contrast to BR78/BV00's
     energy (H^1 seminorm) norm."""
@@ -136,7 +136,7 @@ for method in methods:
             eff_dofs.append(dofs[-1])
             eff_vals.append(eff_br)
         else:
-            (mark, etainf, etad, sigmah, Eh) = amr.nsvmark(
+            (mark, etainf, etad, sigmah, Eh) = amr.nsv03mark(
                 uh, psih, g, f_ufl, g_ufl, theta=0.5, dualtol=dualtol, method="total"
             )
             # effectivity index vs NSV03's own target norm: Eh is the estimator

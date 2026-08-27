@@ -272,7 +272,7 @@ For interior nodes $z \in \Nhr$, define $\sigma_h \in \Vh$ nodally by
 \end{equation}
 whence $\sigma_h(z) = \bigl(\int_\Om \phi_h^z\bigr)^{-1}
 \bigl(\left< \nabla u_h, \nabla \phi_h^z\right> - \left< f, \phi_h^z\right>\bigr)$.  This is \cite[formula (2.1)]{NSV03}, but here with the same sign convention as for $\sigma$ itself (see \eqref{eq:sigma}).  Note that while $\sigma \in H^{-1}(\Om)$ is a quite general object, generally a measure, $\sigma_h$ simply assigns a real value for each interior node in the mesh.  (On the other hand, the reader might be wise to regard $\sigma_h$ as a collection of delta measures at points.)  Definition \eqref{eq:sigmah} is extended to boundary nodes below.
-% also, \eqref{eq:sigmah} is the Galerkin (weak-form) instance of the strong-form nodal residual underlying \cite{BuelerFarrell2024}'s mixed complementarity classification in their \S 7, and it matches the convention already used by \texttt{viamr}'s \texttt{nsvmark()}
+% also, \eqref{eq:sigmah} is the Galerkin (weak-form) instance of the strong-form nodal residual underlying \cite{BuelerFarrell2024}'s mixed complementarity classification in their \S 7, and it matches the convention already used by \texttt{viamr}'s \texttt{nsv03mark()}
 
 Because the constraints in \eqref{eq:Kh} compare piecewise-linear functions, admissibility is decided at the nodes alone.  Indeed, for $v_h \in \Vh$ the differences $v_h - \psiloh$ and $\psiuph - v_h$ are affine on each $T \in \Th$, so Lemma~\ref{lem:affine} promotes nodal inequalities to pointwise ones and
 \begin{equation}

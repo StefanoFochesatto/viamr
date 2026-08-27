@@ -40,7 +40,7 @@
 # the degenerate porous-media operator Lu = -div((u-psi)^{gamma-1} grad(u)).
 # The degenerating coefficient is regularized by eps-continuation.  There is
 # no closed-form exact solution for this operator, so norm/effectivity figures
-# are skipped.  Also, NSV assumes the Laplacian internally (see nsvmark())
+# are skipped.  Also, NSV assumes the Laplacian internally (see nsv03mark())
 # and so is not meaningful here; only UDOBV, UNI, and AVM are compared.
 #
 # Three suggested runs to get familiar with the major cases:
@@ -364,7 +364,7 @@ def errornorm_Linf(amr, u, uh, pdegree=4):
     """Approximate sup-norm (L^infty) error, via interpolation of the
     (generally non-polynomial) exact-minus-computed difference into a
     higher-degree CG^p space, then VIAMR.scalarrange() for a parallel-safe
-    max; same technique nsvmark() itself uses internally for non-polynomial
+    max; same technique nsv03mark() itself uses internally for non-polynomial
     data (e.g. its bdryerr term).  This is the norm NSV03's "pointwise a
     posteriori error control" theory targets, in contrast to BR78/BV00's
     energy (H^1 seminorm) norm."""
@@ -652,7 +652,7 @@ for amrtype in refinetypes:
         elif amrtype == "nsv":
             t_mark0 = time.time()
             g = Function(V).interpolate(g_ufl)
-            (mark, etainf, _, _, Eh) = amr.nsvmark(
+            (mark, etainf, _, _, Eh) = amr.nsv03mark(
                 uh, lb, g, Constant(args.fconst), g_ufl
             )
             t_mark1 = time.time()
@@ -732,7 +732,7 @@ for amrtype in refinetypes:
         fields += [mark, imark]
     elif amrtype == "nsv":
         g = Function(V).interpolate(g_ufl)
-        (mark, etainf, etad, sigmah, _) = amr.nsvmark(
+        (mark, etainf, etad, sigmah, _) = amr.nsv03mark(
             uh, lb, g, Constant(args.fconst), g_ufl
         )
         mark.rename("mark")

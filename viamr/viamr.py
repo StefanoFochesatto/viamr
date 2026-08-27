@@ -41,11 +41,11 @@ class VIAMR(OptionsManager, AVMMixin):
 
       brinactivemark():  classical a posterior error estimator, applied in the computed inactive set, implementing either the method from Babushka & Rheinboldt (1978) or its weighted extension from Bernardi & Verfurth (2000)
 
-      nsvmark():  mark using the "practical estimator" from Nochetto, Siebert, & Veeser (2003) = NSV03
+      nsv03mark():  mark using the "practical estimator" from Nochetto, Siebert, & Veeser (2003) = NSV03
 
       nsv05mark():  mark using the fully-localized, star-based estimator from Nochetto, Siebert, & Veeser (2005) = NSV05, the successor of NSV03
 
-      fixedratemark():  general-purpose thresholding of an elementwise DG0 estimator field by a fixed-rate ('max' or 'total'/bulk/Doerfler) criterion; used internally by gradrecinactivemark(), brinactivemark(), nsvmark(), and nsv05mark(), but also usable directly
+      fixedratemark():  general-purpose thresholding of an elementwise DG0 estimator field by a fixed-rate ('max' or 'total'/bulk/Doerfler) criterion; used internally by gradrecinactivemark(), brinactivemark(), nsv03mark(), and nsv05mark(), but also usable directly
 
       unionmark():  a method for combining existing marks
 
@@ -77,7 +77,7 @@ class VIAMR(OptionsManager, AVMMixin):
       imark, _, _ = amr.gradrecinactivemark(uh, lb)            # classical gradient recovery in inactive set
       imark, _, _ = amr.brinactivemark(uh, lb, res_ufl)        # classical BR78 estimator in inactive set
       imark, _, _ = amr.brinactivemark(uh, lb, res_ufl, Z=Z)   # weighted estimator (BV00) in inactive set
-      mark, _, _, _, _ = amr.nsvmark(uh, lb, g, f_ufl, g_ufl)  # method from NSV03
+      mark, _, _, _, _ = amr.nsv03mark(uh, lb, g, f_ufl, g_ufl)  # method from NSV03
       mark, _, _, _, _ = amr.nsv05mark(uh, lb, g, f_ufl, g_ufl)  # method from NSV05
       mark, ethresh = amr.fixedratemark(eta, theta=0.5, method="total")  # threshold a DG0 estimator eta
       mark = amr.unionmarks(fbmark, imark)                     # mark if either is marked
@@ -87,7 +87,7 @@ class VIAMR(OptionsManager, AVMMixin):
 
     The methods above generalize to upper-bound obstacles by passing ub in the same position as lb and adding the boxside="upper" kwarg; see each method's own docstring.  Note that unionmarks() can be used to apply both lower and upper bounds.
 
-    TODO: nsvmark() and safeactiveunmark() are not yet generalized this way.
+    TODO: nsv03mark() and safeactiveunmark() are not yet generalized this way.
 
     Regarding returned values: fbmark, imark, and mark are element markings in DG0 (Definition 4.2 in paper), rmesh is a refined mesh, and amesh is an adapted mesh.
 
@@ -424,12 +424,12 @@ class VIAMR(OptionsManager, AVMMixin):
         which is the *negative* of UFL's jump(grad(uh), n).  (The convention is
         fixed by requiring that the nodal multiplier s_z of NSV05 (2.5) satisfy
         s_z = <f,phi_z> - <grad u_h, grad phi_z>; see _nodalmultiplier().)  The
-        sign matters here, in contrast to nsvmark(), which only uses |J_h|.
+        sign matters here, in contrast to nsv03mark(), which only uses |J_h|.
 
         Facet values are recovered by dividing an assembled facet integral by the
         facet measure; this is exact because the trace space is elementwise
         constant, so its mass matrix is diagonal.  Exterior facets get the value
-        zero, which is what nsvmark() wants, and also what the NSV05 theory
+        zero, which is what nsv03mark() wants, and also what the NSV05 theory
         wants: its facet set Gamma consists of interior facets only.
 
         The optional input mask is a DG0 {0,1} indicator.  When given, a facet
@@ -526,7 +526,7 @@ class VIAMR(OptionsManager, AVMMixin):
 
         Note s_z is *not* scaled by int phi_z, so it is the value of a functional
         rather than a nodal function value.  This is the NSV05 convention, and it
-        is the opposite sign from nsvmark()'s sigma_h: s_z < 0 there corresponds to
+        is the opposite sign from nsv03mark()'s sigma_h: s_z < 0 there corresponds to
         sigma_h > 0 here."""
         CG1, _ = self.spaces(uh.function_space().mesh())
         phi = TestFunction(CG1)
@@ -885,7 +885,7 @@ class VIAMR(OptionsManager, AVMMixin):
         total_error_est = self._globalpnorm(ieta, 2.0)
         return (mark, ieta, total_error_est)
 
-    def nsvmark(
+    def nsv03mark(
         self,
         uh,
         lb,
@@ -1108,7 +1108,7 @@ class VIAMR(OptionsManager, AVMMixin):
             a posteriori error estimators and barrier sets for contact problems.
             SIAM Journal on Numerical Analysis, 42(5), 2118-2135.
 
-        This is the successor of the NSV03 estimator implemented by nsvmark(); see that method for the earlier version, and see the comparison at the end of this doc string.
+        This is the successor of the NSV03 estimator implemented by nsv03mark(); see that method for the earlier version, and see the comparison at the end of this doc string.
 
         The estimator E_h of Theorem 2.7 in NSV05 is
 
@@ -1146,21 +1146,21 @@ class VIAMR(OptionsManager, AVMMixin):
 
           i.e. exactly half the oscillation of f over the star, computable from elementwise extremes of f.
 
-          Obstacle approximation:  ||(chi - u_h)^+|| is assumed to be zero because we take chi = chi_h here and because we *assert primal admissibility*.  As in nsvmark(), we do not assume we have access to a pure/continuum lower obstacle chi; we have only the one on the current mesh.
+          Obstacle approximation:  ||(chi - u_h)^+|| is assumed to be zero because we take chi = chi_h here and because we *assert primal admissibility*.  As in nsv03mark(), we do not assume we have access to a pure/continuum lower obstacle chi; we have only the one on the current mesh.
 
-          The "blocked gap" ||(u_h - chi)^+|| is restricted to the set Lambda_h of (2.20), which is the union of the stars omega_z over nodes z with s_z < 0, where z is an interior node or a full-contact boundary node.  Compare nsvmark(), which restricts the same quantity to {sigma_h < 0} elementwise, without dilating to stars.
+          The "blocked gap" ||(u_h - chi)^+|| is restricted to the set Lambda_h of (2.20), which is the union of the stars omega_z over nodes z with s_z < 0, where z is an interior node or a full-contact boundary node.  Compare nsv03mark(), which restricts the same quantity to {sigma_h < 0} elementwise, without dilating to stars.
 
-          Boundary datum:  ||g - I_h g||_{inf; partial Omega} is computed with a formula which is correct if g is in CG4.  It is localized here as the elementwise sup over boundary-touching elements, which overestimates the sup over the boundary facets themselves.  (nsvmark() instead divides an assembled boundary integral by the cell volume, which does not have the units of a sup norm.)
+          Boundary datum:  ||g - I_h g||_{inf; partial Omega} is computed with a formula which is correct if g is in CG4.  It is localized here as the elementwise sup over boundary-touching elements, which overestimates the sup over the boundary facets themselves.  (nsv03mark() instead divides an assembled boundary integral by the cell volume, which does not have the units of a sup norm.)
 
         Marking.  E_h is a single number: a max over nodes plus global sup norms.  Localizing it to elements for marking purposes is not spelled out in NSV05, so we follow what section 7.1 of NSV03 does for its own estimator, and use
 
             eta_T = C0 max_{z a vertex of T} eta_z + ||(u_h - chi)^+||_{inf; Lambda_h cap T} + ||g - I_h g||_{inf; partial Omega cap T}.
 
-        Under the default 'max' strategy, taking the max over the vertices of T is exactly equivalent to marking the whole star omega_z of every marked node z.  Note there is only *one* marking pass, in contrast to nsvmark(): NSV05's multiplier sigma_h is a functional defined by (2.3), built without mass lumping, so the quadrature estimator ||h^2 grad(sigma_h)||_{d; Lambda_h} of NSV03 and its separate marking loop have no counterpart here.
+        Under the default 'max' strategy, taking the max over the vertices of T is exactly equivalent to marking the whole star omega_z of every marked node z.  Note there is only *one* marking pass, in contrast to nsv03mark(): NSV05's multiplier sigma_h is a functional defined by (2.3), built without mass lumping, so the quadrature estimator ||h^2 grad(sigma_h)||_{d; Lambda_h} of NSV03 and its separate marking loop have no counterpart here.
 
         Returns (mark, eta, sz, fullcontact, Eh), where eta is the DG0 elementwise estimator, sz is the CG1 nodal multiplier of (2.5), and fullcontact is the DG0 indicator of Omega_h^0.  Eh is the scalar estimator E_h of Theorem 2.7 itself, so it is the quantity which bounds ||u - u_h||_{0,inf;Omega}, and thus the right numerator for an effectivity index.  Its three terms are separate global sup norms, so each is maximized on its own; this makes Eh >= max_T eta_T, with equality only if the three maxima happen to fall on one element.  Note eta exists for marking, and is *not* a field whose l^2 norm means anything here.
 
-        Summary of the differences from nsvmark() (= NSV03):
+        Summary of the differences from nsv03mark() (= NSV03):
           * the indicator is star-based (per node z), not element-based;
           * the residual is switched off entirely on Omega_h^0, instead of having sigma_h subtracted from f on the discrete contact set;
           * the load enters only through its oscillation f - fhat_z;
@@ -1177,7 +1177,7 @@ class VIAMR(OptionsManager, AVMMixin):
 
         # sample the (generally non-polynomial) load, then get its elementwise
         # extremes; note pages 188-189 in NSV03 regarding the use of DG7, and
-        # see nsvmark() for why we drop to DG3 by default
+        # see nsv03mark() for why we drop to DG3 by default
         DGf = FunctionSpace(mesh, "DG", fdegree)
         fs = Function(DGf).interpolate(f_ufl)
         fmaxT = self._elemextreme(fs, minimum=False, defaultval=PETSc.NINFINITY)
@@ -1700,7 +1700,7 @@ class VIAMR(OptionsManager, AVMMixin):
         neighbor is active too, which excludes the one-element-thick border
         adjacent to the discrete free boundary from ever being marked safe.
         This is the same "neighborhood of the active set" idea NSV03 uses
-        (see nsvmark()'s tactive), applied here in the complementary
+        (see nsv03mark()'s tactive), applied here in the complementary
         direction.
 
         This method is O(N) work if N represents current mesh complexity,
@@ -1748,7 +1748,7 @@ class VIAMR(OptionsManager, AVMMixin):
         # thinned active set: only elements that are active *and* whose
         # neighbors are all active too, i.e. elements not adjacent to the
         # current discrete free boundary; same NSV03 "neighborhood of the
-        # active set" concept nsvmark() itself uses (there called tactive).
+        # active set" concept nsv03mark() itself uses (there called tactive).
         thinactive0 = self.thinelemactive(uh0, lb0)
 
         # p-refined estimate of sigma_psi = L(psi) - f, sampled at higher resolution

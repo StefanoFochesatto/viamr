@@ -10,8 +10,8 @@ from test_basic import (
 )
 from test_refine import (
     _fixedrate_total_case,
-    _nsvmark_kink_decay,
-    _nsvmark_nontrivial,
+    _nsv03mark_kink_decay,
+    _nsv03mark_nontrivial,
     _udomark_nontrivial,
     _udomark_nontrivial_lb,
     _udomark_restrict_case,
@@ -117,20 +117,20 @@ def test_fixedrate_total_par():
 
 
 @pytest.mark.parallel(nprocs=2)
-def test_nsvmark_nontrivial_par():
-    # Confirms tests/test_refine.py::_nsvmark_nontrivial() -- including
+def test_nsv03mark_nontrivial_par():
+    # Confirms tests/test_refine.py::_nsv03mark_nontrivial() -- including
     # the eta_d dominance gate -- gives the same result regardless of process
     # count.
-    _nsvmark_nontrivial(VIAMR(debug=True))
+    _nsv03mark_nontrivial(VIAMR(debug=True))
 
 
 @pytest.mark.parallel(nprocs=2)
-def test_nsvmark_kink_decay_par():
-    # Confirms tests/test_refine.py::_nsvmark_kink_decay() gives the same result
+def test_nsv03mark_kink_decay_par():
+    # Confirms tests/test_refine.py::_nsv03mark_kink_decay() gives the same result
     # regardless of process count.  This exercises VIAMR._facetjump(), and the
     # gather of a facet ("HDiv Trace") field to cells by _elemextreme(), which
-    # nsvmark() uses for the jump in R_infty.
-    _nsvmark_kink_decay(VIAMR(debug=True))
+    # nsv03mark() uses for the jump in R_infty.
+    _nsv03mark_kink_decay(VIAMR(debug=True))
 
 
 @pytest.mark.parallel(nprocs=3)
@@ -166,8 +166,8 @@ if __name__ == "__main__":
     test_udo_regression()
     test_udomark_nontrivial_par()
     test_fixedrate_total_par()
-    test_nsvmark_nontrivial_par()
-    test_nsvmark_kink_decay_par()
+    test_nsv03mark_nontrivial_par()
+    test_nsv03mark_kink_decay_par()
     test_freeboundarygraph2D_par()
     test_hausdorff2D_par()
     test_udomark_restrict_par()

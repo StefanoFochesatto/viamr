@@ -179,7 +179,7 @@ def test_refine_br_weighted():
     assert rCG1.dim() == 109
 
 
-def test_nsvmark_allinactive():
+def test_nsv03mark_allinactive():
     # classic obstacle-touching-zero problem:  -Delta u = 8,  u >= 0,  u = 0 on boundary
     mesh = UnitSquareMesh(8, 8)
     amr = VIAMR(debug=True)
@@ -204,7 +204,7 @@ def test_nsvmark_allinactive():
     solver.solve(bounds=(lb, ub))
     assert amr.checkadmissible(u, lb)
 
-    mark, etainf, etad, sigmah, total_err = amr.nsvmark(u, lb, g, f, g)
+    mark, etainf, etad, sigmah, total_err = amr.nsv03mark(u, lb, g, f, g)
     assert mark.function_space().ufl_element() == DG0.ufl_element()
     assert etad.function_space().ufl_element() == DG0.ufl_element()
     assert 0 <= amr.countmark(mark) <= DG0.dim()
@@ -216,13 +216,13 @@ def test_nsvmark_allinactive():
     assert tot2 >= 0.0
 
 
-def _nsvmark_nontrivial_soln(amr):
+def _nsv03mark_nontrivial_soln(amr):
     """Solve NSV03's own "Example 7.2" (their sec. 7.2): a constant obstacle
     chi=0 on (-1,1)^2 with radius r=0.7, whose exact solution is
-    u(x) = (max(|x|^2-r^2,0))^2.  Unlike test_nsvmark_allinactive() above, this
-    gives nsvmark() a genuine interior contact set, free boundary, and inactive
-    boundary to work with.  Shared by _nsvmark_nontrivial() here and
-    tests/test_parallel.py::test_nsvmark_nontrivial_parallel()."""
+    u(x) = (max(|x|^2-r^2,0))^2.  Unlike test_nsv03mark_allinactive() above, this
+    gives nsv03mark() a genuine interior contact set, free boundary, and inactive
+    boundary to work with.  Shared by _nsv03mark_nontrivial() here and
+    tests/test_parallel.py::test_nsv03mark_nontrivial_parallel()."""
     r = 0.7
     mesh = RectangleMesh(
         16,
@@ -262,15 +262,15 @@ def _nsvmark_nontrivial_soln(amr):
     return mesh, uh, lb, f_ufl, g, g_ufl
 
 
-def _nsvmark_nontrivial(amr):
-    # Shared by test_nsvmark_nontrivial() here and
-    # tests/test_parallel.py::test_nsvmark_nontrivial_parallel(), so the
+def _nsv03mark_nontrivial(amr):
+    # Shared by test_nsv03mark_nontrivial() here and
+    # tests/test_parallel.py::test_nsv03mark_nontrivial_parallel(), so the
     # two assert identical counts from one definition.
-    mesh, uh, lb, f_ufl, g, g_ufl = _nsvmark_nontrivial_soln(amr)
+    mesh, uh, lb, f_ufl, g, g_ufl = _nsv03mark_nontrivial_soln(amr)
     CG1, DG0 = amr.spaces(mesh)
     assert amr.checkadmissible(uh, lb)
 
-    mark, etainf, etad, sigmah, total_err = amr.nsvmark(
+    mark, etainf, etad, sigmah, total_err = amr.nsv03mark(
         uh, lb, g, f_ufl, g_ufl, dualtol=1.0e-8
     )
     assert mark.function_space().ufl_element() == DG0.ufl_element()
@@ -293,17 +293,17 @@ def _nsvmark_nontrivial(amr):
 
     # forcing the second (eta_d) pass to always run (etadratio=0.0) must mark
     # at least as many elements as the gated default does
-    mark2, _, _, _, _ = amr.nsvmark(
+    mark2, _, _, _, _ = amr.nsv03mark(
         uh, lb, g, f_ufl, g_ufl, dualtol=1.0e-8, etadratio=0.0
     )
     assert amr.countmark(mark2) >= amr.countmark(mark)
 
 
-def test_nsvmark_nontrivial():
-    _nsvmark_nontrivial(VIAMR(debug=True))
+def test_nsv03mark_nontrivial():
+    _nsv03mark_nontrivial(VIAMR(debug=True))
 
 
-def _nsvmark_kink_soln(amr, m):
+def _nsv03mark_kink_soln(amr, m):
     """Solve an obstacle problem whose obstacle has kinks *inside* the contact set:
     the pyramid chi = dist(x, boundary of Omega) - 1/5 on Omega = (-1,1)^2, with
     f = -5 and g = 0.  This is the example of section 3.2 of NSV05.  The load
@@ -349,12 +349,12 @@ def _nsvmark_kink_soln(amr, m):
     # the contact set must be nonempty, or the kink is not exercised at all
     assert amr.countmark(amr.elemactive(uh, lb)) > 0
 
-    _, etainf, _, _, Eh = amr.nsvmark(uh, lb, g, f_ufl, g_ufl)
+    _, etainf, _, _, Eh = amr.nsv03mark(uh, lb, g, f_ufl, g_ufl)
     return amr.scalarrange(etainf)[1], Eh
 
 
-def _nsvmark_kink_decay(amr):
-    """Regression for the scaling of the jump term in nsvmark()'s R_infty.
+def _nsv03mark_kink_decay(amr):
+    """Regression for the scaling of the jump term in nsv03mark()'s R_infty.
 
     NSV03 (3.7) with p=infty gives R_infty|_T = h_T^{-1} ||[[d_n u_h]]||_{0,inf;dT}
     plus the interior residual, so the estimator term C_0 h_T^2 R_infty is O(h_T)
@@ -367,26 +367,26 @@ def _nsvmark_kink_decay(amr):
 
     Halving h must therefore cut both max_T etainf and Eh substantially.  The bug
     gave a ratio of essentially 1; the threshold 0.7 below sits far from both that
-    and the correct behavior.  Shared by test_nsvmark_kink_decay() here and
-    tests/test_parallel.py::test_nsvmark_kink_decay_par()."""
-    coarse_eta, coarse_Eh = _nsvmark_kink_soln(amr, 8)
-    fine_eta, fine_Eh = _nsvmark_kink_soln(amr, 16)
+    and the correct behavior.  Shared by test_nsv03mark_kink_decay() here and
+    tests/test_parallel.py::test_nsv03mark_kink_decay_par()."""
+    coarse_eta, coarse_Eh = _nsv03mark_kink_soln(amr, 8)
+    fine_eta, fine_Eh = _nsv03mark_kink_soln(amr, 16)
     assert coarse_eta > 0.0 and coarse_Eh > 0.0
     assert fine_eta < 0.7 * coarse_eta
     assert fine_Eh < 0.7 * coarse_Eh
 
 
-def test_nsvmark_kink_decay():
-    _nsvmark_kink_decay(VIAMR(debug=True))
+def test_nsv03mark_kink_decay():
+    _nsv03mark_kink_decay(VIAMR(debug=True))
 
 
-def _nsvmark_active_boundary_soln(amr):
+def _nsv03mark_active_boundary_soln(amr):
     """Solve examples/aol.py's obstacle problem: -Delta u = -1, u >= 0, on the
     rectangle [0,0.5]x[0,1], with Dirichlet data equal to the exact solution
     u(x,y) = max(0.25 r - 0.5 - 0.5 ln(0.5 r), 0), r = (x+1)^2+y^2.  Unlike
-    _nsvmark_nontrivial_soln() above, whose Dirichlet data keeps the whole
+    _nsv03mark_nontrivial_soln() above, whose Dirichlet data keeps the whole
     boundary inactive, part of this rectangle's boundary genuinely touches
-    the obstacle (r >= 2 there), exercising nsvmark()'s NSV03-page-169
+    the obstacle (r >= 2 there), exercising nsv03mark()'s NSV03-page-169
     boundary formula for sigma_h rather than the all-zero fallback."""
     mesh = RectangleMesh(
         6, 12, 0.5, 1.0, distribution_parameters=VIAMR.PARALLEL_OVERLAP
@@ -416,18 +416,18 @@ def _nsvmark_active_boundary_soln(amr):
     return mesh, uh, lb, f_ufl, g, g_ufl
 
 
-def test_nsvmark_active_boundary():
+def test_nsv03mark_active_boundary():
     amr = VIAMR(debug=True)
-    mesh, uh, lb, f_ufl, g, g_ufl = _nsvmark_active_boundary_soln(amr)
+    mesh, uh, lb, f_ufl, g, g_ufl = _nsv03mark_active_boundary_soln(amr)
     CG1, DG0 = amr.spaces(mesh)
     assert amr.checkadmissible(uh, lb)
 
-    # boundary indicator, parallel-safe (same DirichletBC-apply idiom nsvmark() uses)
+    # boundary indicator, parallel-safe (same DirichletBC-apply idiom nsv03mark() uses)
     isbdry = Function(CG1).assign(0.0)
     DirichletBC(CG1, Constant(1.0), "on_boundary").apply(isbdry)
 
     # confirm this problem genuinely has both active and inactive boundary
-    # nodes, i.e. it actually exercises the case nsvmark() previously ignored
+    # nodes, i.e. it actually exercises the case nsv03mark() previously ignored
     gap = Function(CG1).interpolate(uh - lb)
     gap_boundary_only = Function(CG1).interpolate(
         conditional(isbdry > 0.5, gap, 1.0e10)
@@ -436,13 +436,13 @@ def test_nsvmark_active_boundary():
     assert amr.scalarrange(Function(CG1).interpolate(gap * isbdry))[1] > amr.activetol
     # ... and some node inactive
 
-    mark, etainf, etad, sigmah, total_err = amr.nsvmark(uh, lb, g, f_ufl, g_ufl)
+    mark, etainf, etad, sigmah, total_err = amr.nsv03mark(uh, lb, g, f_ufl, g_ufl)
     assert sigmah.function_space().ufl_element() == CG1.ufl_element()
 
     # the point of the fix: sigma_h must respect the sign convention (also
-    # asserted internally by nsvmark()) and now be genuinely nonzero at some
+    # asserted internally by nsv03mark()) and now be genuinely nonzero at some
     # boundary dof; before the fix, boundary values of sigma_h were
-    # unconditionally zeroed by nsvmark(), regardless of activity there
+    # unconditionally zeroed by nsv03mark(), regardless of activity there
     sigmah_boundary = Function(CG1).interpolate(sigmah * isbdry)
     assert amr.scalarrange(sigmah_boundary)[0] >= -1.0e-10
     assert amr.scalarrange(sigmah_boundary)[1] > amr.activetol
@@ -679,9 +679,9 @@ if __name__ == "__main__":
     test_refine_gr()
     test_refine_br()
     test_refine_br_total()
-    test_nsvmark_allinactive()
-    test_nsvmark_nontrivial()
-    test_nsvmark_active_boundary()
+    test_nsv03mark_allinactive()
+    test_nsv03mark_nontrivial()
+    test_nsv03mark_active_boundary()
     test_fixedrate_total()
     test_udomark_nontrivial()
     test_udomark_restrict()

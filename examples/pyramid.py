@@ -9,7 +9,7 @@
 # the pyramid chi(x) = dist(x, boundary of Omega) - 1/5, the source is f = -5,
 # and the boundary values are g = 0.
 #
-# This example compares VIAMR methods nsv05mark() to nsvmark() for AMR.  The former is what
+# This example compares VIAMR methods nsv05mark() to nsv03mark() for AMR.  The former is what
 # NSV05 call "full localization".  The NSV05 residual indicator
 # is identically zero on the discrete full-contact set Omega_h^0, so the mesh
 # stays coarse inside the contact set, and in particular along the diagonals
@@ -114,7 +114,7 @@ for method in ["NSV05", "NSV03"]:
         # each term as a sup over elements, not as an l^2 sum.
         _, nelements, _, _ = amr.meshsizes(mesh)
         if method == "NSV03":
-            (mark, etainf, etad, sigmah, Eh) = amr.nsvmark(
+            (mark, etainf, etad, sigmah, Eh) = amr.nsv03mark(
                 uh, lb, g, f_ufl, g_ufl, theta=theta, method="max"
             )
             print(
