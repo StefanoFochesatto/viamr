@@ -768,7 +768,6 @@ class VIAMR(OptionsManager, AVMMixin):
         C1=0.01,
         fdegree=3,
         etadratio=1.0,
-        safe=None,
     ):
         """For classical obstacle problems, with the Laplacian as the operator, compute marking on entire domain according to the local 'practical estimator' from NSV03:
 
@@ -799,15 +798,7 @@ class VIAMR(OptionsManager, AVMMixin):
 
         Regarding eta_d, NSV03 sec. 7.1 notes that it "exhibits different accumulation" than eta_infty.  That is, as a genuine L^d(Lambda_h) norm, it aggregates over T by an L^d-type sum.  Mixing both into one scalar before marking would let eta_d's different scaling distort the max-based threshold.  Following NSV03, we therefore mark in two separate passes.  First on eta_infty, then on eta_d restricted to Lambda_h, and then take the union.  NSV03 further qualifies that the second pass only runs "provided quadrature dominates the estimator," so the second pass runs only if max(eta_d) > etadratio * max(eta_infty).  NSV03 does not give a precise numerical criterion for "dominates", so etadratio is exposed as a parameter.
 
-        TODO: delete the safe mechanism, before bringing in NSV05
-        The optional input safe is a DG0 {0,1} indicator, e.g. the output of
-        safeactiveunmark(), of active-set elements certified safe to leave
-        unmarked.  When given, eta_infty and eta_d are masked to zero on
-        those elements *before* VIAMR.fixedratemark() applies its threshold
-        strategy.  (Thus the eta_... fields are not merely filtered from
-        the resulting mark afterward.)
-
-        Returns (mark, etainf, etad, sigmah, Eh).  Eh is the scalar estimator Etilde_h of (7.1) itself, so it is the quantity which bounds max(||u - u_h||_{0,inf;Omega}, ||sigma - sigmatilde_h||_{-2,inf;Omega}), and thus the right numerator for an effectivity index.  Each of its terms is accumulated in its own norm: the four sup-norm terms are maximized separately, since (7.1) adds the global norms rather than maximizing their elementwise sum eta_infty; and eta_d is accumulated as an L^d-type sum of d-th powers.  Eh is formed from the unmasked etainf and etad terms, because masking by safe= is a marking policy while Eh is a reliability bound.
+        Returns (mark, etainf, etad, sigmah, Eh).  Eh is the scalar estimator Etilde_h of (7.1) itself, so it is the quantity which bounds max(||u - u_h||_{0,inf;Omega}, ||sigma - sigmatilde_h||_{-2,inf;Omega}), and thus the right numerator for an effectivity index.  Each of its terms is accumulated in its own norm: the four sup-norm terms are maximized separately, since (7.1) adds the global norms rather than maximizing their elementwise sum eta_infty; and eta_d is accumulated as an L^d-type sum of d-th powers.
         """
         # mesh quantities
         mesh = uh.function_space().mesh()
@@ -929,14 +920,8 @@ class VIAMR(OptionsManager, AVMMixin):
         etainf_ufl = residterm + blockgap + bdryerr
         etainf = Function(DG0, name="eta_inf").interpolate(etainf_ufl)
 
-        # TODO remove before bringing in NSV05
-        # mask out any certified-safe elements *before* thresholding, so they
-        # cannot set (or dilute) the fixedratemark() threshold; see VIAMR._maskexclude()
-        notsafe = None if safe is None else Function(DG0).interpolate(1.0 - safe)
-        etainf_eff = self._maskexclude(etainf, notsafe)
-
         # first marking pass: eta_infty over the whole domain
-        mark, _ = self.fixedratemark(etainf_eff, theta, method)
+        mark, _ = self.fixedratemark(etainf, theta, method)
 
         # term eta_d
         d = mesh.cell_dimension()
@@ -947,14 +932,13 @@ class VIAMR(OptionsManager, AVMMixin):
             C1 * hT ** 2 * gradsigmanorm * CellVolume(mesh) ** (1.0 / d) * tactive
         )
         etad = Function(DG0, name="eta_d").interpolate(etad_ufl)
-        etad_eff = self._maskexclude(etad, notsafe)
 
         # second marking pass: eta_d, but only when "quadrature dominates the
         # estimator" (NSV03 section 7.1)
-        etainf_max = self._globalextreme(etainf_eff, minimum=False)
-        etad_max = self._globalextreme(etad_eff, minimum=False)
+        etainf_max = self._globalextreme(etainf, minimum=False)
+        etad_max = self._globalextreme(etad, minimum=False)
         if etad_max > etadratio * etainf_max:
-            markd, _ = self.fixedratemark(etad_eff, theta, method)
+            markd, _ = self.fixedratemark(etad, theta, method)
             mark = self.unionmarks(mark, markd)
 
         # the estimator Etilde_h of (7.1), accumulating each term in its own norm;

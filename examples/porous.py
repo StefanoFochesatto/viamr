@@ -28,8 +28,8 @@
 #   2. UNI = uniform refinement
 #   3. AVM = averaged-metric mesh adaptation (only if "import animate" succeeds)
 #
-# NSV/NSVSAFE are not included: those estimators assume the Laplacian
-# internally, so they are not meaningful for this degenerate operator.
+# NSV is not included: that estimator assumes the Laplacian internally,
+# so it is not meaningful for this degenerate operator.
 #
 # We generate .pvd files: result_porous_{udobv,uni,avm}.pvd
 #
