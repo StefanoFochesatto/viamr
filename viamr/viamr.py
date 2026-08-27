@@ -539,6 +539,51 @@ class VIAMR(OptionsManager, AVMMixin):
         sz.dat.data[:] = -res.dat.data_ro
         return sz
 
+    def _obstacleterms(self, uh, lb, chi_ufl, fdegree):
+        """Compute the two obstacle-approximation quantities which appear in both
+        NSV estimators, as elementwise sup norms in DG0:
+
+            obstacleerr = ||(chi - u_h)^+||_{inf; T}
+            gap         = ||(u_h - chi)^+||_{inf; T}
+
+        Here chi is the *continuum* obstacle, which is what NSV03 (7.1) and NSV05
+        Theorem 2.7 both ask for.  The barrier arguments behind them (NSV05
+        Propositions 2.5 and 2.6) compare u_h against chi itself, so substituting
+        the discrete chi_h changes what is being estimated.
+
+        With chi_ufl=None the continuum obstacle is taken to be the discrete one,
+        chi = chi_h = lb.  Then primal admissibility makes obstacleerr vanish, and
+        gap reduces to the elementwise sup of u_h - lb.  That is exactly what both
+        methods computed before chi_ufl existed, so the default reproduces them.
+
+        Otherwise chi_ufl is sampled at the Lagrange nodes of CG_fdegree, in the
+        spirit of pages 188-189 of NSV03, which approximate a maximum norm of
+        non-polynomial data by element point values at Lagrange nodes.  Both
+        quantities are continuous, so CG is available, and it is what we want:
+        Firedrake's DG node set on simplices does *not* include the vertices, so
+        maximizing over it systematically under-samples a sup norm, whereas CG
+        includes them and so at least sees the vertex values exactly.  This also
+        makes chi_ufl agree with chi_ufl=None to roundoff whenever chi lies in
+        u_h's space, since then both reduce to the same vertex maximum.
+
+        Note that u_h >= chi_h does *not* imply u_h >= chi, so here both positive
+        parts have to be taken explicitly, rather than relying on admissibility to
+        fix a sign."""
+        mesh = uh.function_space().mesh()
+        _, DG0 = self.spaces(mesh)
+        if chi_ufl is None:
+            obstacleerr = Function(DG0).interpolate(Constant(0.0))
+            gaph = Function(uh.function_space()).interpolate(uh - lb)
+            return obstacleerr, self._elemmaxabs(gaph)
+        CGc = FunctionSpace(mesh, "CG", fdegree)
+        obstacleerr = self._elemmaxabs(
+            Function(CGc).interpolate(max_value(chi_ufl - uh, 0.0))
+        )
+        gap = self._elemmaxabs(
+            Function(CGc).interpolate(max_value(uh - chi_ufl, 0.0))
+        )
+        return obstacleerr, gap
+
     def countmark(self, mark):
         """Return count of number of elements marked."""
         mesh = mark.function_space().mesh()
@@ -892,6 +937,7 @@ class VIAMR(OptionsManager, AVMMixin):
         g,
         f_ufl,
         g_ufl,
+        chi_ufl=None,
         method="max",
         theta=0.5,
         dualtol=1.0e-10,
@@ -919,9 +965,9 @@ class VIAMR(OptionsManager, AVMMixin):
         Meaning:
           term 1:  Estimates the residual relevant to the VI problem; see below for the R_infty formula, which uses the discrete residual sigma_h below.  C_0=0.1 is used by NSV03.
 
-          term 2:  Assumed to be zero because we take chi=chi_h here and because we *assert primal admissibility*.  We do not assume we have access to a pure/continuum lower obstacle chi; we have only the one on the current mesh.
+          term 2:  Zero unless the caller supplies chi_ufl.  Without it we take chi = chi_h = lb, having only the obstacle on the current mesh, and then *asserting primal admissibility* makes the term vanish.  Passing chi_ufl, a UFL expression for the continuum obstacle, restores the term; see _obstacleterms().  It matters whenever chi is not representable in u_h's space, since then u_h touches chi_h rather than chi and the difference is a genuine part of the pointwise error.  A curved obstacle sampled on a coarse mesh is the case to worry about: there this term can be the whole of ||u - u_h||_{0,inf;Omega}.
 
-          term 3:  This "blocked gap" is gap = u_h - chi_h, but blocked according to the simplest discrete residual sigma_h, computed below.  In our sign convention the strictly-active set is {sigma_h > 0}, which is NSV03's {sigma_h < 0} in (7.1).  The sup is thus over {sigma_h > 0} cap T, so an element contributes only if it lies in that set, i.e. only if *every* vertex has a strictly active multiplier (residual).  However, we assert sigma_h > -dualtol below.  Thus, under the chi = chi_h assumption of term 2 this makes the term identically zero, since complementarity puts the gap at zero on exactly those nodes.
+          term 3:  This "blocked gap" is gap = (u_h - chi)^+, blocked according to the simplest discrete residual sigma_h, computed below.  In our sign convention the strictly-active set is {sigma_h > 0}, which is NSV03's {sigma_h < 0} in (7.1).  The sup is thus over {sigma_h > 0} cap T, so an element contributes only if it lies in that set, i.e. only if *every* vertex has a strictly active multiplier (residual).  However, we assert sigma_h > -dualtol below.  Thus, under the chi = chi_h default of term 2 this makes the term identically zero, since complementarity puts the gap at zero on exactly those nodes.  With chi_ufl given the term no longer degenerates, which is the situation of NSV03's Remark 5.8, where it drives the initial refinement.
 
           term 4:  Estimates the boundary interpolation error, and we use a formula which is correct if g is in CG4.  Being a sup norm over partial Omega cap T, it is computed as the elementwise sup of |g - I_h g| over the elements touching the boundary.
 
@@ -938,10 +984,13 @@ class VIAMR(OptionsManager, AVMMixin):
         hT = project(CellSize(mesh), DG0)  # versus mesh.cell_sizes(), which is in CG1
 
         # term 2
-        # primal admissibility check; this removes "(\chi - u_h)_+" from
-        #   the estimator because chi = lb is representable in u_h's space
+        # primal admissibility check; this is a property of the discrete solution,
+        #   asserted against the discrete obstacle whether or not chi_ufl is given.
+        #   With chi_ufl=None it is also what makes "(chi - u_h)_+" vanish, since
+        #   then chi = lb is representable in u_h's space.
         gaph = Function(CG1).interpolate(uh - lb)
         assert self._globalextreme(gaph, minimum=True) >= 0.0
+        obstacleerr, gap = self._obstacleterms(uh, lb, chi_ufl, fdegree)
 
         # compute residual sigmah in CG1 following section 2.1 of NSV03, page 169,
         #   but use opposite sign convention so sigmah >= 0.   complementarity is
@@ -1020,19 +1069,18 @@ class VIAMR(OptionsManager, AVMMixin):
         # in their opposite sign convention -- so an element contributes only if it
         # lies *in* that set, which is tested by requiring every vertex to have a
         # strictly active multiplier.
-        # Note that under the chi = chi_h assertion, this term is
-        # identically zero: complementarity makes the gap vanish at exactly the nodes
-        # where the multiplier is active.  That is the honest value here.  NSV03's
-        # Remark 5.8, where this term drives the initial refinement, relies on the
-        # *continuous* chi in (u_h - chi)^+, which we assume is *not* available.
+        # Note that with chi_ufl=None this term is identically zero:
+        # complementarity makes the gap vanish at exactly the nodes where the
+        # multiplier is active.  That is the honest value under that assumption.
+        # NSV03's Remark 5.8, where this term drives the initial refinement,
+        # relies on the *continuous* chi in (u_h - chi)^+, which is available
+        # only when the caller supplies chi_ufl.
         # Compare nsv05mark(), whose Lambda_h of (2.20) is a union of whole stars,
         # so there the analogous term does not degenerate.
         elemincontact = self._elemextreme(
             sigmah, minimum=True, defaultval=PETSc.INFINITY
         )
-        blockgap_ufl = conditional(
-            elemincontact > dualtol, self._elemmaxabs(gaph), 0.0
-        )
+        blockgap_ufl = conditional(elemincontact > dualtol, gap, 0.0)
         blockgap = Function(DG0).interpolate(blockgap_ufl)
 
         # term 4
@@ -1050,7 +1098,7 @@ class VIAMR(OptionsManager, AVMMixin):
 
         # finally compute eta_inf; see doc string above for formula
         residterm = Function(DG0).interpolate(C0 * hT ** 2 * Rinf)
-        etainf_ufl = residterm + blockgap + bdryerr
+        etainf_ufl = residterm + obstacleerr + blockgap + bdryerr
         etainf = Function(DG0, name="eta_inf").interpolate(etainf_ufl)
 
         # first marking pass: eta_infty over the whole domain
@@ -1081,6 +1129,7 @@ class VIAMR(OptionsManager, AVMMixin):
         # accumulated as a sum of d-th powers.
         Eh = (
             self._globalextreme(residterm, minimum=False)
+            + self._globalextreme(obstacleerr, minimum=False)
             + self._globalextreme(blockgap, minimum=False)
             + self._globalextreme(bdryerr, minimum=False)
             + self._globalpnorm(etad, d)
@@ -1094,6 +1143,7 @@ class VIAMR(OptionsManager, AVMMixin):
         g,
         f_ufl,
         g_ufl,
+        chi_ufl=None,
         method="max",
         theta=0.5,
         C0=0.02,
@@ -1163,11 +1213,12 @@ class VIAMR(OptionsManager, AVMMixin):
         1. Following section 3 of NSV05, the unknown constant and the logarithmic factor are replaced by the single practical constant:
             C_* |log h_min|^2  -->  C0 = 0.02.
 
-        2.  We drop the first part of the obstacle approximation, namely ||(chi - u_h)^+||_inf, for the following reason.  We assume that the a posteriori method only has access to the discrete obstacle on the current mesh.  That is, we take this term to be zero because chi = chi_h.  Furthermore we *assert primal admissibility* against the discrete obstacle chi_h.  FIXME this could be addressed by a chi_exact kwarg, essentially expecting a UFL expression
+        2.  The obstacle chi is the *continuum* one, supplied as the UFL expression chi_ufl; see _obstacleterms().  Both obstacle terms use it, since the barrier arguments of Propositions 2.5 and 2.6 compare u_h against chi itself.  With chi_ufl=None we assume instead that the a posteriori method only has access to the discrete obstacle on the current mesh, i.e. chi = chi_h = lb.  Then ||(chi - u_h)^+||_inf vanishes, because we *assert primal admissibility* against chi_h, and the blocked gap reduces to u_h - lb.  That default matters most for a curved obstacle, which is not representable in u_h's space: there u_h touches chi_h rather than chi, and the difference can be all of ||u - u_h||_{0,inf;Omega}, leaving the estimator blind to the dominant error.
 
         3. Note that E_h is a single number: a max over nodes plus global sup norms.  Localizing it to elements for marking purposes is not spelled out in NSV05, so we follow what section 7.1 of NSV03 does for its own estimator.  Define
 
             eta_T = C0 max_{z a vertex of T} eta_z                localized residual on element
+                    + ||(chi - u_h)^+||_{inf; T}                  obstacle approximation (zero if chi_ufl is None)
                     + ||(u_h - chi)^+||_{inf; Lambda_h cap T}     inactive overlap with negative residual set
                     + ||g - I_h g||_{inf; partial Omega cap T}.   boundary data approximation
 
@@ -1202,7 +1253,7 @@ class VIAMR(OptionsManager, AVMMixin):
           * fullcontact is the DG0 indicator of Omega_h^0
           * Eh is the scalar estimator E_h of Theorem 2.7 itself.
 
-        Note that Eh is the quantity which bounds ||u - u_h||_{0,inf;Omega}, and thus it is the appropriate numerator for an effectivity index.  Its three terms are separate global sup norms, so each is maximized on its own; this makes Eh >= max_T eta_T, with equality only if the three maxima happen to fall on one element.
+        Note that Eh is the quantity which bounds ||u - u_h||_{0,inf;Omega}, and thus it is the appropriate numerator for an effectivity index.  Its terms are separate global sup norms, so each is maximized on its own; this makes Eh >= max_T eta_T, with equality only if all the maxima happen to fall on one element.
 
         ** Differences from nsv03mark() = NSV03 **
 
@@ -1315,10 +1366,13 @@ class VIAMR(OptionsManager, AVMMixin):
         )
         etaR = self._elemextreme(etaz, minimum=False, defaultval=0.0)
 
-        # primal admissibility check; this removes "(chi - u_h)^+" from
-        #   the estimator because chi = lb is representable in u_h's space
+        # primal admissibility check; this is a property of the discrete solution,
+        #   asserted against the discrete obstacle whether or not chi_ufl is given.
+        #   With chi_ufl=None it is also what removes "(chi - u_h)^+" from the
+        #   estimator, since then chi = lb is representable in u_h's space.
         gaph = Function(CG1).interpolate(uh - lb)
         assert self._globalextreme(gaph, minimum=True) >= 0.0
+        obstacleerr, gap = self._obstacleterms(uh, lb, chi_ufl, fdegree)
 
         # dual admissibility (up to tolerance): NSV05 gives s_z <= 0 at interior
         # nodes.  The scale for s_z is that of int f phi_z.
@@ -1343,8 +1397,7 @@ class VIAMR(OptionsManager, AVMMixin):
             conditional(sz < -sztol, 1.0, 0.0) * max_value(interior, Ch)
         )
         blockgap = Function(DG0).interpolate(
-            self._elemextreme(lamz, minimum=False, defaultval=0.0)
-            * self._elemmaxabs(gaph)
+            self._elemextreme(lamz, minimum=False, defaultval=0.0) * gap
         )
 
         # boundary datum approximation, as an elementwise sup over the elements
@@ -1360,7 +1413,7 @@ class VIAMR(OptionsManager, AVMMixin):
         # elementwise estimator; see doc string above for the formula
         residterm = Function(DG0).interpolate(C0 * etaR)
         eta = Function(DG0, name="eta (NSV05)").interpolate(
-            residterm + blockgap + bdryerr
+            residterm + obstacleerr + blockgap + bdryerr
         )
 
         # the estimator E_h of Theorem 2.7, whose three terms are separate global
@@ -1370,6 +1423,7 @@ class VIAMR(OptionsManager, AVMMixin):
         # effectivity index; it is >= max_T eta_T.
         Eh = (
             self._globalextreme(residterm, minimum=False)
+            + self._globalextreme(obstacleerr, minimum=False)
             + self._globalextreme(blockgap, minimum=False)
             + self._globalextreme(bdryerr, minimum=False)
         )

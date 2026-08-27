@@ -15,6 +15,8 @@ from test_refine import (
     _nsv03mark_nontrivial,
     _nsv05mark_effectivity,
     _nsv05mark_pyramid,
+    _nsvmark_chiufl_null,
+    _nsvmark_curvedobstacle,
     _udomark_nontrivial,
     _udomark_nontrivial_lb,
     _udomark_restrict_case,
@@ -159,6 +161,16 @@ def test_nsv05mark_effectivity_par():
     _nsv05mark_effectivity(VIAMR(debug=True))
 
 
+@pytest.mark.parallel(nprocs=2)
+def test_nsvmark_curvedobstacle_par():
+    # Confirms tests/test_refine.py::_nsvmark_curvedobstacle() gives the same
+    # result regardless of process count.  This is the chi_ufl path, so it
+    # exercises VIAMR._obstacleterms() -- a CG_fdegree interpolation of a UFL
+    # obstacle followed by the _elemmaxabs() par_loop -- in both nsv03mark() and
+    # nsv05mark().
+    _nsvmark_curvedobstacle(VIAMR(debug=True))
+
+
 @pytest.mark.parallel(nprocs=3)
 def test_freeboundarygraph2D_par():
     # Confirms tests/test_basic.py::_freeboundarygraph2D_circle_case() gives
@@ -196,6 +208,7 @@ if __name__ == "__main__":
     test_nsv03mark_kink_decay_par()
     test_nsv05mark_pyramid_par()
     test_nsv05mark_effectivity_par()
+    test_nsvmark_curvedobstacle_par()
     test_freeboundarygraph2D_par()
     test_hausdorff2D_par()
     test_udomark_restrict_par()

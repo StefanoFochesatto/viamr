@@ -550,8 +550,10 @@ def _nsv05mark_effectivity_case(amr, m):
     _, _, _, _, Eh = amr.nsv05mark(uh, lb, g, f_ufl, g_ufl, dualtol=1.0e-8)
     x, y = SpatialCoordinate(mesh)
     u_ufl = max_value(x ** 2 + y ** 2 - 0.7 ** 2, 0.0) ** 2
-    DG4 = FunctionSpace(mesh, "DG", 4)
-    err = amr.scalarrange(Function(DG4).interpolate(abs(u_ufl - uh)))[1]
+    # CG4, not DG4: Firedrake's DG node set on simplices omits the vertices, so
+    # maximizing over it under-samples a sup norm
+    CG4 = FunctionSpace(mesh, "CG", 4)
+    err = amr.scalarrange(Function(CG4).interpolate(abs(u_ufl - uh)))[1]
     assert Eh > 0.0 and err > 0.0
     return Eh, err
 
@@ -607,6 +609,131 @@ def test_nsv05mark_asserts():
     # it becomes -2 int f phi_z > 0 there, f being negative on this problem.
     with pytest.raises(AssertionError):
         amr.nsv05mark(uh, lb, g, -f_ufl, g_ufl)
+
+
+def _pyramid_chi_ufl(mesh):
+    """The pyramid obstacle of _pyramid_soln() as UFL.  On a crossed mesh its
+    ridges lie on element edges, so I_h chi = chi exactly and chi is in CG1."""
+    x, y = SpatialCoordinate(mesh)
+    return min_value(1.0 - abs(x), 1.0 - abs(y)) - 0.2
+
+
+def _nsvmark_chiufl_null(amr):
+    """Supplying chi_ufl must cost nothing when chi really is in CG1.
+
+    The pyramid obstacle is piecewise affine with ridges on element edges, so
+    chi = I_h chi = lb pointwise.  Then ||(chi - u_h)^+|| is zero and the blocked
+    gap against continuum chi coincides with the one against chi_h, and both
+    estimators must return bit-for-bit what they return with chi_ufl=None.  This
+    pins the claim that the kwarg only adds what the discrete obstacle misses.
+
+    Shared by test_nsvmark_chiufl_null() here and
+    tests/test_parallel.py::test_nsvmark_chiufl_null_par()."""
+    mesh, uh, lb, f_ufl, g, g_ufl = _pyramid_soln(amr, 16)
+    chi_ufl = _pyramid_chi_ufl(mesh)
+
+    mark5a, _, _, fc5a, Eh5a = amr.nsv05mark(uh, lb, g, f_ufl, g_ufl)
+    mark5b, _, _, fc5b, Eh5b = amr.nsv05mark(uh, lb, g, f_ufl, g_ufl, chi_ufl=chi_ufl)
+    assert amr.countmark(mark5a) == amr.countmark(mark5b)
+    assert amr.countmark(fc5a) == amr.countmark(fc5b)
+    assert abs(Eh5b - Eh5a) <= 1.0e-12 * Eh5a
+
+    mark3a, _, _, _, Eh3a = amr.nsv03mark(uh, lb, g, f_ufl, g_ufl)
+    mark3b, _, _, _, Eh3b = amr.nsv03mark(uh, lb, g, f_ufl, g_ufl, chi_ufl=chi_ufl)
+    assert amr.countmark(mark3a) == amr.countmark(mark3b)
+    assert abs(Eh3b - Eh3a) <= 1.0e-12 * Eh3a
+
+
+def test_nsvmark_chiufl_null():
+    _nsvmark_chiufl_null(VIAMR(debug=True))
+
+
+def _sphericalcap_soln(amr, m):
+    """Solve the classical obstacle problem of examples/sphere.py on an m x m
+    crossed mesh of (-2,2)^2: the obstacle is the spherical cap sqrt(1-r^2) for
+    r <= r0 = 0.9, glued C^1 to a linear far field, with f = 0 and Dirichlet data
+    equal to the known exact solution.  Returns
+    (mesh, uh, lb, f_ufl, g, g_ufl, chi_ufl, u_ufl).
+
+    In contrast to _pyramid_soln(), chi here is *curved*, so it is not
+    representable in CG1.  The exact solution equals chi throughout the contact
+    set while u_h equals I_h chi there, which makes chi - I_h chi a genuine and,
+    on these meshes, dominant part of the pointwise error.  This is the case the
+    chi_ufl kwarg exists for."""
+    r0, afree = 0.9, 0.697965148223374
+    A, B = 0.680259411891719, 0.471519893402112
+    mesh = RectangleMesh(
+        m, m, Lx=2.0, Ly=2.0, originX=-2.0, originY=-2.0, diagonal="crossed",
+        distribution_parameters=VIAMR.PARALLEL_OVERLAP,
+    )
+    CG1, _ = amr.spaces(mesh)
+    x, y = SpatialCoordinate(mesh)
+    r = sqrt(x * x + y * y)
+    psi0 = (1.0 - r0 * r0) ** 0.5
+    chi_ufl = conditional(
+        le(r, r0), sqrt(1.0 - r * r), psi0 + (-r0 / psi0) * (r - r0)
+    )
+    u_ufl = conditional(le(r, afree), chi_ufl, -A * ln(r) + B)
+    f_ufl, g_ufl = Constant(0.0), u_ufl
+
+    lb = Function(CG1, name="psi").interpolate(chi_ufl)
+    uh = Function(CG1, name="uh").interpolate(max_value(lb, Constant(0.0)))
+    vh = TestFunction(CG1)
+    F = inner(grad(uh), grad(vh)) * dx - f_ufl * vh * dx
+    g = Function(CG1).interpolate(g_ufl)
+    ub = Function(CG1).interpolate(Constant(1.0e10))
+    sp = {
+        "snes_type": "vinewtonrsls",
+        "snes_rtol": 1.0e-10,
+        "ksp_type": "preonly",
+        "pc_type": "lu",
+        "pc_factor_mat_solver_type": "mumps",
+    }
+    NonlinearVariationalSolver(
+        NonlinearVariationalProblem(F, uh, DirichletBC(CG1, g, "on_boundary")),
+        solver_parameters=sp, options_prefix="s",
+    ).solve(bounds=(lb, ub))
+    assert amr.checkadmissible(uh, lb)
+    assert amr.countmark(amr.elemactive(uh, lb)) > 0
+    return mesh, uh, lb, f_ufl, g, g_ufl, chi_ufl, u_ufl
+
+
+def _nsvmark_curvedobstacle(amr):
+    """Both NSV estimators must see the obstacle-approximation error when the
+    obstacle is curved.
+
+    On the spherical cap the exact solution equals chi throughout the contact
+    set and u_h equals I_h chi there, so ||u - u_h||_{0,inf;Omega} is exactly
+    ||chi - I_h chi||_{0,inf}, and it is attained *inside* the contact set.  That
+    quantity is term 2 of NSV03 (7.1) and the second term of NSV05 Theorem 2.7,
+    and with chi_ufl=None both methods drop it and so cannot be measuring the
+    dominant error at all.  Passing chi_ufl must restore it, which is pinned here
+    two ways: the estimator strictly grows, and it becomes an upper bound for the
+    true error, i.e. reliable rather than accidentally the right size.
+
+    Shared by test_nsvmark_curvedobstacle() here and
+    tests/test_parallel.py::test_nsvmark_curvedobstacle_par()."""
+    mesh, uh, lb, f_ufl, g, g_ufl, chi_ufl, u_ufl = _sphericalcap_soln(amr, 32)
+    # CG4, not DG4: Firedrake's DG node set on simplices omits the vertices, so
+    # maximizing over it under-samples a sup norm
+    CG4 = FunctionSpace(mesh, "CG", 4)
+    err = amr.scalarrange(Function(CG4).interpolate(abs(u_ufl - uh)))[1]
+    # the whole error is the obstacle-approximation term, and it lives in contact
+    drop = amr.scalarrange(
+        Function(CG4).interpolate(max_value(chi_ufl - uh, 0.0))
+    )[1]
+    assert err > 0.0
+    assert abs(drop - err) <= 1.0e-6 * err
+
+    for marker in (amr.nsv03mark, amr.nsv05mark):
+        _, _, _, _, Eh_without = marker(uh, lb, g, f_ufl, g_ufl)
+        _, _, _, _, Eh_with = marker(uh, lb, g, f_ufl, g_ufl, chi_ufl=chi_ufl)
+        assert Eh_with > Eh_without  # the dropped term is genuinely nonzero
+        assert Eh_with >= err  # ... and it alone already bounds the error
+
+
+def test_nsvmark_curvedobstacle():
+    _nsvmark_curvedobstacle(VIAMR(debug=True))
 
 
 def _fixedrate_total_case(amr):
@@ -846,6 +973,8 @@ if __name__ == "__main__":
     test_nsv05mark_pyramid()
     test_nsv05mark_effectivity()
     test_nsv05mark_asserts()
+    test_nsvmark_chiufl_null()
+    test_nsvmark_curvedobstacle()
     test_fixedrate_total()
     test_udomark_nontrivial()
     test_udomark_restrict()
