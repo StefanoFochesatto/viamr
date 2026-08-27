@@ -1060,6 +1060,16 @@ class VIAMR(OptionsManager, AVMMixin):
         #      nodes for 7th order polynomials.""
         # BUT using DG7 this way is really slow because it is so big, so we drop
         # to DG3 by default; DG3.dim() = 10*DG0.dim(), while DG7.dim() ~= 40*DG0.dim()
+        # TODO: Firedrake's DG node set on simplices omits the vertices, so a max
+        # over DG dofs under-samples a sup norm: interpolating x on the unit
+        # triangle gives 0.897 at DG3 and 0.930 at DG4, against 1.0 for CG.  The
+        # bias is toward under-estimation, which is the wrong direction for a
+        # reliability bound.  CG is not a drop-in replacement here, since f_ufl
+        # may be genuinely discontinuous (Example 7.2 builds it from
+        # conditional()), so this needs a decision rather than a rename; the same
+        # applies to the DGf sampling in nsv05mark().  Contrast
+        # _obstacleterms(), where the sampled quantities are continuous and CG is
+        # used for exactly this reason.
         DGf = FunctionSpace(mesh, "DG", fdegree)
         Rinf = Function(DGf).interpolate((jumpu / hT) + X_ufl)
         Rinf = self._elemmaxabs(Rinf)
