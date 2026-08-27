@@ -9,9 +9,12 @@ from test_basic import (
     _hausdorff2D_case,
 )
 from test_refine import (
+    _NSV05_PYRAMID_COUNTS,
     _fixedrate_total_case,
     _nsv03mark_kink_decay,
     _nsv03mark_nontrivial,
+    _nsv05mark_effectivity,
+    _nsv05mark_pyramid,
     _udomark_nontrivial,
     _udomark_nontrivial_lb,
     _udomark_restrict_case,
@@ -133,6 +136,29 @@ def test_nsv03mark_kink_decay_par():
     _nsv03mark_kink_decay(VIAMR(debug=True))
 
 
+@pytest.mark.parallel(nprocs=2)
+def test_nsv05mark_pyramid_par():
+    # Confirms tests/test_refine.py::_nsv05mark_pyramid() gives the identical
+    # full-contact, deep-full-contact, and marked element counts regardless of
+    # process count.  nsv05mark() reduces over stars in two different ways which
+    # both cross process boundaries -- VIAMR._elemtonodeextreme() gathers cells
+    # to nodes and VIAMR._tracetonodeextreme() gathers facets to nodes -- and
+    # the discrete full-contact set Omega_h^0 is built by composing them, so a
+    # missing halo contribution would shrink Omega_h^0 only along the partition
+    # boundaries, exactly where it is hardest to notice.
+    assert _nsv05mark_pyramid(VIAMR(debug=True)) == _NSV05_PYRAMID_COUNTS
+
+
+@pytest.mark.parallel(nprocs=2)
+def test_nsv05mark_effectivity_par():
+    # Confirms tests/test_refine.py::_nsv05mark_effectivity() gives the same
+    # result regardless of process count.  Unlike the counts above, Eh is
+    # assembled from three global sup norms over DG0 fields, so this also
+    # exercises the reductions in VIAMR._globalextreme() and the raw
+    # dat.data[:] copies nsv05mark() makes off assembled cofunctions.
+    _nsv05mark_effectivity(VIAMR(debug=True))
+
+
 @pytest.mark.parallel(nprocs=3)
 def test_freeboundarygraph2D_par():
     # Confirms tests/test_basic.py::_freeboundarygraph2D_circle_case() gives
@@ -168,6 +194,8 @@ if __name__ == "__main__":
     test_fixedrate_total_par()
     test_nsv03mark_nontrivial_par()
     test_nsv03mark_kink_decay_par()
+    test_nsv05mark_pyramid_par()
+    test_nsv05mark_effectivity_par()
     test_freeboundarygraph2D_par()
     test_hausdorff2D_par()
     test_udomark_restrict_par()

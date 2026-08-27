@@ -216,17 +216,19 @@ def test_nsv03mark_allinactive():
     assert tot2 >= 0.0
 
 
-def _nsv03mark_nontrivial_soln(amr):
+def _nsv03mark_nontrivial_soln(amr, m=16):
     """Solve NSV03's own "Example 7.2" (their sec. 7.2): a constant obstacle
     chi=0 on (-1,1)^2 with radius r=0.7, whose exact solution is
     u(x) = (max(|x|^2-r^2,0))^2.  Unlike test_nsv03mark_allinactive() above, this
     gives nsv03mark() a genuine interior contact set, free boundary, and inactive
-    boundary to work with.  Shared by _nsv03mark_nontrivial() here and
-    tests/test_parallel.py::test_nsv03mark_nontrivial_parallel()."""
+    boundary to work with.  Shared by _nsv03mark_nontrivial() here,
+    tests/test_parallel.py::test_nsv03mark_nontrivial_parallel(), and (at two
+    values of m) _nsv05mark_effectivity_case() below, which needs the exact
+    solution to form an effectivity index."""
     r = 0.7
     mesh = RectangleMesh(
-        16,
-        16,
+        m,
+        m,
         1.0,
         1.0,
         originX=-1.0,
@@ -303,7 +305,7 @@ def test_nsv03mark_nontrivial():
     _nsv03mark_nontrivial(VIAMR(debug=True))
 
 
-def _nsv03mark_kink_soln(amr, m):
+def _pyramid_soln(amr, m):
     """Solve an obstacle problem whose obstacle has kinks *inside* the contact set:
     the pyramid chi = dist(x, boundary of Omega) - 1/5 on Omega = (-1,1)^2, with
     f = -5 and g = 0.  This is the example of section 3.2 of NSV05.  The load
@@ -311,8 +313,12 @@ def _nsv03mark_kink_soln(amr, m):
     contact region, and chi is concave and piecewise affine with ridges along the
     diagonals |x| = |y|.  A "crossed" RectangleMesh puts element edges exactly on
     those diagonals, so I_h chi = chi and the jump [[d_n u_h]] along a ridge is the
-    fixed kink in grad(chi), which does *not* vanish under refinement.  Returns
-    (max_T etainf, Eh)."""
+    fixed kink in grad(chi), which does *not* vanish under refinement.
+
+    Shared by _nsv03mark_kink_soln() below, which uses the non-decaying ridge jump
+    as a scaling regression, and by _nsv05mark_pyramid() below, for which this is
+    NSV05's own full-localization example: the ridges lie *inside* the full-contact
+    set Omega_h^0, so nsv05mark() must switch its residual off along them."""
     mesh = RectangleMesh(
         m,
         m,
@@ -348,7 +354,13 @@ def _nsv03mark_kink_soln(amr, m):
     assert amr.checkadmissible(uh, lb)
     # the contact set must be nonempty, or the kink is not exercised at all
     assert amr.countmark(amr.elemactive(uh, lb)) > 0
+    return mesh, uh, lb, f_ufl, g, g_ufl
 
+
+def _nsv03mark_kink_soln(amr, m):
+    """Run nsv03mark() on the pyramid of _pyramid_soln().  Returns
+    (max_T etainf, Eh)."""
+    _, uh, lb, f_ufl, g, g_ufl = _pyramid_soln(amr, m)
     _, etainf, _, _, Eh = amr.nsv03mark(uh, lb, g, f_ufl, g_ufl)
     return amr.scalarrange(etainf)[1], Eh
 
@@ -446,6 +458,155 @@ def test_nsv03mark_active_boundary():
     sigmah_boundary = Function(CG1).interpolate(sigmah * isbdry)
     assert amr.scalarrange(sigmah_boundary)[0] >= -1.0e-10
     assert amr.scalarrange(sigmah_boundary)[1] > amr.activetol
+
+
+def _deepfullcontact(amr, fullcontact):
+    """DG0 indicator of the elements lying *deep* inside the discrete
+    full-contact set Omega_h^0, i.e. those all of whose vertices carry a star
+    contained in Omega_h^0.
+
+    This, and not fullcontact itself, is where nsv05mark()'s eta must vanish
+    identically.  Its element value eta_T takes a max of the star indicator
+    eta_z over the vertices of T, so a full-contact element which happens to
+    have a vertex whose star pokes outside Omega_h^0 can legitimately inherit a
+    nonzero eta_z from there."""
+    CG1, _ = amr.spaces(fullcontact.function_space().mesh())
+    starfull = amr._elemtonodeextreme(fullcontact, CG1, minimum=True, defaultval=1.0)
+    return amr._elemextreme(starfull, minimum=True, defaultval=1.0)
+
+
+def _nsv05mark_pyramid(amr):
+    """Full localization, which is the property NSV05 exists to provide, on
+    NSV05's own section 3.2 example; see _pyramid_soln().  Also checks the
+    invariants which hold for any input.
+
+    The obstacle's ridges lie inside the contact set, so nsv05mark() must switch
+    its residual off along them, while nsv03mark() -- whose residual has sigma_h
+    subtracted from f but is not restricted to Omega_h^+ -- does not.  This is
+    the mechanism behind the coarse contact-set meshes of NSV05 Figure 3.4.
+
+    Shared by test_nsv05mark_pyramid() here and
+    tests/test_parallel.py::test_nsv05mark_pyramid_par(), so the two assert the
+    identical counts from one definition."""
+    mesh, uh, lb, f_ufl, g, g_ufl = _pyramid_soln(amr, 16)
+    CG1, DG0 = amr.spaces(mesh)
+
+    mark, eta, sz, fullcontact, Eh = amr.nsv05mark(uh, lb, g, f_ufl, g_ufl)
+
+    # return contract
+    assert mark.function_space().ufl_element() == DG0.ufl_element()
+    assert eta.function_space().ufl_element() == DG0.ufl_element()
+    assert fullcontact.function_space().ufl_element() == DG0.ufl_element()
+    assert sz.function_space().ufl_element() == CG1.ufl_element()
+
+    # invariants which hold unconditionally
+    assert 0 < amr.countmark(mark) < DG0.dim()  # marks something, not everything
+    assert Eh > 0.0
+    assert amr.scalarrange(eta)[0] >= 0.0  # eta is a sum of norms
+    assert Eh >= amr.scalarrange(eta)[1]  # separate global sups; see nsv05mark()
+
+    # Omega_h^0 must be nonempty, or the localization assertions below are
+    # vacuous.  Every full-contact element is in contact, but not conversely:
+    # the sign conditions on f and J_h, and the requirement that *all* vertices
+    # lie in C_h, drop the fringe of the contact set near the free boundary.
+    active = amr.elemactive(uh, lb)
+    nfull = amr.countmark(fullcontact)
+    assert nfull > 0
+    assert amr.countmark(Function(DG0).interpolate(fullcontact * (1.0 - active))) == 0
+    assert nfull < amr.countmark(active)
+
+    # the property itself: eta vanishes identically deep inside Omega_h^0, so
+    # nothing there is marked, no matter how large the ridge jumps are
+    deep = _deepfullcontact(amr, fullcontact)
+    ndeep = amr.countmark(deep)
+    assert ndeep > 0
+    assert amr.scalarrange(Function(DG0).interpolate(eta * deep))[1] == 0.0
+    assert amr.countmark(Function(DG0).interpolate(mark * deep)) == 0
+
+    # ... in contrast to nsv03mark() on the same solution, whose residual stays
+    # alive on the ridges, and whose estimator is correspondingly larger
+    _, etainf, _, _, Eh03 = amr.nsv03mark(uh, lb, g, f_ufl, g_ufl)
+    assert amr.scalarrange(Function(DG0).interpolate(etainf * deep))[1] > 0.0
+    assert Eh < Eh03
+
+    return nfull, ndeep, amr.countmark(mark)
+
+
+# (number of full-contact elements, of those deep inside Omega_h^0, of marked
+# elements) from _nsv05mark_pyramid().  Asserted in both the serial and the
+# parallel test, so that the two are pinned to the same numbers.
+_NSV05_PYRAMID_COUNTS = (440, 288, 112)
+
+
+def test_nsv05mark_pyramid():
+    assert _nsv05mark_pyramid(VIAMR(debug=True)) == _NSV05_PYRAMID_COUNTS
+
+
+def _nsv05mark_effectivity_case(amr, m):
+    """Run nsv05mark() on NSV03 Example 7.2 at mesh parameter m; see
+    _nsv03mark_nontrivial_soln().  Returns (Eh, ||u - u_h||_{0,inf;Omega}),
+    using the known exact solution u = (max(|x|^2-r^2,0))^2."""
+    mesh, uh, lb, f_ufl, g, g_ufl = _nsv03mark_nontrivial_soln(amr, m=m)
+    _, _, _, _, Eh = amr.nsv05mark(uh, lb, g, f_ufl, g_ufl, dualtol=1.0e-8)
+    x, y = SpatialCoordinate(mesh)
+    u_ufl = max_value(x ** 2 + y ** 2 - 0.7 ** 2, 0.0) ** 2
+    DG4 = FunctionSpace(mesh, "DG", 4)
+    err = amr.scalarrange(Function(DG4).interpolate(abs(u_ufl - uh)))[1]
+    assert Eh > 0.0 and err > 0.0
+    return Eh, err
+
+
+def _nsv05mark_effectivity(amr):
+    """Regression for the h-scaling of nsv05mark()'s estimator Eh.
+
+    Theorem 2.7 of NSV05 bounds ||u - u_h||_{0,inf;Omega} by E_h, but only with
+    the constant C_*|log h_min|^2, which nsv05mark() replaces by C0 = 0.02
+    following NSV05 section 3.  So reliability is not available as an assertion
+    here.  What is available, and what catches a wrong power of h_z in any one
+    term of eta_z, is that Eh and the true error must decay together: their
+    ratio, i.e. the effectivity index, has to stay put as h halves.  Compare
+    NSV05 Figure 3.2, where the two curves are parallel.
+
+    The bounds below are wide enough to tolerate the preasymptotic range at
+    these mesh sizes, and far from the failure they exist to catch, in which one
+    term of the estimator scales like a different power of h than the others and
+    the ratio drifts by an order of magnitude per refinement.
+
+    Shared by test_nsv05mark_effectivity() here and
+    tests/test_parallel.py::test_nsv05mark_effectivity_par()."""
+    Eh_coarse, err_coarse = _nsv05mark_effectivity_case(amr, 8)
+    Eh_fine, err_fine = _nsv05mark_effectivity_case(amr, 16)
+    assert Eh_fine < 0.8 * Eh_coarse  # estimator decays
+    assert err_fine < 0.8 * err_coarse  # ... and so does the true error
+    ratio = (Eh_fine / err_fine) / (Eh_coarse / err_coarse)
+    assert 0.4 < ratio < 2.5  # ... at comparable rates
+    return Eh_coarse, err_coarse, Eh_fine, err_fine
+
+
+def test_nsv05mark_effectivity():
+    _nsv05mark_effectivity(VIAMR(debug=True))
+
+
+def test_nsv05mark_asserts():
+    """nsv05mark()'s two admissibility guards must actually fire.  They are the
+    method's only defense against being handed something which is not a solution
+    of the VI, and the primal one in particular is what licenses dropping
+    ||(chi - u_h)^+||_{inf;Omega} from E_h."""
+    amr = VIAMR(debug=True)
+    mesh, uh, lb, f_ufl, g, g_ufl = _pyramid_soln(amr, 8)
+    CG1, _ = amr.spaces(mesh)
+
+    # primal: uh must lie above the discrete obstacle
+    below = Function(CG1).interpolate(uh - Constant(1.0))
+    with pytest.raises(AssertionError):
+        amr.nsv05mark(below, lb, g, f_ufl, g_ufl)
+
+    # dual: NSV05 gives s_z <= 0 at interior nodes.  Handing the method the load
+    # with the wrong sign leaves uh primal admissible but flips that: s_z = 0 at
+    # the strictly inactive nodes of the true solution, so with -f in place of f
+    # it becomes -2 int f phi_z > 0 there, f being negative on this problem.
+    with pytest.raises(AssertionError):
+        amr.nsv05mark(uh, lb, g, -f_ufl, g_ufl)
 
 
 def _fixedrate_total_case(amr):
@@ -682,6 +843,9 @@ if __name__ == "__main__":
     test_nsv03mark_allinactive()
     test_nsv03mark_nontrivial()
     test_nsv03mark_active_boundary()
+    test_nsv05mark_pyramid()
+    test_nsv05mark_effectivity()
+    test_nsv05mark_asserts()
     test_fixedrate_total()
     test_udomark_nontrivial()
     test_udomark_restrict()
