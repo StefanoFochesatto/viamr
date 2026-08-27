@@ -1,3 +1,7 @@
+# TODO add UDOBR here!  it is best of both worlds:
+#    UDOBR comparable to NSV05 on pyramid (NSV03 overrefines in active)
+#    UDOBR best on sphere (NSV03 *and NSV05* overrefine in active)
+
 # The "pyramid obstacle" example from subsection 3.2 of NSV05 = 
 #
 #   Nochetto, R. H., Siebert, K. G., & Veeser, A. (2005). Fully localized
