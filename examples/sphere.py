@@ -1,15 +1,17 @@
-# This example attempts to do apples-to-apples comparisons of 4 algorithms
+# This example attempts to do apples-to-apples comparisons of 5 algorithms
 # on a classical obstacle problem with a hemispherical obstacle:
 #
 #   1. UDOBR = unstructured dilation operator plus Babuska & Rheinboldt (1989)
 #              in the inactive set
-#   2. NSV = Nochetto, Siebert, and Veeser (2003)
-#   3. UNI = uniform refinement
-#   4. AVM = averaged-metric mesh adaptation
+#   2. NSV03 = Nochetto, Siebert, and Veeser (2003)
+#   3. NSV05 = Nochetto, Siebert, and Veeser (2005), the fully-localized
+#              successor of NSV03
+#   4. UNI = uniform refinement
+#   5. AVM = averaged-metric mesh adaptation
 #
 # The AVM method only runs if "import animate" succeeds.
 #
-# We generate .pvd files: result_sphere_{udobr,nsv,uni,avm}.pvd
+# We generate .pvd files: result_sphere_{udobr,nsv03,nsv05,uni,avm}.pvd
 #
 # For the default mode the exact solution is known and so we can compute
 # norm convergence rates.  We generate ten .png convergence figures comparing
@@ -40,8 +42,9 @@
 # the degenerate porous-media operator Lu = -div((u-psi)^{gamma-1} grad(u)).
 # The degenerating coefficient is regularized by eps-continuation.  There is
 # no closed-form exact solution for this operator, so norm/effectivity figures
-# are skipped.  Also, NSV assumes the Laplacian internally (see nsv03mark())
-# and so is not meaningful here; only UDOBV, UNI, and AVM are compared.
+# are skipped.  Also, both NSV methods assume the Laplacian internally (see
+# nsv03mark() and nsv05mark()) and so are not meaningful here; only UDOBV, UNI,
+# and AVM are compared.
 #
 # Three suggested runs to get familiar with the major cases:
 #   python3 sphere.py                        exact soln known; Laplacian
@@ -137,7 +140,7 @@ parser.add_argument(
     default=False,
     help="use the degenerate porous-media operator -div((u-psi)^(gamma-1) grad(u)) - f, "
     "via eps-continuation, in place of the classical Laplacian; restricts the comparison "
-    "to udobr (weighted BV00)/uni/avm, since nsv requires the Laplacian [default=False]",
+    "to udobr (weighted BV00)/uni/avm, since nsv03 and nsv05 require the Laplacian [default=False]",
 )
 parser.add_argument(
     "-targetelements",
@@ -191,7 +194,7 @@ from netgen.geom2d import SplineGeometry
 # what methods of adaptive refinement do we test
 refinetypes = ["udobr", "uni"]
 if not args.porous:
-    refinetypes += ["nsv"]  # needs Laplacian operator
+    refinetypes += ["nsv03", "nsv05"]  # both need the Laplacian operator
 try:
     import animate
 except:
@@ -450,7 +453,7 @@ for amrtype in refinetypes:
     cummarktime = 0.0
     meshbuildtimes = []  # cumulative wall time spent in the external mesh-construction backend
     cummeshbuildtime = 0.0
-    eff_dofs, eff_vals = [], []  # effectivity index vs DOFs; udobr/nsv only
+    eff_dofs, eff_vals = [], []  # effectivity index vs DOFs; udobr/nsv03/nsv05 only
     activefracs = []  # active-element fraction vs level; used only if not exact_known
     dimpleinactivecounts = []  # inactive elements found inside dimples; -dimples & not exact_known only
 
@@ -649,17 +652,35 @@ for amrtype in refinetypes:
             t_meshbuild1 = time.time()
             marktime_local = t_mark1 - t_mark0
             meshbuildtime_local = t_meshbuild1 - t_mark1
-        elif amrtype == "nsv":
+        elif amrtype in ("nsv03", "nsv05"):
             t_mark0 = time.time()
             g = Function(V).interpolate(g_ufl)
-            (mark, etainf, _, _, Eh) = amr.nsv03mark(
-                uh, lb, g, Constant(args.fconst), g_ufl
-            )
+            # chi_ufl=psi_expr matters here: the cap is curved, so it is not
+            # representable in V=CG1 and u_h touches I_h psi rather than psi.
+            # Without it both estimators drop ||(psi - u_h)^+||_infty, which on
+            # this problem is essentially all of ||u - u_h||_infty and is
+            # attained inside the contact set, so they would be blind to the
+            # dominant error.  Contrast the piecewise-affine pyramid of
+            # pyramid.py, where psi is in CG1 and the term vanishes.
+            if amrtype == "nsv03":
+                # Eh is the estimator Etilde_h of NSV03 (7.1), the whole-domain
+                # (not inactive-set-restricted) bound which the pointwise theory
+                # gives for ||u-u_h||_infty
+                (mark, _, _, _, Eh) = amr.nsv03mark(
+                    uh, lb, g, Constant(args.fconst), g_ufl, chi_ufl=psi_expr
+                )
+            else:
+                # Eh is the estimator E_h of NSV05 Theorem 2.7, which bounds the
+                # same norm.  Unlike NSV03 its residual switches off on the
+                # discrete full-contact set, so it should leave the interior of
+                # the active set coarse; compare the meshes in the .pvd files.
+                (mark, _, _, _, Eh) = amr.nsv05mark(
+                    uh, lb, g, Constant(args.fconst), g_ufl, chi_ufl=psi_expr
+                )
             t_mark1 = time.time()
             if exact_known:
-                # effectivity index vs NSV03's own target norm: Eh is the estimator
-                # Etilde_h of (7.1), the whole-domain (not inactive-set-restricted)
-                # bound which the pointwise theory gives for ||u-u_h||_infty
+                # effectivity index vs the sup norm, the target of both NSV
+                # estimators, so the two are directly comparable here
                 eff_nsv = Eh / errnorm_Linf if errnorm_Linf > 0 else np.nan
                 print(f"  eff_{amrtype.upper()} (sup norm) = {eff_nsv:.3f}")
                 eff_dofs.append(Nv)
@@ -717,7 +738,9 @@ for amrtype in refinetypes:
     outfile = "result_sphere_" + amrtype + ".pvd"
     print(f"done ... writing to {outfile} ...")
     gap = Function(V, name="gap = uh-lb").interpolate(uh - lb)
-    fields = [uh, lb, gap]
+    active = amr.elemactive(uh, lb)
+    active.rename("active")
+    fields = [uh, lb, gap, active]
     if exact_known:
         uexact = Function(V, name="u_exact").interpolate(uexactUFL(r))
         error = Function(V, name="error = |uexact - uh|").interpolate(
@@ -730,13 +753,22 @@ for amrtype in refinetypes:
         imark.rename("imark (BR)")
         mark.rename("mark")
         fields += [mark, imark]
-    elif amrtype == "nsv":
+    elif amrtype == "nsv03":
         g = Function(V).interpolate(g_ufl)
         (mark, etainf, etad, sigmah, _) = amr.nsv03mark(
-            uh, lb, g, Constant(args.fconst), g_ufl
+            uh, lb, g, Constant(args.fconst), g_ufl, chi_ufl=psi_expr
         )
         mark.rename("mark")
         fields += [mark, sigmah, etainf, etad]
+    elif amrtype == "nsv05":
+        g = Function(V).interpolate(g_ufl)
+        (mark, eta, sz, fullcontact, _) = amr.nsv05mark(
+            uh, lb, g, Constant(args.fconst), g_ufl, chi_ufl=psi_expr
+        )
+        mark.rename("mark")
+        # fullcontact is Omega_h^0, the set on which the residual is switched
+        # off; it is the field to look at to see the full localization
+        fields += [mark, sz, eta, fullcontact]
     VTKFile(outfile).write(*fields)
     print("")
 
@@ -749,7 +781,7 @@ if mesh.comm.rank == 0:
     import matplotlib.pyplot as plt
 
     d = 2  # spatial dimension
-    stylemap = {"udobr": "ko", "nsv": "bs", "uni": "rs", "avm": "g^"}
+    stylemap = {"udobr": "ko", "nsv03": "bs", "nsv05": "md", "uni": "rs", "avm": "g^"}
 
     if exact_known:
 
@@ -813,8 +845,8 @@ if mesh.comm.rank == 0:
             -1.0 / d,
             "DOFs^(-1/d)",
         )
-        # sup (L^infty) norm: this is the norm NSV03's pointwise a posteriori
-        # theory targets.  This figure gives an apples-to-apples true-error
+        # sup (L^infty) norm: this is the norm the pointwise a posteriori theory
+        # of both NSV03 and NSV05 targets.  This figure gives an apples-to-apples true-error
         # comparison in that norm across *all* methods.  Reference rate
         # DOFs^(-2/d) matches the L^2 rate above: for smooth solutions, CG1
         # pointwise error is generically the same asymptotic order as L^2,
@@ -830,8 +862,9 @@ if mesh.comm.rank == 0:
         # errornorm_Linf_reconstructed()): the right comparison for UDOBR,
         # which deliberately leaves the active-set interior coarse.
         # Included for all methods, not just that one, for consistency.
-        # NSV/UNI/AVM refine the active set, so their curves should match
-        # ||u-u_h||_2 earlier.
+        # NSV03/UNI/AVM refine the active set, so their curves should match
+        # ||u-u_h||_2 earlier.  NSV05 switches its residual off on the discrete
+        # full-contact set, so it belongs with UDOBR rather than with NSV03 here.
         _convergence_plot(
             6,
             "||u_exact - tilde u_h||_infty",
@@ -891,12 +924,13 @@ if mesh.comm.rank == 0:
         )
 
         # effectivity index = estimator / (true error), in whichever norm the
-        # estimator targets (energy norm for BR78, sup norm for NSV03)
+        # estimator targets (energy norm for BR78, sup norm for both NSV methods)
         # a reliable and efficient estimator should stay O(1) as DOFs grow
         plt.figure()
         effstylemap = {"udobr": ("ko", "BR78 (inactive-set energy norm)"),
-                        "nsv": ("bs", "NSV03 (sup norm)")}
-        for amrtype in ("udobr", "nsv"):
+                        "nsv03": ("bs", "NSV03 (sup norm)"),
+                        "nsv05": ("md", "NSV05 (sup norm)")}
+        for amrtype in ("udobr", "nsv03", "nsv05"):
             if amrtype not in effs or len(effs[amrtype][0]) == 0:
                 continue
             edofs, evals = np.array(effs[amrtype][0]), np.array(effs[amrtype][1])
