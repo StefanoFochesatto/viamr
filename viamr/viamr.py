@@ -1108,65 +1108,109 @@ class VIAMR(OptionsManager, AVMMixin):
             a posteriori error estimators and barrier sets for contact problems.
             SIAM Journal on Numerical Analysis, 42(5), 2118-2135.
 
-        This is the successor of the NSV03 estimator implemented by nsv03mark(); see that method for the earlier version, and see the comparison at the end of this doc string.
+        This is the successor of the NSV03 estimator implemented by nsv03mark(); see the comparison below.
 
-        The estimator E_h of Theorem 2.7 in NSV05 is
+        The estimator is mostly nodal, and star-based at the nodes, but we must return an element-wise eta field for use in marking, via fixedratemark().  After the theory we address this practical implementation issue.
+
+        ** Definitions **
+
+        Let N_h be the set of all nodes on the current mesh.  Let phi_z denote the hat function at node z in N_h, omega_z = supp(phi_z) its star, and gamma_z = Gamma cap (omega_z)^o the set of facets lying in the *interior* of the star.  For simplices this is exactly the set of interior facets which contain z.  The other facets of the star lie in its boundary, and phi_z vanishes identically on them.
+
+        For chi_h the obstacle (chi_h = lb), and J_h the facet jump of the solution u_h (computed by _facetjump()), define the set of full-contact *nodes* as
+
+            C_h = {z in N_h : u_h = chi_h at z, and f <= 0 in omega_z, and J_h <= 0 on gamma_z}
+
+        The discrete full-contact set is
+
+            Omega_h^0 = (union of the elements all of whose vertices lie in C_h).
+
+        This set is returned by the "fullcontact" DG0 marking from this method.  Let Omega_h^+ = Omega \setminus Omega_h^0 be its complement.  Note Omega_h^+ is open, so a facet lying in the boundary of Omega_h^0 is not in Gamma_h^+.  Thus a facet counts only if *both* its elements are outside the full-contact set.
+
+        The residual indicator below is restricted to
+
+            omega_z^+ = omega_z cap Omega_h^+
+            gamma_z^+ = gamma_z cap Omega_h^+
+
+        so it *vanishes identically* on Omega_h^0.  This is the "full localization" which distinguishes NSV05 from NSV03; it is why the mesh can stay coarse inside the contact set.
+
+        Define, see equation (2.5), the *nodal residual*
+
+            s_z = int_Omega f phi_z + int_Gamma J_h phi_z
+
+        This nodal quantity is a tool for generating a set, not the indicator (i.e. eta_z below).  From equation (2.20), let
+
+            Lambda_h = (union of stars omega_z over nodes z with s_z < 0,
+                        where z is an interior node or a full-contact boundary node)
+
+        This is a negative-residual set, used to gate inactive (noncontact) elements in the estimator.
+
+        ** Estimator **
+
+        The nodal star-based residual indicator (2.15) is
+
+            eta_z = h_z^2 ||(f - fhat_z) phi_z||_{inf; omega_z^+}   data oscillation (excluding full contact)
+                    + h_z ||J_h phi_z||_{inf; gamma_z^+}.           gradient jump (excluding full contact)
+
+        Now the estimator E_h of Theorem 2.7 in NSV05 is
 
             E_h =   C_* |log h_min|^2 max_{z in N_h} eta_z    localized residual
-                  + ||(chi - u_h)^+||_{inf; Omega}            localized obstacle approx.
-                  + ||(u_h - chi)^+||_{inf; Lambda_h}
-                  + ||g - I_h g||_{inf; partial Omega}        boundary datum approx.
+                  + ||(chi - u_h)^+||_{inf; Omega}            admissibility violation vs continuum obstacle
+                  + ||(u_h - chi)^+||_{inf; Lambda_h}         inactive overlap with negative-residual set
+                  + ||g - I_h g||_{inf; partial Omega}        boundary data approximation
 
-        where the star-based residual indicator (2.15) is
+        ** Practical implementation **
 
-            eta_z = h_z^2 ||(f - fhat_z) phi_z||_{inf; omega_z^+}
-                    + h_z ||J_h phi_z||_{inf; gamma_z^+}.
+        1. Following section 3 of NSV05, the unknown constant and the logarithmic factor are replaced by the single practical constant:
+            C_* |log h_min|^2  -->  C0 = 0.02.
 
-        Here phi_z is the hat function at node z, omega_z = supp(phi_z) is the star, and gamma_z = Gamma \cap int(omega_z) is the set of interior facets lying in the *interior* of the star, which for simplices is exactly the set of interior facets which contain z.  (The other facets of the star lie in its boundary, and phi_z vanishes identically on them.)  Following section 3 of NSV05, the unknown constant and the logarithmic factor are replaced by the single practical constant C_* = 0.02 = C0.
+        2.  We drop the first part of the obstacle approximation, namely ||(chi - u_h)^+||_inf, for the following reason.  We assume that the a posteriori method only has access to the discrete obstacle on the current mesh.  That is, we take this term to be zero because chi = chi_h.  Furthermore we *assert primal admissibility* against the discrete obstacle chi_h.  FIXME this could be addressed by a chi_exact kwarg, essentially expecting a UFL expression
 
-        Meaning of the pieces:
+        3. Note that E_h is a single number: a max over nodes plus global sup norms.  Localizing it to elements for marking purposes is not spelled out in NSV05, so we follow what section 7.1 of NSV03 does for its own estimator.  Define
 
-          Full-contact nodes and set:  The set of full-contact nodes is
+            eta_T = C0 max_{z a vertex of T} eta_z                localized residual on element
+                    + ||(u_h - chi)^+||_{inf; Lambda_h cap T}     inactive overlap with negative residual set
+                    + ||g - I_h g||_{inf; partial Omega cap T}.   boundary data approximation
 
-            C_h = {z in N_h : u_h = chi_h at z, and f <= 0 in omega_z, and J_h <= 0 on gamma_z},
+        ** Details **
 
-          and the discrete full-contact set Omega_h^0 is the union of the elements all of whose vertices lie in C_h, with Omega_h^+ = Omega \setminus Omega_h^0 its (open) complement.  The residual indicator is restricted to omega_z^+ = omega_z cap Omega_h^+ and gamma_z^+ = gamma_z cap Omega_h^+, so it *vanishes identically* on Omega_h^0.  This is the "full localization" which distinguishes NSV05 from NSV03; it is why the mesh can stay coarse inside the contact set.  Note Omega_h^+ is open, so a facet lying in the boundary of Omega_h^0 is not in Gamma_h^+, i.e. a facet counts only if *both* its elements are outside the full-contact set.
-
-          Element residual:  Only the *oscillation* f - fhat_z of the load enters, not f itself, where by (2.9)
+        1.  Element residual:  By (2.9), only the *oscillation* f - fhat_z of the load enters, not f itself:
 
             fhat_z = (1/2)(min_{omega_z^+} f + max_{omega_z^+} f)   if rho_z = 0,
                      0                                              otherwise,
 
-          with rho_z = int_{Omega_h^+} f phi_z + int_{Gamma_h^+} J_h phi_z the restriction of the nodal multiplier s_z to Omega_h^+.  By (2.2), rho_z = s_z = 0 at every node which is not a full-contact node, so the test only bites inside the contact set.  Since it is an exact equality in the theory but a floating-point comparison here, rho_z is tested against rhotol times the local scale int |f| phi_z.
+        with rho_z = int_{Omega_h^+} f phi_z + int_{Gamma_h^+} J_h phi_z the restriction of the nodal multiplier s_z to Omega_h^+.  By (2.2), the whole star of a node not in C_h lies in Omega_h^+, so rho_z = s_z there.  Combined with discrete complementarity (1.2), rho_z = s_z = 0 at every node where u_h > chi_h strictly, and "perhaps by chance otherwise" (NSV05 p. 2123).  Thus the rho_z = 0 branch applies outside of the contact set.  Since it is an exact equality in the theory but a floating-point comparison here, rho_z is tested against rhotol times the local scale int |f| phi_z.
 
-          Weight phi_z:  On the facet term the hat function is handled exactly; see _tracetonodemaxabs().  On the element term the bound phi_z <= 1 is used instead, which overestimates and so preserves reliability while giving the clean closed form
+        2. Weight phi_z on the oscillation:  On the facet term the hat function is handled exactly; see _tracetonodeextreme().  On the element term the bound phi_z <= 1 is used instead, which overestimates and so preserves reliability while giving the clean closed form
 
             ||f - fhat_z||_{inf; omega_z^+} = (1/2)(max_{omega_z^+} f - min_{omega_z^+} f)   if rho_z = 0,
-                                              max_{omega_z^+} |f|                           otherwise,
+                                              max_{omega_z^+} |f|                            otherwise,
 
-          i.e. exactly half the oscillation of f over the star, computable from elementwise extremes of f.
+        i.e. exactly half the oscillation of f over the star, computable from elementwise extremes of f.
 
-          Obstacle approximation:  ||(chi - u_h)^+|| is assumed to be zero because we take chi = chi_h here and because we *assert primal admissibility*.  As in nsv03mark(), we do not assume we have access to a pure/continuum lower obstacle chi; we have only the one on the current mesh.
+        3. The "blocked gap" ||(u_h - chi)^+|| is restricted to the set Lambda_h of (2.20), which is the union of the stars omega_z over nodes z with s_z < 0, where z is an interior node or a full-contact boundary node.  Compare nsv03mark(), which restricts the same quantity to {sigma_h < 0} elementwise, without dilating to stars.
 
-          The "blocked gap" ||(u_h - chi)^+|| is restricted to the set Lambda_h of (2.20), which is the union of the stars omega_z over nodes z with s_z < 0, where z is an interior node or a full-contact boundary node.  Compare nsv03mark(), which restricts the same quantity to {sigma_h < 0} elementwise, without dilating to stars.
+        4. Boundary datum:  ||g - I_h g||_{inf; partial Omega} is computed with a formula which is correct if g is in CG4.  It is localized here as the elementwise sup over boundary-touching elements, which overestimates the sup over the boundary facets themselves.  (nsv03mark() instead divides an assembled boundary integral by the cell volume, which does not have the units of a sup norm.)
 
-          Boundary datum:  ||g - I_h g||_{inf; partial Omega} is computed with a formula which is correct if g is in CG4.  It is localized here as the elementwise sup over boundary-touching elements, which overestimates the sup over the boundary facets themselves.  (nsv03mark() instead divides an assembled boundary integral by the cell volume, which does not have the units of a sup norm.)
+        ** Marking **
 
-        Marking.  E_h is a single number: a max over nodes plus global sup norms.  Localizing it to elements for marking purposes is not spelled out in NSV05, so we follow what section 7.1 of NSV03 does for its own estimator, and use
+        Under the default 'max' strategy, taking the max over the vertices of T is exactly equivalent to marking the whole star omega_z of every marked node z.  Note there is only *one* marking pass, in contrast to nsv03mark().
 
-            eta_T = C0 max_{z a vertex of T} eta_z + ||(u_h - chi)^+||_{inf; Lambda_h cap T} + ||g - I_h g||_{inf; partial Omega cap T}.
+        Returns (mark, eta, sz, fullcontact, Eh), where
+          * mark is the DG0 element marking for refinement
+          * eta is the DG0 elementwise estimator
+          * sz is the CG1 nodal multiplier of (2.5)
+          * fullcontact is the DG0 indicator of Omega_h^0
+          * Eh is the scalar estimator E_h of Theorem 2.7 itself.
 
-        Under the default 'max' strategy, taking the max over the vertices of T is exactly equivalent to marking the whole star omega_z of every marked node z.  Note there is only *one* marking pass, in contrast to nsv03mark(): NSV05's multiplier sigma_h is a functional defined by (2.3), built without mass lumping, so the quadrature estimator ||h^2 grad(sigma_h)||_{d; Lambda_h} of NSV03 and its separate marking loop have no counterpart here.
+        Note that Eh is the quantity which bounds ||u - u_h||_{0,inf;Omega}, and thus it is the appropriate numerator for an effectivity index.  Its three terms are separate global sup norms, so each is maximized on its own; this makes Eh >= max_T eta_T, with equality only if the three maxima happen to fall on one element.
 
-        Returns (mark, eta, sz, fullcontact, Eh), where eta is the DG0 elementwise estimator, sz is the CG1 nodal multiplier of (2.5), and fullcontact is the DG0 indicator of Omega_h^0.  Eh is the scalar estimator E_h of Theorem 2.7 itself, so it is the quantity which bounds ||u - u_h||_{0,inf;Omega}, and thus the right numerator for an effectivity index.  Its three terms are separate global sup norms, so each is maximized on its own; this makes Eh >= max_T eta_T, with equality only if the three maxima happen to fall on one element.  Note eta exists for marking, and is *not* a field whose l^2 norm means anything here.
+        ** Differences from nsv03mark() = NSV03 **
 
-        Summary of the differences from nsv03mark() (= NSV03):
-          * the indicator is star-based (per node z), not element-based;
-          * the residual is switched off entirely on Omega_h^0, instead of having sigma_h subtracted from f on the discrete contact set;
-          * the load enters only through its oscillation f - fhat_z;
-          * there is no quadrature estimator and no second marking pass;
-          * the blocked gap is restricted to a union of stars, not to elements;
-          * one constant C0 = 0.02, versus C0 = 0.1 and C1 = 0.01.
+          * the theoretical indicator is star-based (per node z), not element-based
+          * the residual is switched off entirely on Omega_h^0
+          * the load enters only through its oscillation f - fhat_z
+          * there is no quadrature estimator and no second marking pass
+          * the blocked gap is restricted to a union of stars, not to elements
         """
         # mesh quantities
         mesh = uh.function_space().mesh()
@@ -1218,7 +1262,7 @@ class VIAMR(OptionsManager, AVMMixin):
         # discrete full-contact set Omega_h^0 = union of elements whose vertices
         # are all in C_h, and its complement Omega_h^+
         fullcontact = self._elemextreme(Ch, minimum=True, defaultval=1.0)
-        fullcontact.rename("Omega_h^0 (full contact)")
+        fullcontact.rename("Omega_h^0 (full contact set)")
         fullplus = Function(DG0).interpolate(1.0 - fullcontact)
 
         # restrictions to Omega_h^+: the facet jump on Gamma_h^+, and the
@@ -1256,8 +1300,7 @@ class VIAMR(OptionsManager, AVMMixin):
         rhoscale.dat.data[:] = assemble(abs(f_ufl) * phi * dx).dat.data_ro
 
         # star-based residual indicator eta_z of (2.15); see doc string for the
-        # closed form of the oscillation term, and _tracetonodemaxabs() for the
-        # exact treatment of phi_z on the facets
+        # closed form of the oscillation term
         hz = self._elemtonodeextreme(hT, CG1, minimum=False, defaultval=0.0)
         osc_ufl = conditional(
             abs(rho) <= rhotol * rhoscale,
