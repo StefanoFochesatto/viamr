@@ -23,9 +23,6 @@
 #   python3 nsv.py -dim 3           easy problem in 3D; needs Netgen
 #   python3 nsv.py -prob pyramid    pyramid problem
 
-# TODO
-#   add figure comparing NSV05 estimate of hausdorff to computed hausdorf (2D only)
-
 from argparse import ArgumentParser
 
 parser = ArgumentParser(
@@ -230,6 +227,7 @@ for method in methods:
     print(f"using AMR by {method} method ...")
     mesh = mesh0
     dofs, errsl2, errsinf, errsH1ia, ests, eff_vals = [], [], [], [], [], []
+    rhs, hausds, hausplains = [], [], []  # interface quantities; 2D easy only
     for j in range(args.maxlevels):
         V = FunctionSpace(mesh, "CG", 1)
         amr = VIAMR(debug=True)
@@ -317,6 +315,64 @@ for method in methods:
         effstr = f", effectivity = {eff:.3f}" if exact_known else ""
         print(f"    {estname} = {Eh:.3e}, marked = {amr.countmark(mark)}{extra}{effstr}")
 
+        # Section 4 of NSV05 locates the exact free boundary F a posteriori.  By
+        # Theorem 4.1, F lies within distance r_h of {u_h > chi_h + E_h}, which is
+        # inside the computed inactive set.  Equation (4.4) in NSV05 gives
+        #     r_h^2 = (2 d / lambda) (2 E_h + ||(chi_h - chi)^+||_inf).
+        # Here chi_h = chi = 0, so that term drops.
+        #
+        # Theorem 4.1 uses the estimator only through reliability, ||u - u_h||_{0,inf} <= E_h,
+        # so it applies to Etilde_h of (7.1) in NSV03, along with E_h of NSV05.
+        #
+        # The "condition number" (NSV05 name) lambda of the stability condition (4.1) is exactly
+        # computable here.  With chi = 0, Remark 4.5 reads lambda = -sup f over
+        # {u_h <= chi_h + E_h}, and f = -8 r^2 (1 - c) with c = |x|^2 - r^2 is
+        # largest at c = 0; f only decreases outside the contact set, so
+        # enlarging the set does not change the value, and lambda = 8 r^2.
+        #
+        # The comparison needs the boundary of {u_h > chi_h + E_h}.  Passing
+        # lb + Eh straight to freeboundarygraph2D() does not give it: that routine
+        # locates the *coincidence* set {|u_h - bound| < activetol} and asserts
+        # u_h >= bound, so it trips the assertion, and returns an empty edge set
+        # with debug off.  Clipping first fixes both, since
+        #     {u_h > chi_h + E_h} = {v > chi_h + E_h}
+        # when v = max(u_h, chi_h + E_h).  Note that v coincides with chi_h + E_h
+        # over a whole region rather than nowhere.
+        #
+        # Every method also gets the plain distance from F to the computed free
+        # boundary Gamma_h = boundary of {u_h = chi_h}, with no E_h offset, which
+        # is the sphere.py comparison.  UDOBR has no sup-norm estimator and hence
+        # neither r_h nor F_h, so this is the only interface quantity it has, and
+        # it is the one which can be compared across all three methods.  Note
+        # dist(F,Gamma_h) is several times smaller than dist(F,F_h), since
+        # Gamma_h is inside F_h by E_h; the two are not interchangeable.
+        if exact_known and d == 2:
+            uexact = Function(V, name="u_exact").interpolate(u_ufl)
+            _, fbexact = amr.freeboundarygraph2D(uexact, lb)
+            _, fbplain = amr.freeboundarygraph2D(uh, lb)
+            # hausdorff2D() returns None for an empty free boundary, e.g. on a
+            # coarse initial mesh; format accordingly
+            hplain = amr.hausdorff2D(fbexact, fbplain)
+            # None means an empty free boundary, and an exact 0.0 means the two
+            # nodal free boundaries coincide, as they do on the initial mesh;
+            # neither goes on a log axis, so both become a gap in the figure
+            hausplains.append(hplain if hplain else np.nan)
+            line = f"    hausdorff2D(F, Gamma_h) = " + (
+                f"{hplain:.3e}" if hplain is not None else "n/a"
+            )
+            if method in ("NSV03", "NSV05"):
+                lam = 8.0 * r ** 2
+                rh = (2.0 * d * 2.0 * Eh / lam) ** 0.5
+                lbE = Function(V).interpolate(lb + Constant(Eh))
+                uclip = Function(V).interpolate(max_value(uh, lbE))
+                _, fbbarrier = amr.freeboundarygraph2D(uclip, lbE)
+                haus = amr.hausdorff2D(fbexact, fbbarrier)
+                hausstr = f"{haus:.3e}" if haus is not None else "n/a"
+                line += (f", hausdorff2D(F, F_h) = {hausstr}, r_h = {rh:.3e}")
+                rhs.append(rh)
+                hausds.append(haus if haus else np.nan)
+            print(line)
+
         # done with this method if we reach target complexity, or run out of levels
         if dofs[-1] > args.targetnodes or j == args.maxlevels - 1:
             break
@@ -328,7 +384,8 @@ for method in methods:
             mesh = mesh.refine_marked_elements(mark)  # Netgen refinement
 
     # for figures below
-    results[method] = (dofs, errsl2, errsinf, errsH1ia, ests, eff_vals)
+    results[method] = (dofs, errsl2, errsinf, errsH1ia, ests, eff_vals, rhs, hausds,
+                       hausplains)
 
     # compute fields on final mesh (independent of method)
     gap = Function(V, name="gap = u_h - chi_h").interpolate(uh - lb)
@@ -497,3 +554,49 @@ if exact_known and mesh.comm.rank == 0:
     plt.ylabel("effectivity ratio (estimator / true-error)")
     plt.title("effectivity index vs DOFs")
     plt.savefig(efffile)
+
+    # Interface figure, in the shape of Figure 5.1 of NSV05: the strip width r_h
+    # of (4.4), and the distance it is meant to control, namely the one between
+    # the exact free boundary F and the computed barrier boundary
+    # F_h = boundary of {u_h > chi_h + E_h}.  Only the two sup-norm estimators
+    # have an r_h, and only 2D has hausdorff2D(); see the loop above.
+    #
+    # The plain distance dist(F,Gamma_h), to the computed free boundary itself,
+    # is shown for all three methods, since it is the one interface quantity they
+    # all have and so the only one which compares them.  Keep the two distances
+    # apart when reading this: Gamma_h sits inside F_h by E_h, so dist(F,Gamma_h)
+    # runs several times below dist(F,F_h), for reasons of definition rather than
+    # of method quality.
+    if d == 2:
+        figfile = f"nsv_{args.prob}_interface.png"
+        print(f"generating interface figure {figfile} ...")
+        intstylemap = {"UDOBR": "ko", "NSV03": "bs", "NSV05": "md"}
+        plt.figure()
+        for meth in methods:
+            idofs = np.array(results[meth][0])
+            iplain = np.array(results[meth][8])
+            plt.loglog(idofs, iplain, intstylemap[meth],
+                       label=meth + " dist(F,Gamma_h)")
+            if meth in ("NSV03", "NSV05"):
+                irh = np.array(results[meth][6])
+                ihaus = np.array(results[meth][7])
+                plt.loglog(idofs, ihaus, intstylemap[meth], markerfacecolor="white",
+                           label=meth + " dist(F,F_h)")
+                plt.loglog(idofs, irh, intstylemap[meth][0] + "--",
+                           label=meth + " r_h")
+        # r_h ~ sqrt(E_h), so the interface converges at half the order of the sup
+        # norm; compare the dotted line of slope -1/2 in Figure 5.1 of NSV05.
+        # Unlike the other figures this one aligns the reference line at the
+        # *finest* level, because on the coarsest meshes E_h is O(1), r_h then
+        # exceeds the diameter of the contact set, and the barrier sets carry no
+        # information; anchoring there would tilt the line for no good reason.
+        ok = np.isfinite(ihaus)
+        y = idofs ** (-1.0 / d)
+        y = y * ihaus[ok][-1] / y[ok][-1]  # fix constant so that it aligns
+        plt.loglog(idofs, y, "k:", label=f"DOFs^(-1/d) for d={d}")
+        plt.legend()
+        plt.grid(True)
+        plt.xlabel("DOFs")
+        plt.ylabel("distance")
+        plt.title("free-boundary location: estimate r_h vs Hausdorff dist()")
+        plt.savefig(figfile)

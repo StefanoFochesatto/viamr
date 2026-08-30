@@ -29,7 +29,7 @@ class VIAMR(OptionsManager, AVMMixin):
         boundary models.  For example, a purpose of solving glacier problems is to know which land
         is glaciated.  Refining near the free boundary matches user goals even if it does not
         reduce the norm error of the solution.  It does reduce the geometrical measures of set
-        errors; see hausdorf() and jaccard() in this class.
+        errors; see hausdorff2D() and jaccard() in this class.
 
     The public mark-and-refine API of the VIAMR class consists of:
 
