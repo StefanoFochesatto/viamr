@@ -8,8 +8,7 @@
 # .png figures.
 
 # TODO
-#   1. add NSV05
-#   2. add figure comparing NSV05 estimate of hausdorff to computed hausdorf (2D only)
+#   add figure comparing NSV05 estimate of hausdorff to computed hausdorf (2D only)
 
 # major parameters
 d = 2  # spatial dimension
@@ -75,7 +74,7 @@ def errornorm_Linf(amr, u, uh):
 print(f"solving example 7.2 ({d}D case) from Nochetto, Siebert, & Veeser (2003) ...")
 r = 0.7  # parameter in defining problem
 results = {}
-methods = ["UDOBR", "NSV03"]
+methods = ["UDOBR", "NSV03", "NSV05"]
 for method in methods:
     print("")
     mesh = mesh0
@@ -133,19 +132,28 @@ for method in methods:
             mark = amr.unionmarks(fmark, imark)
             ests.append(tot_eta)
             # effectivity index vs the inactive set H^1 seminorm BR78 estimator targets
-            eff_br = tot_eta / errsH1ia[-1] if errsH1ia[-1] > 0 else float("nan")
-            print(f"  eff_BR (inactive-set, energy norm) = {eff_br:.3f}")
-            eff_vals.append(eff_br)
-        else:
+            eff = tot_eta / errsH1ia[-1] if errsH1ia[-1] > 0 else float("nan")
+            print(f"  eff_BR (inactive-set, energy norm) = {eff:.3f}")
+        elif method == "NSV03":
             (mark, etainf, etad, sigmah, Eh) = amr.nsv03mark(
                 uh, psih, g, f_ufl, g_ufl, theta=0.5, dualtol=dualtol, method="total"
             )
             ests.append(Eh)
             # effectivity index vs NSV03's ||u-u_h||_infty target norm: Eh is the
             # whole-domain estimator Etilde_h of (7.1)
-            eff_nsv = Eh / errsinf[-1] if errsinf[-1] > 0 else float("nan")
-            print(f"  eff_NSV03 (sup norm) = {eff_nsv:.3f}")
-            eff_vals.append(eff_nsv)
+            eff = Eh / errsinf[-1] if errsinf[-1] > 0 else float("nan")
+            print(f"  eff_NSV03 (sup norm) = {eff:.3f}")
+        elif method == "NSV05":
+            (mark, eta, sz, fullcontact, Eh) = amr.nsv05mark(
+                uh, psih, g, f_ufl, g_ufl, theta=0.5, dualtol=dualtol, method="total"
+            )
+            ests.append(Eh)
+            # effectivity index vs NSV05's ||u-u_h||_infty target norm
+            eff = Eh / errsinf[-1] if errsinf[-1] > 0 else float("nan")
+            print(f"  eff_NSV05 (sup norm) = {eff:.3f}")
+        else:
+            raise NotImplementedError
+        eff_vals.append(eff)
 
         # done with this method if we reach target complexity
         if dofs[-1] > targetnodes:
@@ -179,8 +187,10 @@ for method in methods:
         imark.rename("UDO inactive mark")
         fmark.rename("UDO FB mark")
         fields += [imark, fmark]
-    else:
+    elif method == "NSV03":
         fields += [sigmah, etainf, etad]
+    elif method == "NSV05":
+        fields += [eta, sz, fullcontact]
     if mesh.comm.size > 1:
         fields.append(rank)
     VTKFile(outfile).write(*fields)
@@ -191,9 +201,9 @@ if mesh.comm.rank == 0:
     import numpy as np
 
     print(f"generating convergence and effectivity figures nsv_*.png ...")
+    markers = ["ko", "bs", "md"]
 
     figfile = "nsv_convergence_l2.png"
-    markers = ["ko", "bs"]
     plt.figure()
     for j in range(len(methods)):
         meth = methods[j]
@@ -212,7 +222,6 @@ if mesh.comm.rank == 0:
     plt.savefig(figfile)
 
     figfile = "nsv_convergence_h1ia.png"
-    markers = ["ko", "bs"]
     plt.figure()
     for j in range(len(methods)):
         meth = methods[j]
@@ -233,14 +242,13 @@ if mesh.comm.rank == 0:
     plt.savefig(figfile)
 
     figfile = "nsv_convergence_linf.png"
-    markers = ["ko", "bs"]
     plt.figure()
     for j in range(len(methods)):
         meth = methods[j]
         dofs, errs, ests = np.array(results[meth][0]), np.array(results[meth][2]), np.array(results[meth][4])
         #print(np.polyfit(np.log(dofs), np.log(errs), 1))
         plt.loglog(dofs, errs, markers[j], label=meth+' error')
-        if meth == "NSV03":
+        if meth in ("NSV03", "NSV05"):
             plt.loglog(dofs, ests, markers[j], markerfacecolor='white', label=meth+' estimator')
         if j == len(methods) - 1:
             y = dofs ** (-2.0 / d)
@@ -261,7 +269,8 @@ if mesh.comm.rank == 0:
     # x-axis, and a horizontal reference line at the ideal value of 1
     efffile = "nsv_effectivity.png"
     effstylemap = {"UDOBR": ("ko", "BR78 (inactive-set, energy norm)"),
-                    "NSV03": ("bs", "NSV03 (sup norm)")}
+                   "NSV03": ("bs", "NSV03 (sup norm)"),
+                   "NSV05": ("md", "NSV05 (sup norm)")}
     plt.figure()
     for meth in methods:
         edofs, evals = np.array(results[meth][0]), np.array(results[meth][5])
