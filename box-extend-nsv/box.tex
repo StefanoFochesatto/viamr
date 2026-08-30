@@ -113,11 +113,7 @@ The fixed boundary condition $v=g$ is in the trace sense.  The continuous VI pro
 \end{equation}
 This is the immediate generalization of problem (1.1) of \cite{NSV03}, from a one-sided constraint to the bilateral case.  We state the VI in form \eqref{eq:VI}, matching common conventions elsewhere in the literature \cite{BuelerFarrell2024,Falk1974,GraeserKornhuber2009,KinderlehrerStampacchia1980}, and in the library itself, and it is obviously equivalent to the reversed form ``$\left< \nabla u, \nabla(u - v)\right> \le \left< f, u - v\right>$'' used in \cite[formula (1.1)]{NSV03}.
 
-It is well-known that \eqref{eq:VI} admits a unique H\"older continuous solution $u \in \mathcal{K}$ \cite{KinderlehrerStampacchia1980}.
-%% TODO(citation): NSV03 attributes Hölder continuity of u, in the
-%% unilateral case, to Frehse & Mosco (1982); find and verify a
-%% citation that actually covers the box-constrained/double-obstacle case
-%% before this goes further, rather than asserting one.
+It is well-known that \eqref{eq:VI} admits a unique solution $u \in \mathcal{K}$ \cite[Theorem 6.2]{KinderlehrerStampacchia1980}.  Regularity of $u$ beyond $H^1(\Om)$ is a separate matter, and we take it up below, where it is actually needed.
 
 Let $\sigma \in H^{-1}(\Om) = \mathring H^1(\Om)^*$ be the \emph{residual functional}
 defined by
@@ -156,6 +152,8 @@ For the continuum problem, compactness of $\bar\Om$ allows us to quantify the se
 equivalently the largest constant with $\psilo + \delta_{\min} \le \psiup$ on $\bar\Om$.  The minimum is attained, and positive, by nondegeneracy \eqref{eq:nondeg}, continuity of $\psiup - \psilo$, and compactness of $\bar\Om$.
 
 Let $L^\top \ge 0$ be the H\"older seminorm of $\psiup$ on $\bar\Om$, i.e.\ the least constant with $|\psiup(x) - \psiup(y)| \le L^\top |x-y|^\alpha$ for all $x,y \in \bar\Om$.  This value is finite since $\psiup \in C^{0,\alpha}(\bar\Om)$, but note it can be zero, related to the division convention below.  We assume, as does \cite{NSV03} for the unilateral problem, that the solution $u$ is H\"older continuous on $\bar\Om$ with some exponent $\beta \in (0,1]$ and seminorm $L_u \ge 0$.
+
+Non-degeneracy \eqref{eq:nondeg} keeps this from being a new kind of assumption.  At each point one of the two constraints is slack, so a continuous $u$ is, near that point, the solution of a one-sided problem, where $f \in L^\infty(\Om)$ and a $C^{0,\alpha}(\bar\Om)$ obstacle give $u \in C^{0,\alpha}(\bar\Om)$ \cite[Theorem 2.1]{FinziVita1982}, with $\beta < \alpha$ under inhomogeneous boundary conditions \cite{Biroli1979}.
 
 \begin{proposition}[Separation of the contact sets]
 \label{prop:separation}
@@ -764,8 +762,6 @@ Bounding $\|w\|_{0,\infty;\Om}$ is a question about the linear problem \eqref{eq
 %%      Holder continuity of w; likely unchanged from NSV03 modulo notation.
 %%  (f) Efficiency / lower bounds (NSV03 sec. 6): Prop. 6.2/6.3 analogues
 %%      (bubble functions), needed for both Thbot and Thtop.
-%%  (g) Still open: citation for Holder continuity of u in the
-%%      box-constrained case (see TODO(citation) in section 1 above).
 %%  (h) Bilateral analogues of NSV05: full localization within the
 %%      full-contact sets, and barrier sets for the two free boundaries.
 %%      See Remark \ref{rem:localization}.
