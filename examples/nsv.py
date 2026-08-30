@@ -7,6 +7,10 @@
 # on "7.2 Example: Constant Obstacle".  Generates convergence and effectivity
 # .png figures.
 
+# TODO
+#   1. add NSV05
+#   2. add figure comparing NSV05 estimate of hausdorff to computed hausdorf (2D only)
+
 # major parameters
 d = 2  # spatial dimension
 targetnodes = 5e4 if d == 2 else 2e4  # target number of nodes; less in 3D because matrices
@@ -68,17 +72,16 @@ def errornorm_Linf(amr, u, uh):
     return amr.scalarrange(err)[1]
 
 
-print(f"solving {d}D example from Nochetto, Siebert, & Veeser (2003) ...")
+print(f"solving example 7.2 ({d}D case) from Nochetto, Siebert, & Veeser (2003) ...")
 r = 0.7  # parameter in defining problem
 results = {}
-effs = {}  # effs[method] = (eff_dofs, eff_vals), for the effectivity-index figure
-methods = ["UDOBR", "NSV"]
+methods = ["UDOBR", "NSV03"]
 for method in methods:
+    print("")
     mesh = mesh0
-    dofs, errs, errsinf = [], [], []
-    eff_dofs, eff_vals = [], []
+    dofs, errsl2, errsinf, errsH1ia, ests, eff_vals = [], [], [], [], [], []
     for j in range(maxlevs):
-        print(f"using AMR by {method} ...")
+        print(f"using AMR by {method} method ...")
         x = SpatialCoordinate(mesh)
         V = FunctionSpace(mesh, "CG", 1)
         amr = VIAMR(debug=True)
@@ -112,41 +115,36 @@ for method in methods:
         )
         solver.solve(bounds=(psih, INFupper))
 
-        # error relative to exact (UFL) solution
+        # compute error norms, disregarding relevance to method
         u_ufl = conditional(x2 <= r ** 2, 0.0, circle ** 2)
         dofs.append(V.dim())
-        errs.append(float(errornorm(u_ufl, uh)))  # default norm is L^2
-        errsinf.append(float(errornorm_Linf(amr, u_ufl, uh)))  # L^inf too
-        print(f"  level {j}: nodes = {dofs[-1]}, |u-u_h|_2 = {errs[-1]:.3e},  |u-u_h|_inf = {errsinf[-1]:.3e}, ")
+        errsl2.append(float(errornorm(u_ufl, uh)))  # default norm is L^2
+        errsinf.append(float(errornorm_Linf(amr, u_ufl, uh)))
+        iamark = amr.eleminactive(uh, psih, strong=True)
+        dus = inner(grad(u_ufl - uh), grad(u_ufl - uh))
+        errsH1ia.append(assemble(dus * iamark * dx(degree=6)) ** 0.5)
+        print(f"  level {j}: nodes = {dofs[-1]}, |u-u_h|_2 = {errsl2[-1]:.3e}, |u-u_h|_inf = {errsinf[-1]:.3e}, ")
 
-        # compute marking; note fmark is written to file for comparison
+        # marking and effectivity
         if method == "UDOBR":
             fmark = amr.udomark(uh, psih, n=nUDO)
             residual = -div(grad(uh)) - f_ufl
             (imark, _, tot_eta) = amr.brinactivemark(uh, psih, residual, theta=0.5, method="total")
             mark = amr.unionmarks(fmark, imark)
-            # effectivity index vs the SAME inactive set brinactivemark()
-            # restricts its estimator to; matches the H^1 seminorm BR78's
-            # unweighted estimator targets
-            iamark = amr.eleminactive(uh, psih, strong=True)
-            dus = inner(grad(u_ufl - uh), grad(u_ufl - uh))
-            errH1_inactive = assemble(dus * iamark * dx(degree=6)) ** 0.5
-            eff_br = tot_eta / errH1_inactive if errH1_inactive > 0 else float("nan")
+            ests.append(tot_eta)
+            # effectivity index vs the inactive set H^1 seminorm BR78 estimator targets
+            eff_br = tot_eta / errsH1ia[-1] if errsH1ia[-1] > 0 else float("nan")
             print(f"  eff_BR (inactive-set, energy norm) = {eff_br:.3f}")
-            eff_dofs.append(dofs[-1])
             eff_vals.append(eff_br)
         else:
             (mark, etainf, etad, sigmah, Eh) = amr.nsv03mark(
                 uh, psih, g, f_ufl, g_ufl, theta=0.5, dualtol=dualtol, method="total"
             )
-            # effectivity index vs NSV03's own target norm: Eh is the estimator
-            # Etilde_h of (7.1), the whole-domain (not inactive-set-restricted)
-            # quantity its pointwise theory bounds ||u-u_h||_infty by, in contrast
-            # to BR78/BV00's energy-norm estimator above
-            errLinf = errornorm_Linf(amr, u_ufl, uh)
-            eff_nsv = Eh / errLinf if errLinf > 0 else float("nan")
-            print(f"  eff_NSV (sup norm) = {eff_nsv:.3f}")
-            eff_dofs.append(dofs[-1])
+            ests.append(Eh)
+            # effectivity index vs NSV03's ||u-u_h||_infty target norm: Eh is the
+            # whole-domain estimator Etilde_h of (7.1)
+            eff_nsv = Eh / errsinf[-1] if errsinf[-1] > 0 else float("nan")
+            print(f"  eff_NSV03 (sup norm) = {eff_nsv:.3f}")
             eff_vals.append(eff_nsv)
 
         # done with this method if we reach target complexity
@@ -160,8 +158,7 @@ for method in methods:
             mesh = mesh.refine_marked_elements(mark)  # Netgen refinement
 
     # for figures below
-    results[method] = (dofs, errs, errsinf)
-    effs[method] = (eff_dofs, eff_vals)
+    results[method] = (dofs, errsl2, errsinf, errsH1ia, ests, eff_vals)
 
     # compute fields on final mesh (independent of method)
     uerr = Function(V, name="u_err = u_h - u_exact").interpolate(uh - u_ufl)
@@ -211,7 +208,28 @@ if mesh.comm.rank == 0:
     plt.grid(True)
     plt.xlabel("DOFs")
     plt.ylabel("norm error |u-u_h|_2")
-    plt.title("compare Figure 7.1 in Nochetto, Siebert, & Veeser (2003)")
+    plt.title("L^2 errors")
+    plt.savefig(figfile)
+
+    figfile = "nsv_convergence_h1ia.png"
+    markers = ["ko", "bs"]
+    plt.figure()
+    for j in range(len(methods)):
+        meth = methods[j]
+        dofs, errs, ests = np.array(results[meth][0]), np.array(results[meth][3]), np.array(results[meth][4])
+        #print(np.polyfit(np.log(dofs), np.log(errs), 1))
+        plt.loglog(dofs, errs, markers[j], label=meth+' error')
+        if meth == "UDOBR":
+            plt.loglog(dofs, ests, markers[j], markerfacecolor='white', label=meth+' estimator')
+        if j == len(methods) - 1:
+            y = dofs ** (-1.0 / d)
+            y = y * errs[0] / y[0]  # fix constant so that it aligns
+            plt.loglog(dofs, y, "k:", label=f"DOFs^(-1/d) for d={d}")
+    plt.legend()
+    plt.grid(True)
+    plt.xlabel("DOFs")
+    plt.ylabel("|u-u_h|_H1 inactive")
+    plt.title("H^1 errors restricted to inactive set")
     plt.savefig(figfile)
 
     figfile = "nsv_convergence_linf.png"
@@ -219,9 +237,11 @@ if mesh.comm.rank == 0:
     plt.figure()
     for j in range(len(methods)):
         meth = methods[j]
-        dofs, errs = np.array(results[meth][0]), np.array(results[meth][2])
+        dofs, errs, ests = np.array(results[meth][0]), np.array(results[meth][2]), np.array(results[meth][4])
         #print(np.polyfit(np.log(dofs), np.log(errs), 1))
-        plt.loglog(dofs, errs, markers[j], label=meth)
+        plt.loglog(dofs, errs, markers[j], label=meth+' error')
+        if meth == "NSV03":
+            plt.loglog(dofs, ests, markers[j], markerfacecolor='white', label=meth+' estimator')
         if j == len(methods) - 1:
             y = dofs ** (-2.0 / d)
             y = y * errs[0] / y[0]  # fix constant so that it aligns
@@ -230,6 +250,7 @@ if mesh.comm.rank == 0:
     plt.grid(True)
     plt.xlabel("DOFs")
     plt.ylabel("norm error |u-u_h|_inf")
+    plt.title("L^inf errors (compare Figure 7.1 top in NSV03)")
     plt.savefig(figfile)
 
     # effectivity index = estimator / true error, in whichever norm the
@@ -240,10 +261,10 @@ if mesh.comm.rank == 0:
     # x-axis, and a horizontal reference line at the ideal value of 1
     efffile = "nsv_effectivity.png"
     effstylemap = {"UDOBR": ("ko", "BR78 (inactive-set, energy norm)"),
-                    "NSV": ("bs", "NSV03 (sup norm)")}
+                    "NSV03": ("bs", "NSV03 (sup norm)")}
     plt.figure()
     for meth in methods:
-        edofs, evals = np.array(effs[meth][0]), np.array(effs[meth][1])
+        edofs, evals = np.array(results[meth][0]), np.array(results[meth][5])
         style, label = effstylemap[meth]
         plt.semilogx(edofs, evals, style, label=label)
     plt.axhline(1.0, color="k", linestyle=":", label="ideal eff=1")
