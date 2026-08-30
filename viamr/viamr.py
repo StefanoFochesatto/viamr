@@ -156,6 +156,28 @@ class VIAMR(OptionsManager, AVMMixin):
         total = w.function_space().mesh().comm.allreduce(local, op=MPI.SUM)
         return float(total) ** (1.0 / p)
 
+    def _domaindiameter(self, mesh):
+        """Compute the diameter of the mesh's bounding box, collectively from the
+        coordinate field.  This is a cheap stand-in for diam(Omega), used to
+        nondimensionalize a mesh size before taking its logarithm; see
+        nsv05mark().  Correct in parallel, including when a process owns no local
+        coordinate dofs."""
+        xyz = mesh.coordinates.dat.data_ro
+        if xyz.ndim == 1:
+            xyz = xyz.reshape((-1, 1))
+        comm = mesh.comm
+        diamsqr = 0.0
+        for j in range(xyz.shape[1]):
+            empty = xyz.shape[0] == 0
+            lo = comm.allreduce(
+                PETSc.INFINITY if empty else float(xyz[:, j].min()), op=MPI.MIN
+            )
+            hi = comm.allreduce(
+                PETSc.NINFINITY if empty else float(xyz[:, j].max()), op=MPI.MAX
+            )
+            diamsqr += (hi - lo) ** 2
+        return diamsqr ** 0.5
+
     def meshsizes(self, mesh):
         """Compute number of vertices, number of elements, and range of
         mesh diameters."""
@@ -1220,17 +1242,24 @@ class VIAMR(OptionsManager, AVMMixin):
 
         ** Practical implementation **
 
-        1. Following section 3 of NSV05, the unknown constant and the logarithmic factor are replaced by the single practical constant:
-            C_* |log h_min|^2  -->  C0 = 0.02.
+        1. Section 3 of NSV05 replaces the whole prefactor C_* |log h_min|^2 by the single constant 0.02.  We keep the logarithmic factor instead, and treat C0 = 0.02 as a coefficient:
+
+            C_* |log h_min|^2  -->  C0 |log(h_min / diam Omega)|^2
+
+        Here h_min = min_z h_z as in NSV05.  Dividing by the bounding box makes the argument dimensionless, so the estimator is invariant under a rescaling of the geometry.  The reason for keeping the log factor is that a bare 0.02 is not reliable.  In the examples of NSV05 section 3 the solution vanishes in a neighborhood of the boundary, so the localized residual is never the binding term there.  However, example 7.2 of NSV03 (2003 paper), reveals the flaw: it has a large inactive set on which u is smooth and nonzero, and the pointwise error there is ordinary P1 interpolation error, ||u - u_h||_{inf;T} ~ h^2 |D^2 u| / 8.  Meanwhile eta_z ~ h^2 |D^2 u|, since the load enters only through its oscillation and the jump term has to carry the whole residual, so the prefactor on max_z eta_z must be at least about 1/8.  A bare 0.02 is roughly eight times too small.  On quasi-uniform meshes this stays hidden, because the obstacle term ||(u_h - chi)^+||_{inf;Lambda_h} is then the largest term in E_h, but adaptive refinement drives that term down much faster than the residual term, and the estimator then falls below the error.  With the logarithmic factor restored, |log(h_min / diam Omega)|^2 is 20 to 35 on the meshes that example generates, so the effective prefactor is 0.4 to 0.7 and E_h dominates at every level.
 
         2.  The obstacle chi is the *continuum* one, supplied as the UFL expression chi_ufl; see _obstacleterms().  Both obstacle terms use it, since the barrier arguments of Propositions 2.5 and 2.6 compare u_h against chi itself.  With chi_ufl=None we assume instead that the a posteriori method only has access to the discrete obstacle on the current mesh, i.e. chi = chi_h = lb.  Then ||(chi - u_h)^+||_inf vanishes, because we *assert primal admissibility* against chi_h, and the blocked gap reduces to u_h - lb.  That default matters most for a curved obstacle, which is not representable in u_h's space: there u_h touches chi_h rather than chi, and the difference can be all of ||u - u_h||_{0,inf;Omega}, leaving the estimator blind to the dominant error.
 
         3. Note that E_h is a single number: a max over nodes plus global sup norms.  Localizing it to elements for marking purposes is not spelled out in NSV05, so we follow what section 7.1 of NSV03 does for its own estimator.  Define
 
-            eta_T = C0 max_{z a vertex of T} eta_z                localized residual on element
+            eta_T = CC max_{z a vertex of T} eta_z                localized residual on element
                     + ||(chi - u_h)^+||_{inf; T}                  obstacle approximation (zero if chi_ufl is None)
                     + ||(u_h - chi)^+||_{inf; Lambda_h cap T}     inactive overlap with negative residual set
                     + ||g - I_h g||_{inf; partial Omega cap T}.   boundary data approximation
+
+        where
+
+            CC = C0 |log(h_min / diam Omega)|^2
 
         ** Details **
 
@@ -1363,6 +1392,10 @@ class VIAMR(OptionsManager, AVMMixin):
         # star-based residual indicator eta_z of (2.15); see doc string for the
         # closed form of the oscillation term
         hz = self._elemtonodeextreme(hT, CG1, minimum=False, defaultval=0.0)
+        # the prefactor C0 |log(h_min / diam Omega)|^2 on the localized residual;
+        # see the doc string for why the logarithmic factor is kept
+        hmin = self._globalextreme(hz, minimum=True)
+        Clog = C0 * np.log(hmin / self._domaindiameter(mesh)) ** 2
         osc_ufl = conditional(
             abs(rho) <= rhotol * rhoscale,
             0.5 * (fmaxplusz - fminplusz),
@@ -1421,7 +1454,7 @@ class VIAMR(OptionsManager, AVMMixin):
         )
 
         # elementwise estimator; see doc string above for the formula
-        residterm = Function(DG0).interpolate(C0 * etaR)
+        residterm = Function(DG0).interpolate(Clog * etaR)
         eta = Function(DG0, name="eta (NSV05)").interpolate(
             residterm + obstacleerr + blockgap + bdryerr
         )
