@@ -33,7 +33,7 @@ Next see the richer examples  `sphere.py` and `spiral.py`.  These examples toget
 
 These 2 addtional examples also solve the classical obstacle problem:
 
-  * `nsv.py` compares UDO+BR to the NSV method from Nochetto, Siebert, & Veeser (2003).  The problem solved is "7.2 Example: Constant Obstacle" from that reference.  A convergence figure is generated, which is explained in the paper.
+  * `nsv.py` compares UDO+BR to the NSV methods from Nochetto, Siebert, & Veeser (2003, 2005).  Option `-prob easy`, the default, solves "7.2 Example: Constant Obstacle" from the 2003 reference; it has a known exact solution, so convergence and effectivity figures are generated, and one of these is explained in the paper.  Option `-prob pyramid` solves the pyramid obstacle problem of subsection 3.2 of the 2005 reference, on a diamond domain; it has no known exact solution, so it only reports the estimators and plots their decay.
 
   * `blisters.py` solves a classical obstacle problem which generates a large active set, covering more than 80% of the domain.  Resolving the connectedness of the inactive set in this example requires high resolution.
 
