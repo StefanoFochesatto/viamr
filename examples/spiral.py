@@ -2,12 +2,14 @@
 # generates a spiral-shaped coincidence (active) set.
 # This example generates 3 .pvd files, result_spiral_{udobr,vcdbr,nsv}.pvd.
 # Notes:
-#   1) For simplicity we just use an initial Firedrake mesh, so AVM is not applied.
-#   2) Because of thin and highly-nontrivial active set, Jaccard similarity
-#      is zero until a few levels in.
+#   1 For simplicity we just use a Firedrake mesh.  AVM is not applied.
+#   2 n=0 UDO and [0.1,0.9]-bracket VCD are compared.
+#   3 Because of thin and highly-nontrivial active set, Jaccard similarity
+#     is zero until a few levels in.
+#   4 The less expensive NSV03 method is used.
 
 m0 = 10  # initial mesh is m0 x m0
-targetnodes = 50000  # stop on first mesh to reach this many nodes
+targetnodes = 1e4  # stop on first mesh to reach this many nodes
 maxlevels = 12  # backstop the targetnodes
 
 from firedrake import *
@@ -100,20 +102,13 @@ for amrtype in typelist:
             residual = -div(grad(uh))
             imark, _, _ = amr.brinactivemark(uh, lb, residual, method="total")
             if amrtype == "udobr":
-                mark = amr.udomark(uh, lb, n=1)
+                mark = amr.udomark(uh, lb, n=0)
             elif amrtype == "vcdbr":
                 mark = amr.vcdmark(uh, lb, bracket=[0.1, 0.9])
             mark = amr.unionmarks(mark, imark)
         else:
-            (mark, _, _, _, _) = amr.nsv03mark(
-                uh,
-                lb,
-                Constant(0.0),
-                Constant(0.0),
-                Constant(0.0),
-                method="total",
-                dualtol=1.0e-6,
-            )
+            z = Constant(0.0)
+            mark, _, _, _, _ = amr.nsv03mark(uh, lb, z, z, z, method="total", dualtol=1.0e-6)
 
         mesh = amr.refinesbr2D(mesh, mark)
         meshHist.append(mesh)
@@ -137,15 +132,8 @@ for amrtype in typelist:
         fields += [mark, fbmark, imark]
     else:
         # for output file, compute fields on final mesh
-        (mark, etainf, etad, sigmah, _) = amr.nsv03mark(
-            uh,
-            lb,
-            Constant(0.0),
-            Constant(0.0),
-            Constant(0.0),
-            method="total",
-            dualtol=1.0e-6,
-        )
+        z = Constant(0.0)
+        mark, etainf, etad, sigmah, _ = amr.nsv03mark(uh, lb, z, z, z, method="total", dualtol=1.0e-6)
         mark.rename("mark")
         fields += [mark, sigmah, etainf, etad]
     VTKFile(outfile).write(*fields)
