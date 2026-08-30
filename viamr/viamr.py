@@ -754,16 +754,17 @@ class VIAMR(OptionsManager, AVMMixin):
     def fixedratemark(self, eta, theta, method):
         """Marks elements according to the values of estimator eta in DG0 and a threshold which depends on the scalar theta.
 
-        Allowed values are method in {'max', 'total'}.  Both methods mark all elements with eta greater than ethresh.
+        Allowed values are method in {'max', 'total'}.  Both methods threshold eta at a value ethresh, and neither ever marks an element where eta = 0.
 
-        The default 'max' strategy sets
+        The default 'max' strategy marks {eta > ethresh}, where
           ethresh = theta * max eta
-        Here theta is a relative threshold, and the number of elements marked is a *decreasing function of theta*: theta near 1 marks only the worst elements, theta near 0 marks nearly all of them.  (See Verfuerth (2013). A Posteriori Error Estimation Techniques for Finite Element Methods, Oxford University Press, section 4.2.)
+        Here theta is a relative threshold, and the number of elements marked is a *decreasing function of theta*: theta near 1 marks only the worst elements, theta near 0 marks nearly all of them.  (See Verfuerth (2013). A Posteriori Error Estimation Techniques for Finite Element Methods, Oxford University Press, section 4.2.)  Note ethresh is a *fraction* of the maximum, so it is generally not a value which eta attains, and the comparison is therefore strict.  In particular eta = 0 everywhere gives ethresh = 0 and marks nothing.
 
-        The 'total' strategy sorts all elements (globally, across processes) by decreasing eta value.  Then the threshold
+        The 'total' strategy sorts all elements (globally, across processes) by decreasing eta value.  Then it marks {eta >= ethresh}, where the threshold
           ethresh = eta(index)
-        equals the eta value where
-          theta * (sum_i eta_i) = sum_{eta_i > ethresh} eta_i
+        is the largest eta value for which
+          theta * (sum_i eta_i) <= sum_{eta_i >= ethresh} eta_i
+        Here ethresh *is* a value which eta attains, namely the smallest one in the marked set, so the comparison must include equality for the marked set to reach the theta fraction at all.  A strict comparison would leave the set one element short of the criterion every time, and would mark nothing whatsoever when the eta values are all tied, as they are on a mesh symmetric enough to give bit-identical indicators.
         (I.e. theta gives the fraction of the total eta sum.)  This strategy is the refine-only version of the "fixed-rate" strategy, with X=theta and Y=0, described in section 4.2 of
           W. Bangerth & R. Rannacher (2003).  Adaptive Finite Element Methods for
           Differential Equations, Springer Basel.
@@ -781,10 +782,14 @@ class VIAMR(OptionsManager, AVMMixin):
         with eta.dat.vec_ro as eta_:
             if method == "max":
                 ethresh = theta * eta_.max()[1]  # process independent
+                atthresh = False  # ethresh is not an attained value; see doc string
             elif method == "total":
                 comm = DG0.mesh().comm
                 values = np.concatenate(comm.allgather(eta_.array_r))
-                if values.size == 0:  # global mesh has no elements
+                # drop the zeros, so that they cannot be swept in by the
+                # inclusive comparison below when eta vanishes on much of the mesh
+                values = values[values > 0.0]
+                if values.size == 0:  # no elements globally, or eta vanishes
                     ethresh = PETSc.INFINITY
                 else:
                     sorted_values = np.sort(values)[::-1]  # sort in descending order
@@ -792,11 +797,15 @@ class VIAMR(OptionsManager, AVMMixin):
                     target = np.sum(values) * theta  # scalar
                     idx = np.argmax(cumsum >= target)  # first index so that cumsum_i >= target
                     ethresh = sorted_values[idx]
+                atthresh = True  # ethresh is an attained value; see doc string
             else:
                 raise ValueError("unknown method for VIAMR.fixedratemark()")
 
+        # the marked set must include ethresh itself exactly when ethresh is a
+        # value eta attains, namely in the 'total' case
+        emark = ge(eta, ethresh) if atthresh else gt(eta, ethresh)
         mark = Function(DG0, name="mark (fixedratemark)").interpolate(
-            conditional(gt(eta, ethresh), 1.0, 0.0)
+            conditional(emark, 1.0, 0.0)
         )
         return mark, ethresh
 
