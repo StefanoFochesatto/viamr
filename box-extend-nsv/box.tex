@@ -60,7 +60,7 @@ urlcolor=blue,
 \newcommand{\ombot}{\omega_\bot}
 \newcommand{\omtop}{\omega^\top}
 
-\title[Appendix: A posteriori bounds for box-constrained VIs]{Appendix: Pointwise a posteriori error bounds \\ for box-constrained elliptic variational inequalities}
+\title[Pointwise a posteriori bounds for box-constrained VIs]{Pointwise a posteriori error bounds \\ for finite element solutions of \\ box-constrained elliptic variational inequalities}
 
 \author{Ed Bueler \and Claude (Anthropic)}
 
@@ -75,7 +75,7 @@ The VIAMR library (\href{https://github.com/StefanoFochesatto/viamr}{github.com/
 
 However, for classical obstacle problems, namely unilateral problems where the operator is the (weak) Laplacian and the corresponding PDE is the Poisson equation, the library also implements element marking using the fully-rigorous \emph{a posteriori} estimators from Nochetto, Siebert, \& Veeser \cite{NSV03,NSV05}.  Reliability (error $\preceq$ estimator) and efficiency (estimator $\preceq$ error) are proven in the $L^\infty$ pointwise norm for these estimators, plus localization for the latter.  Such precision is generally not available for nonlinear and/or degenerating operators, and it is not proven for the partly-heuristic methods in the library.
 
-This Appendix extends \cite{NSV03}'s proof of reliability and efficiency to the bilateral case, that is, with continuous lower \emph{and upper} bounds.  The sequence of topics here, and much of the notation, generally follows the original.  Note that the operator must still be the ordinary linear Laplacian; this is not changed.
+This paper extends \cite{NSV03}'s proof of reliability and efficiency to the bilateral case, that is, with continuous lower \emph{and upper} bounds.  The sequence of topics here, and much of the notation, generally follows the original.  Note that the operator must still be the ordinary linear Laplacian; this is not changed.
 
 We are not aware of any pointwise \emph{a posteriori} theory for the bilateral problem, which is why we write this out.  Relatedly, Ot\'arola, Rankin, \& Salgado \cite{Otarolaetal2019} prove reliable and efficient maximum-norm \emph{a posteriori} bounds for a problem with genuine box constraints, using the machinery of \cite{NSV03}, but their constrained variable is a control, and it is determined by a pointwise projection of the adjoint state, so there is no free boundary of the present kind, and no pointwise barrier construction of the sort in \S \ref{sec:barriers}.  (Our constrained variable is the solution of the VI itself.)
 
@@ -697,6 +697,7 @@ A boundary vertex contributes nothing, because $\Pih v \in \Vhr$ vanishes there.
 
 The first two sums used the pointwise signs of $\sigma_h$ on wholly-active elements, from \S\ref{sec:discretization}, while the third used only nodal values of $\sigma_h$ and the ball averages defining $\Pih$.  In particular no hypothesis relating $h$ to the geometry of the contact sets is needed, and the separation constant $r_0$ of Proposition~\ref{prop:separation} again plays no role.
 
+
 \subsection{Lower barrier}
 
 \begin{proposition}[Lower barrier]
@@ -722,7 +723,7 @@ Now consider \eqref{eq:sigmatildesplit} term by term.  If $T \in \Thtop$ then $\
 \end{proof}
 
 
-\subsection{Partial pointwise error estimate}
+\subsection{Initial pointwise error estimate}
 
 Subtracting $u_h$ from the two barriers, Propositions~\ref{prop:upperbarrier} and~\ref{prop:lowerbarrier} give
 \begin{align}
