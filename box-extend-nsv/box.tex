@@ -13,6 +13,7 @@ citecolor=Red,
 urlcolor=blue,
 ]{hyperref}
 
+\newtheorem{theorem}{Theorem}
 \newtheorem{proposition}{Proposition}
 \newtheorem{lemma}{Lemma}
 \newtheorem{assumption}{Assumption}
@@ -548,8 +549,7 @@ Let $w \in \mathring H^1(\Om)$ be the Riesz representation of the Galerkin funct
 \label{eq:w}
   \int_\Om \nabla w \cdot \nabla\varphi = \left<\Gh,\varphi\right> \qquad \text{for all } \varphi \in \mathring H^1(\Om).
 \end{equation}
-As in \cite[\S 4]{NSV03} we assume throughout this section that $w$ is continuous.  This is a statement about the linear problem \eqref{eq:w}, in which the obstacles enter only through the data $\Gh$, so \cite[Lemma 5.1]{NSV03} applies here to justify H\"older continuity of $w$.
-% FIXME with $\Lamh$ now the bilateral active region of \eqref{eq:Qhbound}.  We have not yet transcribed that argument.
+As in \cite[\S 4]{NSV03} we use throughout this section that $w$ is continuous.  This is not an extra hypothesis.  Continuity is a statement about the linear problem \eqref{eq:w}, in which the obstacles enter only through the data $\Gh$, and Lemma~\ref{lem:holder} below establishes H\"older continuity of $w$ in the box-constrained case.  Nothing in \S\ref{sec:pointwise} depends on the present section, so there is no circularity.
 
 
 \subsection{Reduction to two pairings}
@@ -751,13 +751,218 @@ Our estimator localizes to the star-dilated sets \eqref{eq:omegas} and not to th
 Bounding $\|w\|_{0,\infty;\Om}$ is a question about the linear problem \eqref{eq:w} only, and it is taken up next.
 
 
+\section{Pointwise estimates} \label{sec:pointwise}
+
+Estimate \eqref{eq:barrierbound} is computable except for $\|w\|_{0,\infty;\Om}$, and $w$ solves the linear problem \eqref{eq:w}.  The obstacles enter that problem only as the data $\Gh$, and \S \ref{sec:estimator} has already put $\Gh$ into a form which does not distinguish them.  Consequently this section follows \cite[\S 5]{NSV03} without structural change, and the box constraint appears only in the readings $\Thzero = \Thbot \cup \Thtop$ inside \eqref{eq:Rp} and $\Lamh = \Lamhbot \cup \Lamhtop$ in \eqref{eq:Qhbound}.  We write the argument out anyway, both because those readings have to be checked and because the section supplies the continuity of $w$ used in \S \ref{sec:barriers}.
+
+The difficulty addressed here is a mismatch of orders.  What linear theory controls directly is a H\"older norm of $w$, and only by a first-order quantity, whereas $\|u-u_h\|_{0,\infty;\Om}$ must be bounded by a second-order estimator.  Following \cite[\S 5.1]{NSV03}, the resolution comes in three steps.  We first bound $w$ in $C^{0,\alpha}(\bar\Om)$ by the first-order quantity.  We then bound a mollified point value $\left<\delta,w\right>$ by a second-order quantity, using a regularized Green's function.  Finally we combine the two, in such a way that the first-order term acquires a positive power of $h_{\min}$ and is thereby demoted to second order.
+
+
+\subsection{A first-order bound on the Galerkin functional}
+
+Bound \eqref{eq:Ghbound} controls $\Gh$ in the dual norm \eqref{eq:Ghdualnorm}, which is built on the seminorm $|D^2\varphi|_{\mathrm{var}}(\Om)$.  The H\"older estimate needs instead the dual norm of $\mathring W^{1,p'}(\Om)$, built on $\|\nabla\varphi\|_{0,p';\Om}$, and this is where the first-order quantity arises.
+
+\begin{lemma}[$L^p$ bound on $\Gh$]
+\label{lem:Ghp}
+Let $1 \le p \le \infty$, with dual exponent $p' = p/(p-1)$.  Then
+\begin{equation}
+\label{eq:Ghp}
+  \bigl|\left<\Gh,\varphi\right>\bigr| \ \preceq\ \Bigl(\|h R_p\|_{0,p;\Om} + \|h^2\nabla\sigma_h\|_{0,p;\Lamh}\Bigr)\,\|\nabla\varphi\|_{0,p';\Om}
+\end{equation}
+for all $\varphi \in \mathring W^{1,p'}(\Om)$.
+\end{lemma}
+
+\begin{proof}
+Start from the representation formula \eqref{eq:Gh-repn}.  Write $\varrho_T := f + \sigma_h$ if $T\in\Thzero$ and $\varrho_T := f$ if $T\in\Thplus$, matching the second term of \eqref{eq:Rp}.  For the residual part of \eqref{eq:Gh-repn}, apply H\"older's inequality on each side and element appearing in definition \eqref{eq:RhQh} of $\Rh$, and then the second and third estimates of \eqref{eq:Pihprops}, the latter two with exponent $p'$, so that $h_S^{1-1/p'} = h_S^{1/p}$:
+\begin{align*}
+  \bigl|\left<\Rh,\varphi-\Pih\varphi\right>\bigr|
+  &\le \sum_{S\in\Sh} \bigl\|\jump{\partial_\nu u_h}\bigr\|_{0,p;S}\,\|\varphi-\Pih\varphi\|_{0,p';S}
+     + \sum_{T\in\Th} \|\varrho_T\|_{0,p;T}\,\|\varphi-\Pih\varphi\|_{0,p';T} \\
+  &\preceq \sum_{S\in\Sh} h_S^{1/p}\bigl\|\jump{\partial_\nu u_h}\bigr\|_{0,p;S}\,\|\nabla\varphi\|_{0,p';\Uh(S)}
+     + \sum_{T\in\Th} h_T\|\varrho_T\|_{0,p;T}\,\|\nabla\varphi\|_{0,p';\Uh(T)}.
+\end{align*}
+In definition \eqref{eq:Rp} the side term of $R_p|_T$ carries the factor $h_T^{-1/p'}|T|^{-1/p}$, so, after a discrete H\"older inequality in the pair $(p,p')$ and the finite overlap of the patches $\Uh(T)$ and $\Uh(S)$, both sums are bounded by $\|hR_p\|_{0,p;\Om}\,\|\nabla\varphi\|_{0,p';\Om}$.
+
+For the quadrature part, the mass-lumping bound already used for \eqref{eq:Qhbound}, but now with the H\"older pair $(p,p')$ in place of $(d,d')$, together with the first estimate of \eqref{eq:Pihprops} and the same finite overlap, gives
+\[
+  \bigl|\left<\Qh,\Pih\varphi\right>\bigr| \ \preceq\ \|h^2\nabla\sigma_h\|_{0,p;\Lamh}\,\|\nabla\Pih\varphi\|_{0,p';\Om}
+  \ \preceq\ \|h^2\nabla\sigma_h\|_{0,p;\Lamh}\,\|\nabla\varphi\|_{0,p';\Om}.
+\]
+Adding the two bounds gives \eqref{eq:Ghp}.
+\end{proof}
+
+\begin{lemma}[H\"older continuity of $w$]
+\label{lem:holder}
+The Riesz representation $w$ of \eqref{eq:w} is H\"older continuous.  More precisely, for every $p > d$ there is $\alpha \in (0,1)$ such that
+\begin{equation}
+\label{eq:holder}
+  \|w\|_{C^{0,\alpha}(\bar\Om)} \ \preceq\ \|h R_p\|_{0,p;\Om} + \|h^2\nabla\sigma_h\|_{0,p;\Lamh},
+\end{equation}
+where the hidden constant depends on $\Om$ and $p$, and blows up as $p \downarrow d$.
+\end{lemma}
+
+\begin{proof}
+The classical H\"older estimate of De Giorgi and Nash, applied to \eqref{eq:w}, gives $\|w\|_{C^{0,\alpha}(\bar\Om)} \preceq \|\Gh\|_{-1,p;\Om}$, where
+\[
+  \|\Gh\|_{-1,p;\Om} := \sup\bigl\{\left<\Gh,\varphi\right> \,:\, \varphi \in \mathring W^{1,p'}(\Om),\ \|\nabla\varphi\|_{0,p';\Om} \le 1\bigr\}
+\]
+is the norm of the dual space of $\mathring W^{1,p'}(\Om)$; see \cite[Theorem C.2]{KinderlehrerStampacchia1980}.  Now apply Lemma~\ref{lem:Ghp}.
+\end{proof}
+
+This justifies the continuity of $w$ used in \S \ref{sec:barriers}.  Note that the box constraint enters \eqref{eq:holder} only through $\Thzero$ inside $R_p$, and through $\Lamh$; the linear theory behind the De Giorgi--Nash estimate knows nothing of the obstacles.
+
+
+\subsection{Maximum norm of \texorpdfstring{$w$}{w}}
+
+The right side of \eqref{eq:holder} is first order in $h$, so \eqref{eq:holder} alone is not enough.  Since $w$ is continuous and vanishes on $\dOm$, choose $x_0\in\Om$ with $|w(x_0)| = \|w\|_{0,\infty;\Om}$.  The uniform cone property of $\Om$ \cite[\S 4.7]{Adams1975} then provides a ball $B \subset \Om$ of radius $\rho = C h_{\min}^\beta$, with $\operatorname{dist}(x_0,B) \preceq \rho$, where $h_{\min} := \min_{T\in\Th} h_T$ and $\beta \ge 1$ is chosen below.  Let $\delta \in C_0^\infty(\Om)$ be a regularization of the Dirac mass at $x_0$:
+\begin{equation}
+\label{eq:delta}
+  \operatorname{supp}\delta \subset B, \qquad \int_\Om \delta = 1, \qquad 0 \le \delta \preceq \rho^{-d}.
+\end{equation}
+Because $w$ is continuous and $\delta$ has unit mass, there is $x_1 \in B$ with $\left<\delta,w\right> = w(x_1)$, and then
+\begin{equation}
+\label{eq:wsplit}
+  \|w\|_{0,\infty;\Om} \ \le\ \bigl|\left<\delta,w\right>\bigr| + |w(x_0)-w(x_1)|.
+\end{equation}
+Since $|x_0 - x_1| \preceq \rho = C h_{\min}^\beta$, Lemma~\ref{lem:holder} bounds the second term of \eqref{eq:wsplit} by
+\begin{equation}
+\label{eq:holderapplied}
+  |w(x_0)-w(x_1)| \ \preceq\ h_{\min}^{\alpha\beta}\Bigl(\|hR_p\|_{0,p;\Om} + \|h^2\nabla\sigma_h\|_{0,p;\Lamh}\Bigr).
+\end{equation}
+
+The first term of \eqref{eq:wsplit} is handled by the regularized Green's function $G \in \mathring H^1(\Om)$, defined by
+\begin{equation}
+\label{eq:green}
+  \left<\nabla G,\nabla\varphi\right> = \left<\delta,\varphi\right> \qquad \text{for all } \varphi\in\mathring H^1(\Om),
+\end{equation}
+for which the a priori bound
+\begin{equation}
+\label{eq:greenbound}
+  \|D^2 G\|_{0,1;\Om} + \|DG\|_{0,d/(d-1);\Om} \ \preceq\ |\log h_{\min}|^2
+\end{equation}
+holds on any polyhedral domain, proved in \cite{Nochetto1995} for $d=2$ and in \cite{Darietal2000} for $d=3$; the hidden constant depends on $\beta$ through $\rho$.  In particular $G \in W^{2,1}(\Om)\cap\mathring H^1(\Om) \subset W$, so $|D^2G|_{\mathrm{var}}(\Om) = \|D^2G\|_{0,1;\Om}$ and $G$ is admissible in both \eqref{eq:Rhbound} and \eqref{eq:Qhbound}.
+
+\begin{lemma}[Mollified point value]
+\label{lem:mollified}
+The regularized Dirac mass \eqref{eq:delta} and the Riesz representation $w$ of \eqref{eq:w} satisfy
+\begin{equation}
+\label{eq:mollified}
+  \bigl|\left<\delta,w\right>\bigr| \ \preceq\ |\log h_{\min}|^2 \Bigl(\|h^2R_\infty\|_{0,\infty;\Om} + \|h^2\nabla\sigma_h\|_{0,d;\Lamh}\Bigr),
+\end{equation}
+where the hidden constant depends on $\beta$ through $\rho$.
+\end{lemma}
+
+\begin{proof}
+Taking $\varphi = w$ in \eqref{eq:green}, then $\varphi = G$ in \eqref{eq:w}, and then applying the representation formula \eqref{eq:Gh-repn},
+\[
+  \left<\delta,w\right> = \left<\nabla G,\nabla w\right> = \left<\Gh,G\right> = \left<\Rh,G-\Pih G\right> + \left<\Qh,\Pih G\right>.
+\]
+Bound \eqref{eq:Rhbound} controls the first term by $\|h^2R_\infty\|_{0,\infty;\Om}\|D^2G\|_{0,1;\Om}$.  The first inequality of \eqref{eq:Qhbound}, followed by the first estimate of \eqref{eq:Pihprops} with exponent $d' = d/(d-1)$, controls the second by $\|h^2\nabla\sigma_h\|_{0,d;\Lamh}\|DG\|_{0,d/(d-1);\Om}$.  Now apply \eqref{eq:greenbound}.
+\end{proof}
+
+\begin{proposition}[Pointwise estimate of $|w|$]
+\label{prop:wbound}
+The maximum norm of the Riesz representation $w$ of \eqref{eq:w} satisfies
+\begin{equation}
+\label{eq:wbound}
+  \|w\|_{0,\infty;\Om} \ \preceq\ |\log h_{\min}|^2\Bigl(\|h^2R_\infty\|_{0,\infty;\Om} + \|h^2\nabla\sigma_h\|_{0,d;\Lamh}\Bigr).
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+Fix $p > d$, let $\alpha$ be as in Lemma~\ref{lem:holder}, and choose $\beta = 1/\alpha$, so that $h_{\min}^{\alpha\beta} = h_{\min}$ in \eqref{eq:holderapplied}.  Given \eqref{eq:wsplit} and Lemma~\ref{lem:mollified}, it suffices to show that the right side of \eqref{eq:holderapplied} is then dominated by the right side of \eqref{eq:wbound}.  We may assume $\operatorname{diam}\Om \le 1$, since rescaling the geometry costs only a constant.
+
+For the residual term, $R_p|_T \preceq R_\infty|_T$ pointwise on every $T$, uniformly in $p$: the volume terms of \eqref{eq:Rp} agree, while $\|\jump{\partial_\nu u_h}\|_{0,p;\partial T\setminus\dOm} \le |\partial T|^{1/p}\,\|\jump{\partial_\nu u_h}\|_{0,\infty;\partial T\setminus\dOm}$, and shape regularity turns the resulting factor $h_T^{-1/p'}|T|^{-1/p}|\partial T|^{1/p}$ into $h_T^{-1}$.  Hence, using $h_{\min}\le h_T$ and the boundedness of $\Om$,
+\[
+  h_{\min}\|hR_p\|_{0,p;\Om} \le \|h^2R_p\|_{0,p;\Om} \preceq \|h^2R_\infty\|_{0,\infty;\Om}.
+\]
+
+For the quadrature term, $\nabla\sigma_h$ is constant on each element, so $\|h^2\nabla\sigma_h\|_{0,p;\Lamh} \approx (\sum_T a_T^p)^{1/p}$ with $a_T := h_T^{2+d/p}|\nabla\sigma_h|_T$, the sum running over the elements of $\Lamh$; the case $p=d$ of the same identity has $a_T$ replaced by $b_T := h_T^{3}|\nabla\sigma_h|_T$.  Now $h_{\min} a_T \le b_T$, because $h_{\min} \le h_T \le h_T^{1-d/p}$ under $\operatorname{diam}\Om\le 1$, and $\ell^p \subset \ell^d$ with $(\sum_T c_T^p)^{1/p} \le (\sum_T c_T^d)^{1/d}$ because $p > d$.  Therefore
+\[
+  h_{\min}\|h^2\nabla\sigma_h\|_{0,p;\Lamh} \preceq \Bigl(\sum_T b_T^d\Bigr)^{1/d} \approx \|h^2\nabla\sigma_h\|_{0,d;\Lamh}. \qedhere
+\]
+\end{proof}
+
+
+\subsection{Reliability}
+
+Collecting \S \ref{sec:barriers} and Proposition~\ref{prop:wbound}, define the \emph{pointwise estimator}
+\begin{equation}
+\label{eq:Eh}
+\begin{aligned}
+  E_h := \ & C_0 |\log h_{\min}|^2 \|h^2 R_\infty\|_{0,\infty;\Om}
+    && \text{localized residual} \\
+  &+ C_1 |\log h_{\min}|^2 \|h^2\nabla\sigma_h\|_{0,d;\Lamh}
+    && \text{localized quadrature} \\
+  &+ \|(\psilo-u_h)^+\|_{0,\infty;\Om} + \|(u_h-\psiup)^+\|_{0,\infty;\Om}
+    && \text{obstacle admissibility} \\
+  &+ \|(\psiup-u_h)^+\|_{0,\infty;\omtop} + \|(u_h-\psilo)^+\|_{0,\infty;\ombot}
+    && \text{localized detachment} \\
+  &+ \|g-\Ih g\|_{0,\infty;\dOm}
+    && \text{boundary datum.}
+\end{aligned}
+\end{equation}
+This is the box-constrained form of the estimator of \cite[\S 5.2]{NSV03}, which has one term of each of the last three kinds instead of two, two, and one.
+
+\begin{theorem}[Reliability]
+\label{thm:reliability}
+Let $u$ solve \eqref{eq:VI} and let $u_h$ solve \eqref{eq:discVI}.  If $C_0$ and $C_1$ are twice the constants hidden in \eqref{eq:wbound} then
+\begin{equation}
+\label{eq:reliability}
+  \|u-u_h\|_{0,\infty;\Om} \ \le\ E_h.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+Insert \eqref{eq:wbound} into the term $2\|w\|_{0,\infty;\Om}$ of \eqref{eq:barrierbound}, the factor two being absorbed by the choice of $C_0$ and $C_1$.  The five remaining terms of \eqref{eq:barrierbound} are precisely the last five terms of \eqref{eq:Eh}.
+\end{proof}
+
+Every term of $E_h$ is computable from $u_h$, the mesh, and the data.  The two star-dilated sets $\ombot,\omtop$ of \eqref{eq:omegas} are computable as well, being determined by the nodal signs of $\sigma_h$.
+
+The estimator also controls the error in the residual, as in \cite[Theorem 5.4]{NSV03}.
+
+\begin{proposition}[Residual estimate]
+\label{prop:residualest}
+$\|\sigma-\tilde\sigma_h\|_{-2,\infty;\Om} \preceq E_h$.
+\end{proposition}
+
+\begin{proof}
+Let $\varphi \in W \cap W^{2,1}(\Om)$ with $|D^2\varphi|_{\mathrm{var}}(\Om)\le 1$.  Integrating by parts in \eqref{eq:Ghagain}, and using $u - u_h = g - \Ih g$ on $\dOm$,
+\[
+  \left<\sigma-\tilde\sigma_h,\varphi\right> = -\left<u-u_h,\Delta\varphi\right> + \int_{\dOm}(g-\Ih g)\,\partial_\nu\varphi - \left<\Gh,\varphi\right>.
+\]
+Here $\|\Delta\varphi\|_{0,1;\Om} \le |D^2\varphi|_{\mathrm{var}}(\Om) \le 1$, a trace estimate gives $\|\nabla\varphi\|_{0,1;\dOm} \preceq |D^2\varphi|_{\mathrm{var}}(\Om)$, and $\left<\Gh,\varphi\right>$ is bounded by \eqref{eq:Ghbound}.  Taking the supremum over such $\varphi$,
+\[
+  \|\sigma-\tilde\sigma_h\|_{-2,\infty;\Om} \preceq \|u-u_h\|_{0,\infty;\Om} + \|g-\Ih g\|_{0,\infty;\dOm} + \|h^2R_\infty\|_{0,\infty;\Om} + \|h^2\nabla\sigma_h\|_{0,d;\Lamh}.
+\]
+Each term on the right is bounded by a multiple of $E_h$: the first by Theorem~\ref{thm:reliability}, the second directly, and the last two by the first two terms of \eqref{eq:Eh}, since $|\log h_{\min}|^2 \ge 1$ once $h_{\min}\le e^{-1}$.
+\end{proof}
+
+\begin{remark}[On the constants]
+\label{rem:constants}
+\cite[Theorem 5.4]{NSV03} states the sharper conclusion $\max\{\|u-u_h\|_{0,\infty;\Om},\|\sigma-\tilde\sigma_h\|_{-2,\infty;\Om}\} \le E_h$, with no hidden constant on either component.  Getting that from the proof above would require enlarging $C_0$ and $C_1$ once more, so that they also absorb \eqref{eq:Ghbound}, and absorbing the boundary trace term into $\|g-\Ih g\|_{0,\infty;\dOm}$.  We have kept the two statements separate rather than tune constants, since it is \eqref{eq:reliability} that the library uses.
+\end{remark}
+
+\begin{remark}[Localization of the interior residual]
+\label{rem:interiorloc}
+By \eqref{eq:Rp}, the interior residual entering $E_h$ reads $|f+\sigma_h|$ on the active region $\Lamh$, and not $|f|$.  As in \cite[Remark 5.7]{NSV03}, it is the presence of $\sigma_h$ there which permits coarse meshes inside the contact region while $u$ is smooth, and in the box-constrained case this now applies to $\Lamhbot$ and $\Lamhtop$ alike.  The effect is a cancellation within one term, however, and not a vanishing of $E_h$; see Remark~\ref{rem:localization}.
+\end{remark}
+
+\begin{remark}[Logarithmic factor]
+\label{rem:logfactor}
+The factor $|\log h_{\min}|^2$ in \eqref{eq:Eh} comes from \eqref{eq:greenbound}, hence from linear theory, and it has nothing to do with the obstacles.  As \cite[Remark 5.10]{NSV03} observes, its power can be improved from $2$ to $1$ for smooth or convex domains.
+\end{remark}
+
+
 %% TODO: remaining sections, mirroring NSV03's structure, not yet written:
 %%
 %%  (d) Barriers (NSV03 sec. 4): drafted above (\S\ref{sec:barriers}).  The
 %%      T_h^+ sign indeterminacy is closed by star-dilating the strict
 %%      contact sets; see Remark \ref{rem:whystar}.
-%%  (e) Pointwise estimates (NSV03 sec. 5): Green's function bound and
-%%      Holder continuity of w; likely unchanged from NSV03 modulo notation.
+%%  (e) Pointwise estimates (NSV03 sec. 5): drafted above
+%%      (\S\ref{sec:pointwise}).  Unchanged from NSV03 apart from reading
+%%      Thzero and Lamh bilaterally, as anticipated.  Two loose ends: the
+%%      boundary trace term and the constants of Remark \ref{rem:constants}.
 %%  (f) Efficiency / lower bounds (NSV03 sec. 6): Prop. 6.2/6.3 analogues
 %%      (bubble functions), needed for both Thbot and Thtop.
 %%  (h) Bilateral analogues of NSV05: full localization within the
