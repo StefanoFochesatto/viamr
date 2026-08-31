@@ -642,6 +642,10 @@ be their star-dilations, each a union of closed elements by \eqref{eq:star}.  By
 \end{equation}
 because if $\sigma_h(x) < 0$ then, $\sigma_h$ being affine on any element $T$ containing $x$, some vertex $z$ of $T$ has $\sigma_h(z) < 0$, and then $T \subset \Uh(z) \subset \omtop$.  Second, $B(z) \subset \Uh(z) \subset \omtop$ for every $z \in \Nh^- \cap \Nhr$, by the construction of the balls in \S \ref{sec:discretization}, and symmetrically for $\ombot$.
 
+Figure~\ref{fig:stardilate} illustrates \eqref{eq:Nhpm} and \eqref{eq:omegas} on the mesh of Figure~\ref{fig:nodalelem}.
+
+\input{tikz/stardilate}
+
 \begin{remark}[Why the star, and not the bare set $\{\sigma_h<0\}$]
 \label{rem:whystar}
 The corresponding set in \cite[formula (4.6)]{NSV03} is not dilated.  There the third sum in \eqref{eq:sigmatildesplit} is handled instead by an argument which needs the global sign: if $v > 0$ at an interior point of an element $T$, then $\sigma_h$ vanishes at that point, and an affine function of one sign on $T$ which vanishes at an interior point of $T$ vanishes identically on $T$, hence at the vertices of $T$ as well.  Bilaterally that reasoning fails exactly where it is needed.  A node $z \in \Nh^-$ can be a vertex of a transition element $T \in \Thplus$ on which $\sigma_h$ changes sign, and then $v > 0$ at a point of $T$ where $\sigma_h \ge 0$ is no contradiction, so nothing forces $(\Pih v)(z) = 0$.  Dilating by one ring of elements restores the conclusion directly, at the cost of measuring the barrier term on a slightly larger set.
