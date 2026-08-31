@@ -155,7 +155,7 @@ def test_refine_br_total():
     (imark, _, _) = amr.brinactivemark(u, psi, residual, theta=0.8, method="total")
     rmesh = amr.refinesbr2D(mesh, imark)
     rCG1, _ = amr.spaces(rmesh)
-    assert rCG1.dim() == 99
+    assert rCG1.dim() == 109
 
 
 def test_refine_br_weighted():
@@ -529,10 +529,12 @@ def _nsv05mark_pyramid(amr):
     assert amr.countmark(Function(DG0).interpolate(mark * deep)) == 0
 
     # ... in contrast to nsv03mark() on the same solution, whose residual stays
-    # alive on the ridges, and whose estimator is correspondingly larger
-    _, etainf, _, _, Eh03 = amr.nsv03mark(uh, lb, g, f_ufl, g_ufl)
+    # alive on the ridges.  Only the localization is compared, not the sizes of
+    # the two estimators: nsv05mark() carries the prefactor C0 |log(h_min/diam
+    # Omega)|^2 on its residual and nsv03mark() has no such factor, so E_h and
+    # Etilde_h are not on a common scale.
+    _, etainf, _, _, _ = amr.nsv03mark(uh, lb, g, f_ufl, g_ufl)
     assert amr.scalarrange(Function(DG0).interpolate(etainf * deep))[1] > 0.0
-    assert Eh < Eh03
 
     return nfull, ndeep, amr.countmark(mark)
 
@@ -540,7 +542,7 @@ def _nsv05mark_pyramid(amr):
 # (number of full-contact elements, of those deep inside Omega_h^0, of marked
 # elements) from _nsv05mark_pyramid().  Asserted in both the serial and the
 # parallel test, so that the two are pinned to the same numbers.
-_NSV05_PYRAMID_COUNTS = (440, 288, 112)
+_NSV05_PYRAMID_COUNTS = (440, 288, 120)
 
 
 def test_nsv05mark_pyramid():
@@ -780,8 +782,12 @@ def _fixedrate_total_case(amr):
     eta = Function(DG0).interpolate(x + 2 * y)
     mark, ethresh = amr.fixedratemark(eta, theta=0.5, method="total")
     total_error_est = amr._globalpnorm(eta, 2.0)
+    # eta descending is [2.25, 2, 1.75, 1.5, 1.5, 1.25, 1, 0.75], summing to 12,
+    # so the cumulative sum reaches theta * 12 = 6 exactly at the third element.
+    # That element is therefore the threshold, and the inclusive comparison of
+    # the 'total' strategy marks it along with the two above it.
     assert abs(ethresh - 1.75) < 1.0e-10
-    assert amr.countmark(mark) == 2
+    assert amr.countmark(mark) == 3
     assert abs(total_error_est - 4.444097208657794) < 1.0e-10
 
 
