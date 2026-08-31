@@ -419,14 +419,14 @@ The \emph{Galerkin functional} $\Gh \in H^{-1}(\Om)$ is
 \label{eq:Gh}
   \left<\Gh,\varphi\right> := -\left<\nabla u_h,\nabla\varphi\right> + \left< f + \tilde\sigma_h,\varphi\right>, \qquad \varphi \in \mathring H^1(\Om).
 \end{equation}
-This is \cite[formula (3.3)]{NSV03}, but with $\tilde\sigma_h$ entering with the opposite sign, consistent because our $\sigma_h$ is the negative of theirs.  Definition \eqref{eq:sigma} of $\sigma$ eliminates $f$:
+This is \cite[formula (3.3)]{NSV03}, but with $\tilde\sigma_h$ entering with the opposite sign, consistent because our $\sigma_h$ is the negative of theirs.  Definition \eqref{eq:sigma} of $\sigma$ eliminates $f$ to give an equivalent expression of the Galerkin functional:
 \begin{equation}
 \label{eq:Ghagain}
 \left<\Gh,\varphi\right> = \left<\nabla(u-u_h),\nabla\varphi\right> - \left<\sigma-\tilde\sigma_h,\varphi\right>.
 \end{equation}
 Thus $\Gh$ measures two mismatches at once, between $u$ and $u_h$, and between the exact residual $\sigma$ and its discrete surrogate $\tilde\sigma_h$.
 
-Consider the application of $\Gh$ to a piecewise-linear function $\varphi_h$.  The following Lemma can be read as saying that the result would be zero if $\sigma_h$ and $\tilde \sigma_h$ were computing the same thing, and if the inner products $\left<\cdot,\cdot\right>$ and $\left<\cdot,\cdot\right>_h$ were the same.  Because these statements are not true, we ``almost'' have orthogonality.  Every step in the proof uses only the set-theoretic split $\Th = \Thzero \sqcup \Thplus$, and unconditional definition \eqref{eq:sigmah} of $\sigma_h$ at interior nodes, none of which cares whether the (thinned) active elements $\Thzero$ are from a lower or upper obstacle.
+Consider the application of $\Gh$ to a piecewise-linear function $\varphi_h$.  The following Lemma can be read as saying that the result would be zero if $\sigma_h$ and $\tilde \sigma_h$ were computing the same thing, and if the inner products $\left<\cdot,\cdot\right>$ and $\left<\cdot,\cdot\right>_h$ were the same.  Because these statements are not true, we ``almost'' have orthogonality.  Every step in the proof uses only the disjoint split $\Th = \Thzero \sqcup \Thplus$, and unconditional definition \eqref{eq:sigmah} of $\sigma_h$ at interior nodes, so the result is independent of which obstacle contacts the (thinned) active elements $\Thzero$.
 
 \begin{lemma}[Almost Galerkin orthogonality]
 \label{lem:almostGO}
@@ -451,12 +451,12 @@ In the following Lemma, $\Rh$ is a residual while $\Qh$ is a quadrature error.
 
 \begin{lemma}[Representation formula for $\Gh$]
 \label{lem:Gh-repn}
-For each interior side $S \in \Sh$, let $T^-,T^+ \in \Th$ be the two elements meeting along $S$, fix a unit normal $\nu$ pointing from $T^-$ into $T^+$, and write
+For each interior side $S \in \Sh$, let $T^-,T^+ \in \Th$ be the elements meeting along $S$, with unit normal $\nu$ pointing from $T^-$ to $T^+$, and write
 \begin{equation}
 \label{eq:jump}
   \jump{\partial_\nu u_h} := \partial_\nu u_h|_{T^+} - \partial_\nu u_h|_{T^-}
 \end{equation}
-for the jump across $S$.  This sign convention matters below, though it does not affect the estimator itself, in which only $|\jump{\partial_\nu u_h}|$ appears.  Define $\Rh \in H^{-1}(\Om)$, and $\Qh \in \Vhr^*$ a linear functional on the discrete space, by
+for the jump across $S$.  (This sign convention matters below, though it does not affect the estimator itself, which needs only $|\jump{\partial_\nu u_h}|$.)  Define $\Rh \in H^{-1}(\Om)$, and $\Qh \in \Vhr^*$, a linear functional on the discrete space, by
 \begin{align}
 \label{eq:RhQh}
   \left<\Rh,\varphi\right> &:= \sum_{S\in\Sh}\int_S \jump{\partial_\nu u_h}\,\varphi + \sum_{T\in\Thzero}\int_T (f+\sigma_h)\varphi + \sum_{T\in\Thplus}\int_T f\varphi, \\
@@ -492,7 +492,7 @@ For $\left<\Gh,\Pih\varphi\right>$, apply Lemma~\ref{lem:almostGO} with $\varphi
 Adding \eqref{eq:Gh-second} and \eqref{eq:Gh-first} and cancelling leaves \eqref{eq:Gh-repn}.
 \end{proof}
 
-As with Lemma~\ref{lem:almostGO}, this derivation only used the $\Th = \Thzero \sqcup \Thplus$ split, $\sigma_h$'s definition, and linearity of $\Pih$ and $\Ih$; which obstacle is active on $\Thzero$ is not relevant.  The cancellation is exactly why $\tilde\sigma_h$, rather than $\sigma_h$ itself, appears in \eqref{eq:Gh}.  If one used $\sigma_h$ in place of $\tilde\sigma_h$ it would leave an uncancelled $\Thplus$ term in \eqref{eq:Gh-repn}, one that does not shrink at the rate needed for a second-order estimator; see the discussion after \cite[formula (3.6)]{NSV03}.
+As with Lemma~\ref{lem:almostGO}, this derivation only used the $\Th = \Thzero \sqcup \Thplus$ split, $\sigma_h$'s definition, and linearity of $\Pih$ and $\Ih$; which obstacle is active on $\Thzero$ is not relevant.  The cancellation at the end of the proof is exactly why $\tilde\sigma_h$, rather than $\sigma_h$ itself, appears in \eqref{eq:Gh}.  (An un-cancelled $\Thplus$ term in \eqref{eq:Gh-repn} would not shrink at the rate needed for a second-order estimator; see the discussion after \cite[formula (3.6)]{NSV03}.)
 
 
 \subsection{Localized residual and quadrature estimators}
@@ -525,43 +525,43 @@ The second term $\left<\Qh,\Pih\varphi\right>$ in the representation formula \eq
   \bigl|\left<\Qh,\Pih\varphi\right>\bigr| \ \preceq\ \|h^2\nabla\sigma_h\|_{0,d;\Lamh}\, \|\nabla\Pih\varphi\|_{0,d';\Om}
   \ \preceq\ \|h^2\nabla\sigma_h\|_{0,d;\Lamh}\, |D^2\varphi|_{\mathrm{var}}(\Om),
 \end{equation}
-where $\Lamh := \Lamhbot \cup \Lamhtop = \bigcup_{T\in\Thzero} T$ is the union of both active regions.  We have generalized from the unilateral contact set \cite[formula (2.4)]{NSV03} to the bilateral case in the obvious way.
+where $\Lamh := \Lamhbot \cup \Lamhtop = \bigcup_{T\in\Thzero} T$ is the union of both active regions.  We have generalized from the unilateral case, namely \cite[formula (2.4)]{NSV03}, to bilateral in the obvious way.
 
 Both \eqref{eq:Rhbound} and \eqref{eq:Qhbound} control their left sides by the same seminorm $|D^2\varphi|_{\mathrm{var}}(\Om)$, so they combine into a bound on $\Gh$ in the corresponding dual norm,
 \begin{equation}
 \label{eq:Ghdualnorm}
   \|\Gh\|_{-2,\infty;\Om} := \sup\bigl\{\left<\Gh,\varphi\right> : \varphi\in W,\ |D^2\varphi|_{\mathrm{var}}(\Om)\le 1\bigr\}.
 \end{equation}
-Indeed, inserting \eqref{eq:Rhbound} and \eqref{eq:Qhbound} into the representation formula \eqref{eq:Gh-repn} gives the upper bound
+Inserting into the representation formula \eqref{eq:Gh-repn} gives the upper bound
 \begin{equation}
 \label{eq:Ghbound}
   \|\Gh\|_{-2,\infty;\Om} \ \preceq\ \|h^2 R_\infty\|_{0,\infty;\Om} \ +\ \|h^2\nabla\sigma_h\|_{0,d;\Lamh}.
 \end{equation}
-Bound \eqref{eq:Ghbound} is \cite[formula (3.10)]{NSV03}.  As with the Galerkin functional itself, nothing in its derivation distinguishes lower from upper contact; the same bound controls $\Gh$ whether the active elements $T\in\Thzero$ come from $\Thbot$ or $\Thtop$.
+Bound \eqref{eq:Ghbound} is \cite[formula (3.10)]{NSV03}.  As with the Galerkin functional itself, nothing in its derivation distinguishes lower from upper contact.
 
 
 \section{Barriers} \label{sec:barriers}
 
-Following \cite[\S 4]{NSV03}, we now bracket the exact solution between continuous \emph{barriers}, $u_\bot \le u \le u^\top$, built from the discrete solution, the data, and a correction $w$ which solves a linear problem.
+Following \cite[\S 4]{NSV03}, we now bracket the exact solution between continuous \emph{barriers}, $u_\bot \le u \le u^\top$, built from the discrete solution $u_h$, the data $g,\psi_\bot,\psi_\top$, and a correction $w$ which solves a linear problem.
 
-Let $w \in \mathring H^1(\Om)$ be the Riesz representation of the Galerkin functional $\Gh$,
+In fact, $w \in \mathring H^1(\Om)$ is defined as the Riesz representation of the Galerkin functional:
 \begin{equation}
 \label{eq:w}
   \int_\Om \nabla w \cdot \nabla\varphi = \left<\Gh,\varphi\right> \qquad \text{for all } \varphi \in \mathring H^1(\Om).
 \end{equation}
-As in \cite[\S 4]{NSV03} we use throughout this section that $w$ is continuous.  This is not an extra hypothesis.  Continuity is a statement about the linear problem \eqref{eq:w}, in which the obstacles enter only through the data $\Gh$, and Lemma~\ref{lem:holder} below establishes H\"older continuity of $w$ in the box-constrained case.  Nothing in \S\ref{sec:pointwise} depends on the present section, so there is no circularity.
+As in \cite[\S 4]{NSV03}, $w$ is continuous; Lemma~\ref{lem:holder} below establishes H\"older continuity of $w$ in the box-constrained case.
 
 
 \subsection{Reduction to two pairings}
 
-For each candidate barrier below the gradient is $\nabla u_h + \nabla w$ and certain reductions apply.
+Formulas \eqref{eq:candtop} and \eqref{eq:candbot} state candidate barriers, with values of ``$c$'' to be determined.  The gradient of each barrier is $\nabla u_h + \nabla w$ and thus certain reductions apply.
 
 \begin{lemma}[Barrier criterion]
 \label{lem:barriercrit}
 If $c \ge \|g - \Ih g\|_{0,\infty;\dOm}$ is any constant then the functions
 \begin{align}
-u^\top &:= u_h + w + c \\
-u_\bot &:= u_h + w - c
+u^\top &:= u_h + w + c \label{eq:candtop} \\
+u_\bot &:= u_h + w - c \label{eq:candbot}
 \end{align}
 satisfy
 \begin{itemize}
@@ -582,9 +582,7 @@ Thus if $\left<\sigma,v\right> \ge 0$ and $\left<\tilde\sigma_h,v\right> \le 0$ 
 \begin{proof}
 We prove (i); part (ii) is the same computation with the roles of the two functions in $v$ exchanged and the sign of $c$ reversed.
 
-Since $w \in \mathring H^1(\Om)$ is continuous it vanishes on $\dOm$, while $u = g$ and $u_h = \Ih g$ there.  Hence $(u - u^\top)|_{\dOm} = (g - \Ih g) - c \le 0$, by the hypothesis on $c$, so $v$ vanishes on $\dOm$.  Also $v \ge 0$ by definition, and $v$ is continuous because $u$, $u_h$, and $w$ are.
-
-For \eqref{eq:barrierenergy}, recall $\nabla v = \nabla(u-u^\top)$ almost everywhere on $\{v > 0\}$ and $\nabla v = 0$ almost everywhere elsewhere.  Therefore, using $\nabla u^\top = \nabla u_h + \nabla w$ and then \eqref{eq:w} and \eqref{eq:Ghagain},
+Since $w \in \mathring H^1(\Om)$ is continuous it vanishes on $\dOm$, while $u = g$ and $u_h = \Ih g$ there.  Hence $(u - u^\top)|_{\dOm} = (g - \Ih g) - c \le 0$, by the hypothesis on $c$, so $v$ vanishes on $\dOm$.  Also $v \ge 0$ by definition, and $v$ is continuous because $u$, $u_h$, and $w$ are.  For \eqref{eq:barrierenergy}, recall $\nabla v = \nabla(u-u^\top)$ almost everywhere on $\{v > 0\}$ and $\nabla v = 0$ almost everywhere elsewhere.  Therefore, using $\nabla u^\top = \nabla u_h + \nabla w$, and then using \eqref{eq:w} and \eqref{eq:Ghagain} as well,
 \[
   \|\nabla v\|_{0,2;\Om}^2 = \int_\Om \nabla(u - u^\top)\cdot\nabla v
   = \left<\nabla(u-u_h),\nabla v\right> - \left<\Gh,v\right>
@@ -607,7 +605,7 @@ To show $\left<\tilde\sigma_h,v\right> \ge 0$ for the upper barrier, recall that
 \label{eq:sigmatildesplit}
   \left<\tilde\sigma_h,v\right> = \sum_{T\in\Thbot}\int_T \sigma_h v \ +\ \sum_{T\in\Thtop}\int_T \sigma_h v \ +\ \sum_{T\in\Thplus}\int_T \Ih(\sigma_h \Pih v),
 \end{equation}
-in which the first sum is already non-negative, because $\sigma_h \ge 0$ pointwise on each $T \in \Thbot$ (\S \ref{sec:discretization}) and $v \ge 0$.  The box constraint is relevant in the second and third sums: $\sigma_h \le 0$ on $\Thtop$ elements, and $\sigma_h$ has no sign at all on $\Thplus$ elements, so both can contribute negatively.  (In the unilateral case of \cite{NSV03} this does not happen, since there $\sigma_h \ge 0$ on all of $\bar\Om$ and hence $\left<\tilde\sigma_h,v\right> \ge 0$ for every $v \ge 0$ (Remark~\ref{rem:nodalglobal}).)  The upper barrier must therefore contain a second mechanism, which forces $v$ to vanish wherever $\sigma_h < 0$ can influence \eqref{eq:sigmatildesplit}.
+in which the first sum is already non-negative, because $\sigma_h \ge 0$ pointwise on each $T \in \Thbot$ (\S \ref{sec:discretization}) and $v \ge 0$.  The box constraint is relevant in the second and third sums: $\sigma_h \le 0$ on $\Thtop$ elements, and $\sigma_h$ has no sign at all on $\Thplus$ elements, so both can contribute negatively.  (In the unilateral case of \cite{NSV03} this does not happen, since there $\sigma_h \ge 0$ on all of $\bar\Om$ and hence $\left<\tilde\sigma_h,v\right> \ge 0$ for every $v \ge 0$.)  The upper barrier must therefore contain a second mechanism, which forces $v$ to vanish wherever $\sigma_h < 0$ can influence \eqref{eq:sigmatildesplit}.
 
 Proposition \ref{prop:upperbarrier} will set $c$ so that these considerations apply and we can get $u\le u^\top$.  The lower barrier is symmetric in every respect.
 
@@ -625,7 +623,9 @@ be the nodes at which the discrete residual is strictly signed, and let
 \label{eq:omegas}
   \ombot := \Uh(\Nh^+), \qquad \omtop := \Uh(\Nh^-)
 \end{equation}
-be their star-dilations, each a union of closed elements by \eqref{eq:star}.  By Proposition~\ref{prop:nodalsign} at interior nodes, and by the first two cases of \eqref{eq:sigmah-bnd} at boundary nodes, $\Nh^+ \subset \Nhbot$ and $\Nh^- \subset \Nhtop$; a strictly-signed node is active, and the sign says against which obstacle.  The barrier proofs use two consequences of \eqref{eq:omegas}.  First,
+be their star-dilations, each a union of closed elements by \eqref{eq:star}.  By Proposition~\ref{prop:nodalsign} at interior nodes, and by the first two cases of \eqref{eq:sigmah-bnd} at boundary nodes, $\Nh^+ \subset \Nhbot$ and $\Nh^- \subset \Nhtop$; a strictly-signed node is active, and the sign says against which obstacle.
+
+The barrier proofs use two consequences of \eqref{eq:omegas}.  Regarding $\sigma_h$ as a piecewise-linear function, first note that
 \begin{equation}
 \label{eq:omegacontains}
   \{\sigma_h < 0\} \subset \omtop \qquad \text{and} \qquad \{\sigma_h > 0\} \subset \ombot,
