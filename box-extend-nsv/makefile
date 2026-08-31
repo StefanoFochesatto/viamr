@@ -1,10 +1,10 @@
 all: box.pdf
 
-box.pdf: box.tex box.aux box.bbl
+box.pdf: box.tex tikz/separation.tex tikz/nodalelem.tex box.aux box.bbl
 	pdflatex box
 	pdflatex box
 
-box.aux: box.tex
+box.aux: box.tex tikz/separation.tex tikz/nodalelem.tex
 	pdflatex box
 	bibtex box
 

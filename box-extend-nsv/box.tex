@@ -3,6 +3,8 @@
 \usepackage{amssymb}
 \usepackage[margin=1in]{geometry}
 \usepackage[dvipsnames]{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta}
 
 % hyperref should be the last package we load
 \usepackage[pdftex,
@@ -184,6 +186,11 @@ $L^\top r^\alpha < \delta_{\min}/2$ and $L_u r^\beta < \delta_{\min}/2$, by defi
 $r \ge r_0$, and $\operatorname{dist}(\Cbot,\Ctop) \ge r_0$ follows.
 \end{proof}
 
+Figure~\ref{fig:separation} illustrates the geometry.  The gap $\delta_{\min}$ is vertical, and determined by the obstacles alone, whereas $r_0$ is a horizontal distance in $\Om$ which also depends on the H\"older regularity of $u$.
+
+\input{tikz/separation}
+
+
 Separation hypotheses of this kind are expected in the bilateral setting.  For the displacement obstacle problem of clamped Kirchhoff plates, a fourth-order bilateral problem, Brenner et al.~\cite{Brenneretal2012} assume that the two obstacles are separated from each other and from the boundary values, and under that hypothesis obtain $L^\infty$ convergence rates and approximation of the coincidence set, though \emph{a priori} in both cases.  Here, by contrast, $\delta_{\min}$ in \eqref{eq:deltamin} and $r_0$ in \eqref{eq:r0} are computed from the data rather than assumed.
 
 Proposition~\ref{prop:separation} gives an explicit, data-determined lower bound $r_0$ on the spatial separation of the two contact sets  $\Cbot, \Ctop$.  The lower bound $r_0$ is controlled by the data functions $f,g,\psilo,\psiup$ through the regularity theory \cite{KinderlehrerStampacchia1980}.  As it turns out, \S \ref{sec:discretization} does \emph{not} need to impose $h < c\,r_0$ as a hypothesis for the estimator to be well-defined and correct.  Instead, $r_0$'s role is to bound the width of the transition band so that the discretization's classification tracks the true contact sets closely.
@@ -324,6 +331,9 @@ Then define $\Lamhbot$ and $\Lamhtop$ as the corresponding unions of elements,
 \Lamhbot = \bigcup_{T \in \Thbot} T, \qquad \Lamhtop = \bigcup_{T \in \Thtop} T.
 \end{equation}
 These subsets of $\bar\Omega$ are discrete lower- and upper-contact active sets, but \emph{element-wise}, in contrast to the nodal sets of Proposition \ref{prop:nodalsign}.
+  Figure~\ref{fig:nodalelem} shows both kinds of set on a common mesh.
+
+\input{tikz/nodalelem}
 
 \begin{remark}[The library computes $\Thbot$, $\Thtop$]
 \label{rem:thinactive}
