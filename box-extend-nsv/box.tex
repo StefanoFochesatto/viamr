@@ -965,9 +965,53 @@ The factor $|\log h_{\min}|^2$ in \eqref{eq:Eh} comes from \eqref{eq:greenbound}
 %%      boundary trace term and the constants of Remark \ref{rem:constants}.
 %%  (f) Efficiency / lower bounds (NSV03 sec. 6): Prop. 6.2/6.3 analogues
 %%      (bubble functions), needed for both Thbot and Thtop.
-%%  (h) Bilateral analogues of NSV05: full localization within the
-%%      full-contact sets, and barrier sets for the two free boundaries.
-%%      See Remark \ref{rem:localization}.
+
+
+%% TODO: bilateral analogues of NSV05, i.e. following the NSV05 work rather
+%% than NSV03.  This list replaces the one-line item which used to stand here,
+%% and it expands Remark \ref{rem:localization}.  Attempt only after (e) and
+%% (f) above: NSV05 omits the proofs of its own lower bounds (Thm. 2.9) and
+%% cites NSV03 sec. 6 for them, so a bilateral efficiency theorem has nothing
+%% to lean on until (f) exists.  Four issues, of which only (a) has no
+%% unilateral analogue at all.
+%%
+%%  (a) Opposite sign conditions on the same f.  NSV05's full-contact nodes
+%%      are C_h = {z : u_h = chi_h at z, f <= 0 on omega_z, J_h <= 0 on
+%%      gamma_z} (their sign convention).  The upper-obstacle analogue needs
+%%      f >= 0 and J_h >= 0 instead.  Both act on the same load, so with a
+%%      one-signed f only one of the two contact sets can localize: e.g. with
+%%      f < 0 and an upper obstacle dipping below max g there is upper contact
+%%      but no localization there.  With f = 0 both conditions hold trivially
+%%      and localization is driven by J_h alone.  The conditions are
+%%      sufficient, not necessary, so a bilateral relaxation may exist.
+%%
+%%  (b) No bilateral Lemma 2.1.  NSV05 obtains the global sign sigma_h <= 0
+%%      from positivity of Pi_h together with the C_h sign conditions.
+%%      Bilaterally sigma_h must be split by region, with a sign on each
+%%      piece, and the pairings in Props. 2.5-2.6 done by cases.  This is the
+%%      same difficulty as \eqref{eq:sigmatildesplit}, so the star-dilation of
+%%      Remark \ref{rem:whystar} is the first tool to try.
+%%
+%%  (c) Lambda_h of NSV05 (2.20) is one-sided: the union of the stars over
+%%      nodes with s_z < 0.  Bilaterally it should split into Lambda_h,bot
+%%      (s_z < 0) and Lambda_h^top (s_z > 0), each gating its own gap term,
+%%      matching the two localized terms in \eqref{eq:barrierbound}.
+%%
+%%  (d) Barrier sets (NSV05 sec. 4) need nondegeneracy on both sides, namely
+%%      f + Lap(psilo) <= -lambda near the lower free boundary and
+%%      f + Lap(psiup) >= lambda near the upper, and then the two strips must
+%%      be shown disjoint before either one localizes a free boundary.  This
+%%      is where r_0 of Proposition \ref{prop:separation} finally has a job.
+%%
+%% One definitional trap runs through all of these.  With C_h = C_h,bot union
+%% C_h^top, the test "sum_{z in C_h} phi_z = 1" of NSV05 wrongly admits an
+%% element having vertices in both.  Define Omega_h^{0,bot} and
+%% Omega_h^{0,top} separately, each from elements all of whose vertices lie in
+%% the *same* set, and take the union.  A mixed element then falls into
+%% Omega_h^+, where the residual indicator is live, so a coarse mesh loses
+%% localization near the transition but stays reliable.  Note C_h,bot and
+%% C_h^top are disjoint as node sets for free, since psiloh < psiuph at nodes,
+%% so no hypothesis on h is needed here either.
 
 \bibliographystyle{siamplain}
 \bibliography{box}
