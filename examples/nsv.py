@@ -134,7 +134,7 @@ if args.prob == "easy":
             x2 <= r ** 2, -8.0 * r ** 2 * (1.0 - circle), -4.0 * (2.0 * x2 + d * circle)
         )
         g_ufl = circle ** 2  # note this is quartic, so P4 interpolation should be exact
-        lb = Function(V, name="chi_h (obstacle)").interpolate(Constant(0.0))
+        lb = Function(V, name="lb (obstacle)").interpolate(Constant(0.0))
         u_ufl = conditional(x2 <= r ** 2, 0.0, circle ** 2)
         return f_ufl, g_ufl, lb, u_ufl
 
@@ -185,9 +185,9 @@ else:
         x = SpatialCoordinate(mesh)
         f_ufl = Constant(-5.0)
         g_ufl = Constant(0.0)
-        chi_ufl = (1.0 - abs(x[0]) - abs(x[1])) / sqrt(2.0) - 0.2
+        lb_ufl = (1.0 - abs(x[0]) - abs(x[1])) / sqrt(2.0) - 0.2
         # discrete obstacle chi_h = I_h chi; exact here, see comment above
-        lb = Function(V, name="chi_h (obstacle)").interpolate(chi_ufl)
+        lb = Function(V, name="lb (obstacle)").interpolate(lb_ufl)
         return f_ufl, g_ufl, lb, None
 
 # an exact solution is known only for the easy problem, so only it can report
@@ -291,7 +291,7 @@ for method in methods:
             estname = "eta_BR (inactive-set, energy norm)"
         elif method == "NSV03":
             (mark, etainf, etad, sigmah, Eh) = amr.nsv03mark(
-                uh, lb, g, f_ufl, g_ufl, theta=marktheta, dualtol=dualtol,
+                uh, (lb, None), g, f_ufl, g_ufl, theta=marktheta, dualtol=dualtol,
                 method=markmethod
             )
             # NSV03 targets ||u-u_h||_infty
@@ -299,7 +299,7 @@ for method in methods:
             estname = "Etilde_h (NSV03, sup norm)"
         elif method == "NSV05":
             (mark, eta, sz, fullcontact, Eh) = amr.nsv05mark(
-                uh, lb, g, f_ufl, g_ufl, theta=marktheta, dualtol=dualtol,
+                uh, (lb, None), g, f_ufl, g_ufl, theta=marktheta, dualtol=dualtol,
                 method=markmethod
             )
             # NSV05 targets ||u-u_h||_infty

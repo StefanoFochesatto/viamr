@@ -15,7 +15,7 @@ from test_refine import (
     _nsv03mark_nontrivial,
     _nsv05mark_effectivity,
     _nsv05mark_pyramid,
-    _nsvmark_chiufl_null,
+    _nsvmark_lbufl_null,
     _nsvmark_curvedobstacle,
     _udomark_nontrivial,
     _udomark_nontrivial_lb,
@@ -164,7 +164,7 @@ def test_nsv05mark_effectivity_par():
 @pytest.mark.parallel(nprocs=2)
 def test_nsvmark_curvedobstacle_par():
     # Confirms tests/test_refine.py::_nsvmark_curvedobstacle() gives the same
-    # result regardless of process count.  This is the chi_ufl path, so it
+    # result regardless of process count.  This is the lb_ufl path, so it
     # exercises VIAMR._obstacleterms() -- a CG_fdegree interpolation of a UFL
     # obstacle followed by the _elemmaxabs() par_loop -- in both nsv03mark() and
     # nsv05mark().

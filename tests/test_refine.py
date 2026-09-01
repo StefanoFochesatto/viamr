@@ -204,7 +204,7 @@ def test_nsv03mark_allinactive():
     solver.solve(bounds=(lb, ub))
     assert amr.checkadmissible(u, lb)
 
-    mark, etainf, etad, sigmah, total_err = amr.nsv03mark(u, lb, g, f, g)
+    mark, etainf, etad, sigmah, total_err = amr.nsv03mark(u, (lb, None), g, f, g)
     assert mark.function_space().ufl_element() == DG0.ufl_element()
     assert etad.function_space().ufl_element() == DG0.ufl_element()
     assert 0 <= amr.countmark(mark) <= DG0.dim()
@@ -273,7 +273,7 @@ def _nsv03mark_nontrivial(amr):
     assert amr.checkadmissible(uh, lb)
 
     mark, etainf, etad, sigmah, total_err = amr.nsv03mark(
-        uh, lb, g, f_ufl, g_ufl, dualtol=1.0e-8
+        uh, (lb, None), g, f_ufl, g_ufl, dualtol=1.0e-8
     )
     assert mark.function_space().ufl_element() == DG0.ufl_element()
     assert sigmah.function_space().ufl_element() == CG1.ufl_element()
@@ -296,7 +296,7 @@ def _nsv03mark_nontrivial(amr):
     # forcing the second (eta_d) pass to always run (etadratio=0.0) must mark
     # at least as many elements as the gated default does
     mark2, _, _, _, _ = amr.nsv03mark(
-        uh, lb, g, f_ufl, g_ufl, dualtol=1.0e-8, etadratio=0.0
+        uh, (lb, None), g, f_ufl, g_ufl, dualtol=1.0e-8, etadratio=0.0
     )
     assert amr.countmark(mark2) >= amr.countmark(mark)
 
@@ -338,7 +338,7 @@ def _pyramid_solve(amr, mesh):
     CG1, _ = amr.spaces(mesh)
     f_ufl = Constant(-5.0)
     g_ufl = Constant(0.0)
-    lb = Function(CG1).interpolate(_pyramid_chi_ufl(mesh))
+    lb = Function(CG1).interpolate(_pyramid_lb_ufl(mesh))
 
     uh = Function(CG1, name="uh").interpolate(max_value(Constant(0.0), lb))
     vh = TestFunction(CG1)
@@ -366,7 +366,7 @@ def _nsv03mark_kink_soln(amr, m):
     """Run nsv03mark() on the pyramid of _pyramid_soln().  Returns
     (max_T etainf, Eh)."""
     _, uh, lb, f_ufl, g, g_ufl = _pyramid_soln(amr, m)
-    _, etainf, _, _, Eh = amr.nsv03mark(uh, lb, g, f_ufl, g_ufl)
+    _, etainf, _, _, Eh = amr.nsv03mark(uh, (lb, None), g, f_ufl, g_ufl)
     return amr.scalarrange(etainf)[1], Eh
 
 
@@ -453,7 +453,7 @@ def test_nsv03mark_active_boundary():
     assert amr.scalarrange(Function(CG1).interpolate(gap * isbdry))[1] > amr.activetol
     # ... and some node inactive
 
-    mark, etainf, etad, sigmah, total_err = amr.nsv03mark(uh, lb, g, f_ufl, g_ufl)
+    mark, etainf, etad, sigmah, total_err = amr.nsv03mark(uh, (lb, None), g, f_ufl, g_ufl)
     assert sigmah.function_space().ufl_element() == CG1.ufl_element()
 
     # the point of the fix: sigma_h must respect the sign convention (also
@@ -496,7 +496,7 @@ def _nsv05mark_pyramid(amr):
     mesh, uh, lb, f_ufl, g, g_ufl = _pyramid_soln(amr, 16)
     CG1, DG0 = amr.spaces(mesh)
 
-    mark, eta, sz, fullcontact, Eh = amr.nsv05mark(uh, lb, g, f_ufl, g_ufl)
+    mark, eta, sz, fullcontact, Eh = amr.nsv05mark(uh, (lb, None), g, f_ufl, g_ufl)
 
     # return contract
     assert mark.function_space().ufl_element() == DG0.ufl_element()
@@ -533,7 +533,7 @@ def _nsv05mark_pyramid(amr):
     # the two estimators: nsv05mark() carries the prefactor C0 |log(h_min/diam
     # Omega)|^2 on its residual and nsv03mark() has no such factor, so E_h and
     # Etilde_h are not on a common scale.
-    _, etainf, _, _, _ = amr.nsv03mark(uh, lb, g, f_ufl, g_ufl)
+    _, etainf, _, _, _ = amr.nsv03mark(uh, (lb, None), g, f_ufl, g_ufl)
     assert amr.scalarrange(Function(DG0).interpolate(etainf * deep))[1] > 0.0
 
     return nfull, ndeep, amr.countmark(mark)
@@ -554,7 +554,7 @@ def _nsv05mark_effectivity_case(amr, m):
     _nsv03mark_nontrivial_soln().  Returns (Eh, ||u - u_h||_{0,inf;Omega}),
     using the known exact solution u = (max(|x|^2-r^2,0))^2."""
     mesh, uh, lb, f_ufl, g, g_ufl = _nsv03mark_nontrivial_soln(amr, m=m)
-    _, _, _, _, Eh = amr.nsv05mark(uh, lb, g, f_ufl, g_ufl, dualtol=1.0e-8)
+    _, _, _, _, Eh = amr.nsv05mark(uh, (lb, None), g, f_ufl, g_ufl, dualtol=1.0e-8)
     x, y = SpatialCoordinate(mesh)
     u_ufl = max_value(x ** 2 + y ** 2 - 0.7 ** 2, 0.0) ** 2
     # CG4, not DG4: Firedrake's DG node set on simplices omits the vertices, so
@@ -608,32 +608,32 @@ def test_nsv05mark_asserts():
     # primal: uh must lie above the discrete obstacle
     below = Function(CG1).interpolate(uh - Constant(1.0))
     with pytest.raises(AssertionError):
-        amr.nsv05mark(below, lb, g, f_ufl, g_ufl)
+        amr.nsv05mark(below, (lb, None), g, f_ufl, g_ufl)
 
     # dual: NSV05 gives s_z <= 0 at interior nodes.  Handing the method the load
     # with the wrong sign leaves uh primal admissible but flips that: s_z = 0 at
     # the strictly inactive nodes of the true solution, so with -f in place of f
     # it becomes -2 int f phi_z > 0 there, f being negative on this problem.
     with pytest.raises(AssertionError):
-        amr.nsv05mark(uh, lb, g, -f_ufl, g_ufl)
+        amr.nsv05mark(uh, (lb, None), g, -f_ufl, g_ufl)
 
 
-def _pyramid_chi_ufl(mesh):
+def _pyramid_lb_ufl(mesh):
     """The pyramid obstacle of _pyramid_soln() as UFL.  On a crossed mesh its
     ridges lie on element edges, so I_h chi = chi exactly and chi is in CG1."""
     x, y = SpatialCoordinate(mesh)
     return min_value(1.0 - abs(x), 1.0 - abs(y)) - 0.2
 
 
-def _nsvmark_chiufl_null(amr):
-    """Supplying chi_ufl must cost nothing when chi really is in CG1, and it must
+def _nsvmark_lbufl_null(amr):
+    """Supplying lb_ufl must cost nothing when chi really is in CG1, and it must
     stay that way under adaptive refinement.
 
     The pyramid obstacle is piecewise affine with ridges on element edges, so
     chi = I_h chi = lb pointwise.  Then ||(chi - u_h)^+|| is zero and the blocked
     gap against continuum chi coincides with the one against chi_h, so both
-    estimators must return what they return with chi_ufl=None.  This is what lets
-    examples/pyramid.py leave chi_ufl off.
+    estimators must return what they return with no continuum obstacle.  This is what lets
+    examples/pyramid.py leave lb_ufl off.
 
     That example refines adaptively, though, so checking only the initial crossed
     mesh would not cover it.  The ridges survive SBR because bisection splits an
@@ -644,28 +644,28 @@ def _nsvmark_chiufl_null(amr):
     whose element-interior points are exactly where a ridge cutting through a cell
     would show up.
 
-    Shared by test_nsvmark_chiufl_null() here and
-    tests/test_parallel.py::test_nsvmark_chiufl_null_par()."""
+    Shared by test_nsvmark_lbufl_null() here and
+    tests/test_parallel.py::test_nsvmark_lbufl_null_par()."""
     mesh, uh, lb, f_ufl, g, g_ufl = _pyramid_soln(amr, 16)
     for level in range(3):
-        chi_ufl = _pyramid_chi_ufl(mesh)
+        lb_ufl = _pyramid_lb_ufl(mesh)
         CG4 = FunctionSpace(mesh, "CG", 4)
         chierr = amr.scalarrange(
-            Function(CG4).interpolate(abs(chi_ufl - lb))
+            Function(CG4).interpolate(abs(lb_ufl - lb))
         )[1]
         assert chierr < 1.0e-14  # chi is still exactly representable in CG1
 
-        mark5a, _, _, fc5a, Eh5a = amr.nsv05mark(uh, lb, g, f_ufl, g_ufl)
+        mark5a, _, _, fc5a, Eh5a = amr.nsv05mark(uh, (lb, None), g, f_ufl, g_ufl)
         mark5b, _, _, fc5b, Eh5b = amr.nsv05mark(
-            uh, lb, g, f_ufl, g_ufl, chi_ufl=chi_ufl
+            uh, (lb, None), g, f_ufl, g_ufl, bounds_ufl=(lb_ufl, None)
         )
         assert amr.countmark(mark5a) == amr.countmark(mark5b)
         assert amr.countmark(fc5a) == amr.countmark(fc5b)
         assert abs(Eh5b - Eh5a) <= 1.0e-12 * Eh5a
 
-        mark3a, _, _, _, Eh3a = amr.nsv03mark(uh, lb, g, f_ufl, g_ufl)
+        mark3a, _, _, _, Eh3a = amr.nsv03mark(uh, (lb, None), g, f_ufl, g_ufl)
         mark3b, _, _, _, Eh3b = amr.nsv03mark(
-            uh, lb, g, f_ufl, g_ufl, chi_ufl=chi_ufl
+            uh, (lb, None), g, f_ufl, g_ufl, bounds_ufl=(lb_ufl, None)
         )
         assert amr.countmark(mark3a) == amr.countmark(mark3b)
         assert abs(Eh3b - Eh3a) <= 1.0e-12 * Eh3a
@@ -677,8 +677,8 @@ def _nsvmark_chiufl_null(amr):
             uh, lb, f_ufl, g, g_ufl = _pyramid_solve(amr, mesh)
 
 
-def test_nsvmark_chiufl_null():
-    _nsvmark_chiufl_null(VIAMR(debug=True))
+def test_nsvmark_lbufl_null():
+    _nsvmark_lbufl_null(VIAMR(debug=True))
 
 
 def _sphericalcap_soln(amr, m):
@@ -686,13 +686,13 @@ def _sphericalcap_soln(amr, m):
     crossed mesh of (-2,2)^2: the obstacle is the spherical cap sqrt(1-r^2) for
     r <= r0 = 0.9, glued C^1 to a linear far field, with f = 0 and Dirichlet data
     equal to the known exact solution.  Returns
-    (mesh, uh, lb, f_ufl, g, g_ufl, chi_ufl, u_ufl).
+    (mesh, uh, lb, f_ufl, g, g_ufl, lb_ufl, u_ufl).
 
     In contrast to _pyramid_soln(), chi here is *curved*, so it is not
     representable in CG1.  The exact solution equals chi throughout the contact
     set while u_h equals I_h chi there, which makes chi - I_h chi a genuine and,
     on these meshes, dominant part of the pointwise error.  This is the case the
-    chi_ufl kwarg exists for."""
+    lb_ufl kwarg exists for."""
     r0, afree = 0.9, 0.697965148223374
     A, B = 0.680259411891719, 0.471519893402112
     mesh = RectangleMesh(
@@ -703,13 +703,13 @@ def _sphericalcap_soln(amr, m):
     x, y = SpatialCoordinate(mesh)
     r = sqrt(x * x + y * y)
     psi0 = (1.0 - r0 * r0) ** 0.5
-    chi_ufl = conditional(
+    lb_ufl = conditional(
         le(r, r0), sqrt(1.0 - r * r), psi0 + (-r0 / psi0) * (r - r0)
     )
-    u_ufl = conditional(le(r, afree), chi_ufl, -A * ln(r) + B)
+    u_ufl = conditional(le(r, afree), lb_ufl, -A * ln(r) + B)
     f_ufl, g_ufl = Constant(0.0), u_ufl
 
-    lb = Function(CG1, name="psi").interpolate(chi_ufl)
+    lb = Function(CG1, name="psi").interpolate(lb_ufl)
     uh = Function(CG1, name="uh").interpolate(max_value(lb, Constant(0.0)))
     vh = TestFunction(CG1)
     F = inner(grad(uh), grad(vh)) * dx - f_ufl * vh * dx
@@ -728,7 +728,7 @@ def _sphericalcap_soln(amr, m):
     ).solve(bounds=(lb, ub))
     assert amr.checkadmissible(uh, lb)
     assert amr.countmark(amr.elemactive(uh, lb)) > 0
-    return mesh, uh, lb, f_ufl, g, g_ufl, chi_ufl, u_ufl
+    return mesh, uh, lb, f_ufl, g, g_ufl, lb_ufl, u_ufl
 
 
 def _nsvmark_curvedobstacle(amr):
@@ -739,28 +739,28 @@ def _nsvmark_curvedobstacle(amr):
     set and u_h equals I_h chi there, so ||u - u_h||_{0,inf;Omega} is exactly
     ||chi - I_h chi||_{0,inf}, and it is attained *inside* the contact set.  That
     quantity is term 2 of NSV03 (7.1) and the second term of NSV05 Theorem 2.7,
-    and with chi_ufl=None both methods drop it and so cannot be measuring the
-    dominant error at all.  Passing chi_ufl must restore it, which is pinned here
+    and with no continuum obstacle both methods drop it and so cannot be measuring the
+    dominant error at all.  Passing lb_ufl must restore it, which is pinned here
     two ways: the estimator strictly grows, and it becomes an upper bound for the
     true error, i.e. reliable rather than accidentally the right size.
 
     Shared by test_nsvmark_curvedobstacle() here and
     tests/test_parallel.py::test_nsvmark_curvedobstacle_par()."""
-    mesh, uh, lb, f_ufl, g, g_ufl, chi_ufl, u_ufl = _sphericalcap_soln(amr, 32)
+    mesh, uh, lb, f_ufl, g, g_ufl, lb_ufl, u_ufl = _sphericalcap_soln(amr, 32)
     # CG4, not DG4: Firedrake's DG node set on simplices omits the vertices, so
     # maximizing over it under-samples a sup norm
     CG4 = FunctionSpace(mesh, "CG", 4)
     err = amr.scalarrange(Function(CG4).interpolate(abs(u_ufl - uh)))[1]
     # the whole error is the obstacle-approximation term, and it lives in contact
     drop = amr.scalarrange(
-        Function(CG4).interpolate(max_value(chi_ufl - uh, 0.0))
+        Function(CG4).interpolate(max_value(lb_ufl - uh, 0.0))
     )[1]
     assert err > 0.0
     assert abs(drop - err) <= 1.0e-6 * err
 
     for marker in (amr.nsv03mark, amr.nsv05mark):
-        _, _, _, _, Eh_without = marker(uh, lb, g, f_ufl, g_ufl)
-        _, _, _, _, Eh_with = marker(uh, lb, g, f_ufl, g_ufl, chi_ufl=chi_ufl)
+        _, _, _, _, Eh_without = marker(uh, (lb, None), g, f_ufl, g_ufl)
+        _, _, _, _, Eh_with = marker(uh, (lb, None), g, f_ufl, g_ufl, bounds_ufl=(lb_ufl, None))
         assert Eh_with > Eh_without  # the dropped term is genuinely nonzero
         assert Eh_with >= err  # ... and it alone already bounds the error
 
@@ -1010,7 +1010,7 @@ if __name__ == "__main__":
     test_nsv05mark_pyramid()
     test_nsv05mark_effectivity()
     test_nsv05mark_asserts()
-    test_nsvmark_chiufl_null()
+    test_nsvmark_lbufl_null()
     test_nsvmark_curvedobstacle()
     test_fixedrate_total()
     test_udomark_nontrivial()

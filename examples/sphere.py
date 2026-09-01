@@ -655,7 +655,7 @@ for amrtype in refinetypes:
         elif amrtype in ("nsv03", "nsv05"):
             t_mark0 = time.time()
             g = Function(V).interpolate(g_ufl)
-            # chi_ufl=psi_expr matters here: the cap is curved, so it is not
+            # lb_ufl=psi_expr matters here: the cap is curved, so it is not
             # representable in V=CG1 and u_h touches I_h psi rather than psi.
             # Without it both estimators drop ||(psi - u_h)^+||_infty, which on
             # this problem is essentially all of ||u - u_h||_infty and is
@@ -667,7 +667,7 @@ for amrtype in refinetypes:
                 # (not inactive-set-restricted) bound which the pointwise theory
                 # gives for ||u-u_h||_infty
                 (mark, _, _, _, Eh) = amr.nsv03mark(
-                    uh, lb, g, Constant(args.fconst), g_ufl, chi_ufl=psi_expr
+                    uh, (lb, None), g, Constant(args.fconst), g_ufl, bounds_ufl=(psi_expr, None)
                 )
             else:
                 # Eh is the estimator E_h of NSV05 Theorem 2.7, which bounds the
@@ -675,7 +675,7 @@ for amrtype in refinetypes:
                 # discrete full-contact set, so it should leave the interior of
                 # the active set coarse; compare the meshes in the .pvd files.
                 (mark, _, _, _, Eh) = amr.nsv05mark(
-                    uh, lb, g, Constant(args.fconst), g_ufl, chi_ufl=psi_expr
+                    uh, (lb, None), g, Constant(args.fconst), g_ufl, bounds_ufl=(psi_expr, None)
                 )
             t_mark1 = time.time()
             if exact_known:
@@ -756,14 +756,14 @@ for amrtype in refinetypes:
     elif amrtype == "nsv03":
         g = Function(V).interpolate(g_ufl)
         (mark, etainf, etad, sigmah, _) = amr.nsv03mark(
-            uh, lb, g, Constant(args.fconst), g_ufl, chi_ufl=psi_expr
+            uh, (lb, None), g, Constant(args.fconst), g_ufl, bounds_ufl=(psi_expr, None)
         )
         mark.rename("mark")
         fields += [mark, sigmah, etainf, etad]
     elif amrtype == "nsv05":
         g = Function(V).interpolate(g_ufl)
         (mark, eta, sz, fullcontact, _) = amr.nsv05mark(
-            uh, lb, g, Constant(args.fconst), g_ufl, chi_ufl=psi_expr
+            uh, (lb, None), g, Constant(args.fconst), g_ufl, bounds_ufl=(psi_expr, None)
         )
         mark.rename("mark")
         # fullcontact is Omega_h^0, the set on which the residual is switched

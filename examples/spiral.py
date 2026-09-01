@@ -108,7 +108,7 @@ for amrtype in typelist:
             mark = amr.unionmarks(mark, imark)
         else:
             z = Constant(0.0)
-            mark, _, _, _, _ = amr.nsv03mark(uh, lb, z, z, z, method="total", dualtol=1.0e-6)
+            mark, _, _, _, _ = amr.nsv03mark(uh, (lb, None), z, z, z, method="total", dualtol=1.0e-6)
 
         mesh = amr.refinesbr2D(mesh, mark)
         meshHist.append(mesh)
@@ -133,7 +133,7 @@ for amrtype in typelist:
     else:
         # for output file, compute fields on final mesh
         z = Constant(0.0)
-        mark, etainf, etad, sigmah, _ = amr.nsv03mark(uh, lb, z, z, z, method="total", dualtol=1.0e-6)
+        mark, etainf, etad, sigmah, _ = amr.nsv03mark(uh, (lb, None), z, z, z, method="total", dualtol=1.0e-6)
         mark.rename("mark")
         fields += [mark, sigmah, etainf, etad]
     VTKFile(outfile).write(*fields)

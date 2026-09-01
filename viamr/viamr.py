@@ -77,8 +77,8 @@ class VIAMR(OptionsManager, AVMMixin):
       imark, _, _ = amr.gradrecinactivemark(uh, lb)            # classical gradient recovery in inactive set
       imark, _, _ = amr.brinactivemark(uh, lb, res_ufl)        # classical BR78 estimator in inactive set
       imark, _, _ = amr.brinactivemark(uh, lb, res_ufl, Z=Z)   # weighted estimator (BV00) in inactive set
-      mark, _, _, _, _ = amr.nsv03mark(uh, lb, g, f_ufl, g_ufl)  # method from NSV03
-      mark, _, _, _, _ = amr.nsv05mark(uh, lb, g, f_ufl, g_ufl)  # method from NSV05
+      mark, _, _, _, _ = amr.nsv03mark(uh, (lb, ub), g, f_ufl, g_ufl)  # method from NSV03, box-constrained
+      mark, _, _, _, _ = amr.nsv05mark(uh, (lb, None), g, f_ufl, g_ufl)  # method from NSV05, lower obstacle only
       mark, ethresh = amr.fixedratemark(eta, theta=0.5, method="total")  # threshold a DG0 estimator eta
       mark = amr.unionmarks(fbmark, imark)                     # mark if either is marked
       rmesh = amr.refinesbr2D(mesh, mark)                      # PETSc DMPlexTransform for skeleton-based refinement
@@ -87,7 +87,11 @@ class VIAMR(OptionsManager, AVMMixin):
 
     The methods above generalize to upper-bound obstacles by passing ub in the same position as lb and adding the boxside="upper" kwarg; see each method's own docstring.  Note that unionmarks() can be used to apply both lower and upper bounds.
 
-    TODO: nsv03mark() and safeactiveunmark() are not yet generalized this way.
+    nsv03mark() and nsv05mark() also take bounds = (lb, ub), plus bounds_ufl = (lb_ufl, ub_ufl) for the *continuum* obstacles when those are not representable in u_h's space; see _obstacleterms().  nsv03mark() computes the genuinely box-constrained estimator of doc/nsv-box/box.tex, so it accepts either or both obstacles; its estimator is not a sum of two unilateral ones.  nsv05mark() is unilateral, NSV05's theory having no upper obstacle, so it requires bounds = (lb, None).
+
+    TODO: every method should be considered for the bounds=(lb,ub) signature feature, i.e. foo(..., bounds=(lb,ub), ...), replacing the bound plus boxside="lower"/"upper" pair everywhere.  So far only nsv03mark() and nsv05mark() have it.  A caller then never builds an artificial infinite obstacle, which is what a PETSc VI solve requires and which VIAMR has no reason to require.
+
+    TODO: safeactiveunmark() is not yet generalized this way.
 
     Regarding returned values: fbmark, imark, and mark are element markings in DG0 (Definition 4.2 in paper), rmesh is a refined mesh, and amesh is an adapted mesh.
 
@@ -585,48 +589,67 @@ class VIAMR(OptionsManager, AVMMixin):
         sz.dat.data[:] = -res.dat.data_ro
         return sz
 
-    def _obstacleterms(self, uh, lb, chi_ufl, fdegree):
+    def _obstacleterms(self, uh, bound, bound_ufl, fdegree, boxside="lower"):
         """Compute the two obstacle-approximation quantities which appear in both
-        NSV estimators, as elementwise sup norms in DG0:
+        NSV estimators, as elementwise sup norms in DG0.  For boxside="lower",
+        where bound is the discrete lower obstacle,
 
             obstacleerr = ||(chi - u_h)^+||_{inf; T}
             gap         = ||(u_h - chi)^+||_{inf; T}
+
+        and for boxside="upper", where bound is the discrete upper obstacle, the
+        two positive parts are exchanged,
+
+            obstacleerr = ||(u_h - chi)^+||_{inf; T}
+            gap         = ||(chi - u_h)^+||_{inf; T}.
+
+        Either way obstacleerr measures how far u_h violates the *continuum*
+        obstacle on that side, and gap measures how far u_h has detached from it,
+        so the caller uses them for the same two purposes on both sides.
 
         Here chi is the *continuum* obstacle, which is what NSV03 (7.1) and NSV05
         Theorem 2.7 both ask for.  The barrier arguments behind them (NSV05
         Propositions 2.5 and 2.6) compare u_h against chi itself, so substituting
         the discrete chi_h changes what is being estimated.
 
-        With chi_ufl=None the continuum obstacle is taken to be the discrete one,
-        chi = chi_h = lb.  Then primal admissibility makes obstacleerr vanish, and
-        gap reduces to the elementwise sup of u_h - lb.  That is exactly what both
-        methods computed before chi_ufl existed, so the default reproduces them.
+        With bound_ufl=None the continuum obstacle is taken to be the discrete
+        one, i.e. bound itself.  Then primal admissibility makes obstacleerr
+        vanish, and gap reduces to the elementwise sup of the gap to bound.  That
+        is exactly what both methods computed before bound_ufl existed, so the
+        default reproduces them.
 
-        Otherwise chi_ufl is sampled at the Lagrange nodes of CG_fdegree, in the
+        Otherwise bound_ufl is sampled at the Lagrange nodes of CG_fdegree, in the
         spirit of pages 188-189 of NSV03, which approximate a maximum norm of
         non-polynomial data by element point values at Lagrange nodes.  Both
         quantities are continuous, so CG is available, and it is what we want:
         Firedrake's DG node set on simplices does *not* include the vertices, so
         maximizing over it systematically under-samples a sup norm, whereas CG
         includes them and so at least sees the vertex values exactly.  This also
-        makes chi_ufl agree with chi_ufl=None to roundoff whenever chi lies in
-        u_h's space, since then both reduce to the same vertex maximum.
+        makes bound_ufl agree with bound_ufl=None to roundoff whenever the
+        continuum obstacle lies in u_h's space, since then both reduce to the
+        same vertex maximum.
 
         Note that u_h >= chi_h does *not* imply u_h >= chi, so here both positive
         parts have to be taken explicitly, rather than relying on admissibility to
         fix a sign."""
         mesh = uh.function_space().mesh()
         _, DG0 = self.spaces(mesh)
-        if chi_ufl is None:
+        upper = boxside == "upper"
+        if bound_ufl is None:
             obstacleerr = Function(DG0).interpolate(Constant(0.0))
-            gaph = Function(uh.function_space()).interpolate(uh - lb)
+            gaph = Function(uh.function_space()).interpolate(
+                bound - uh if upper else uh - bound
+            )
             return obstacleerr, self._elemmaxabs(gaph)
         CGc = FunctionSpace(mesh, "CG", fdegree)
+        # violation of the continuum obstacle, signed so that its positive part
+        # is obstacleerr and the positive part of its negative is gap
+        viol_ufl = (uh - bound_ufl) if upper else (bound_ufl - uh)
         obstacleerr = self._elemmaxabs(
-            Function(CGc).interpolate(max_value(chi_ufl - uh, 0.0))
+            Function(CGc).interpolate(max_value(viol_ufl, 0.0))
         )
         gap = self._elemmaxabs(
-            Function(CGc).interpolate(max_value(uh - chi_ufl, 0.0))
+            Function(CGc).interpolate(max_value(-viol_ufl, 0.0))
         )
         return obstacleerr, gap
 
@@ -988,11 +1011,11 @@ class VIAMR(OptionsManager, AVMMixin):
     def nsv03mark(
         self,
         uh,
-        lb,
+        bounds,
         g,
         f_ufl,
         g_ufl,
-        chi_ufl=None,
+        bounds_ufl=(None, None),
         method="max",
         theta=0.5,
         dualtol=1.0e-10,
@@ -1007,12 +1030,21 @@ class VIAMR(OptionsManager, AVMMixin):
             a posteriori error control for elliptic obstacle problems.
             Numerische Mathematik, 95(1), 163-195.
 
-        The per-element main formula (7.1) in NSV03 is
+        With ub given this is the *box-constrained* form of that estimator, i.e.
+        formula (6.1) of doc/nsv-box/box.tex, which extends NSV03 to the two-sided
+        constraint chi_lo <= u <= chi_up.  Both obstacles are then live, and the
+        four terms below which refer to an obstacle come in symmetric pairs.  The
+        default ub=None is the unilateral problem of NSV03 itself, in which the
+        upper obstacle is absent and each pair collapses to its lower half.
+
+        The per-element main formula, NSV03 (7.1) read box-constrained, is
             eta_infty =
-                  C_0 h_T^2 ||R_infty||_infty                      [term 1]
-                + ||(chi - u_h)^+||_infty                          [term 2]
-                + 1_{sigma_h > 0} * ||(u_h - chi)^+||_infty        [term 3]
-                + ||g - I_h g||_{infty; partial Omega cap T}       [term 4]
+                  C_0 h_T^2 ||R_infty||_infty                        [term 1]
+                + ||(chi_lo - u_h)^+||_infty
+                    + ||(u_h - chi_up)^+||_infty                     [term 2]
+                + 1_{omega_bot} ||(u_h - chi_lo)^+||_infty
+                    + 1_{omega_top} ||(chi_up - u_h)^+||_infty       [term 3]
+                + ||g - I_h g||_{infty; partial Omega cap T}         [term 4]
         But there is a second per-element quantity, the L^d "quadrature indicator" of section 7.1:
             eta_d = C_1 h_T^2 ||grad(sigma_h)||_{d; Lambda_h cap T}    [term eta_d]
         Both eta_.. are computed on each triangle T in the mesh.
@@ -1020,17 +1052,21 @@ class VIAMR(OptionsManager, AVMMixin):
         Meaning:
           term 1:  Estimates the residual relevant to the VI problem; see below for the R_infty formula, which uses the discrete residual sigma_h below.  C_0=0.1 is used by NSV03.
 
-          term 2:  Zero unless the caller supplies chi_ufl.  Without it we take chi = chi_h = lb, having only the obstacle on the current mesh, and then *asserting primal admissibility* makes the term vanish.  Passing chi_ufl, a UFL expression for the continuum obstacle, restores the term; see _obstacleterms().  It matters whenever chi is not representable in u_h's space, since then u_h touches chi_h rather than chi and the difference is a genuine part of the pointwise error.  A curved obstacle sampled on a coarse mesh is the case to worry about: there this term can be the whole of ||u - u_h||_{0,inf;Omega}.
+          term 2:  The two *obstacle admissibility* terms, each zero unless the caller supplies the corresponding continuum obstacle lb_ufl (lower) or ub_ufl (upper), i.e. the entries of bounds_ufl.  Without it we take the continuum obstacle to be lb (resp. ub) itself, having only the obstacle on the current mesh, and then *asserting primal admissibility* makes the term vanish.  Passing a UFL expression for the continuum obstacle restores the term; see _obstacleterms().  It matters whenever chi is not representable in u_h's space, since then u_h touches chi_h rather than chi and the difference is a genuine part of the pointwise error.  A curved obstacle sampled on a coarse mesh is the case to worry about: there this term can be the whole of ||u - u_h||_{0,inf;Omega}.
 
-          term 3:  This "blocked gap" is gap = (u_h - chi)^+, blocked according to the simplest discrete residual sigma_h, computed below.  In our sign convention the strictly-active set is {sigma_h > 0}, which is NSV03's {sigma_h < 0} in (7.1).  The sup is thus over {sigma_h > 0} cap T, so an element contributes only if it lies in that set, i.e. only if *every* vertex has a strictly active multiplier (residual).  However, we assert sigma_h > -dualtol below.  Thus, under the chi = chi_h default of term 2 this makes the term identically zero, since complementarity puts the gap at zero on exactly those nodes.  With chi_ufl given the term no longer degenerates, which is the situation of NSV03's Remark 5.8, where it drives the initial refinement.
+          term 3:  The two *localized detachment* terms, which measure how far u_h has detached from an obstacle on the region where the discrete residual asserts that it is attached.  Each is localized to a star-dilated strict contact set, in the sign convention of sigma_h below,
+
+              omega_bot = U_h({sigma_h > 0}),   omega_top = U_h({sigma_h < 0}),
+
+          so an element counts if *some* vertex has a strictly signed multiplier.  NSV03 (7.1) instead uses the bare set {sigma_h < 0} in their opposite sign convention, requiring *every* vertex; the dilation is forced by the box constraint, because on a transition element sigma_h changes sign and the affine argument justifying the bare set fails.  See Remark 5.2 of box.tex, which also notes that the dilated set contains the bare one, so this stays reliable unilaterally.  One consequence: unlike the bare set, omega_bot does not force the term to zero when the continuum obstacle is absent, since an element with one strictly active vertex and two inactive ones has a nonzero gap.
 
           term 4:  Estimates the boundary interpolation error, and we use a formula which is correct if g is in CG4.  Being a sup norm over partial Omega cap T, it is computed as the elementwise sup of |g - I_h g| over the elements touching the boundary.
 
-          term eta_d:  Controls the mass-lumping/quadrature error incurred when computing sigma_h (see sec. 6.3 and 7.1 in NSV03).  sigma_h is CG1, so grad(sigma_h) is elementwise constant, and its L^d(T) norm is |grad(sigma_h)|_T * |T|^{1/d}.  Localized to Lambda_h (the discrete contact set, approximated here by tactive below, the same "neighborhood active" indicator used for term 1's X) because sigma = 0 off the contact set (see (1.2) in NSV03), so grad(sigma_h) there is quadrature noise rather than signal.  C_1=0.01 is the practical value used by NSV03 in (7.1).
+          term eta_d:  Controls the mass-lumping/quadrature error incurred when computing sigma_h (see sec. 6.3 and 7.1 in NSV03).  sigma_h is CG1, so grad(sigma_h) is elementwise constant, and its L^d(T) norm is |grad(sigma_h)|_T * |T|^{1/d}.  Localized to Lambda_h (the discrete contact set, approximated here by tactive below, the same "neighborhood active" indicator used for term 1's X) because sigma = 0 off the contact set (see (1.2) in NSV03), so grad(sigma_h) there is quadrature noise rather than signal.  Bilaterally Lambda_h is the union of the lower and upper element-wise contact sets, formula (3.11) of box.tex.  C_1=0.01 is the practical value used by NSV03 in (7.1).
 
         Regarding eta_d, NSV03 sec. 7.1 notes that it "exhibits different accumulation" than eta_infty.  That is, as a genuine L^d(Lambda_h) norm, it aggregates over T by an L^d-type sum.  Mixing both into one scalar before marking would let eta_d's different scaling distort the max-based threshold.  Following NSV03, we therefore mark in two separate passes.  First on eta_infty, then on eta_d restricted to Lambda_h, and then take the union.  NSV03 further qualifies that the second pass only runs "provided quadrature dominates the estimator," so the second pass runs only if max(eta_d) > etadratio * max(eta_infty).  NSV03 does not give a precise numerical criterion for "dominates", so etadratio is exposed as a parameter.
 
-        Returns (mark, etainf, etad, sigmah, Eh).  Eh is the scalar estimator Etilde_h of (7.1) itself, so it is the quantity which bounds max(||u - u_h||_{0,inf;Omega}, ||sigma - sigmatilde_h||_{-2,inf;Omega}), and thus the right numerator for an effectivity index.  Each of its terms is accumulated in its own norm: the four sup-norm terms are maximized separately, since (7.1) adds the global norms rather than maximizing their elementwise sum eta_infty; and eta_d is accumulated as an L^d-type sum of d-th powers.
+        Returns (mark, etainf, etad, sigmah, Eh).  Eh is the scalar estimator Etilde_h of (7.1) itself, so it is the quantity which bounds max(||u - u_h||_{0,inf;Omega}, ||sigma - sigmatilde_h||_{-2,inf;Omega}), and thus the right numerator for an effectivity index.  (Bilaterally, Theorem 6.6 of box.tex gives the ||u - u_h||_{0,inf;Omega} half of that bound; the residual half is Proposition 6.7 there, up to a constant.)  Each of its terms is accumulated in its own norm: the sup-norm terms are maximized separately, since (7.1) adds the global norms rather than maximizing their elementwise sum eta_infty; and eta_d is accumulated as an L^d-type sum of d-th powers.
         """
         # mesh quantities
         mesh = uh.function_space().mesh()
@@ -1038,18 +1074,43 @@ class VIAMR(OptionsManager, AVMMixin):
         n = FacetNormal(mesh)
         hT = project(CellSize(mesh), DG0)  # versus mesh.cell_sizes(), which is in CG1
 
+        # the discrete obstacles, and the continuum ones; either entry of either
+        #   pair may be None, and an absent obstacle contributes nothing
+        lb, ub = bounds
+        lb_ufl, ub_ufl = bounds_ufl
+        assert not (lb is None and ub is None), "bounds must constrain a side"
+
         # term 2
         # primal admissibility check; this is a property of the discrete solution,
-        #   asserted against the discrete obstacle whether or not chi_ufl is given.
-        #   With chi_ufl=None it is also what makes "(chi - u_h)_+" vanish, since
-        #   then chi = lb is representable in u_h's space.
-        gaph = Function(CG1).interpolate(uh - lb)
-        assert self._globalextreme(gaph, minimum=True) >= 0.0
-        obstacleerr, gap = self._obstacleterms(uh, lb, chi_ufl, fdegree)
+        #   asserted against the discrete obstacle whether or not the continuum one
+        #   is given.  With lb_ufl=None it is also what makes "(lb - u_h)^+" vanish,
+        #   since then the continuum obstacle is lb itself, which is representable
+        #   in u_h's space.  Symmetrically on the upper side.
+        if lb is None:
+            obstacleerrlo = Function(DG0)
+            gaplo = Function(DG0)
+        else:
+            gaph = Function(CG1).interpolate(uh - lb)
+            assert self._globalextreme(gaph, minimum=True) >= 0.0
+            obstacleerrlo, gaplo = self._obstacleterms(uh, lb, lb_ufl, fdegree)
+        if ub is None:
+            obstacleerrup = Function(DG0)
+            gapup = Function(DG0)
+        else:
+            gaphup = Function(CG1).interpolate(ub - uh)
+            assert self._globalextreme(gaphup, minimum=True) >= 0.0
+            obstacleerrup, gapup = self._obstacleterms(
+                uh, ub, ub_ufl, fdegree, boxside="upper"
+            )
 
         # compute residual sigmah in CG1 following section 2.1 of NSV03, page 169,
         #   but use opposite sign convention so sigmah >= 0.   complementarity is
         #   uh >= lb,  sigmah >= 0,  (uh - lb) sigmah = 0
+        # bilaterally sigmah has no global sign.  Proposition 3.4 of box.tex
+        #   gives instead a nodal complementarity: at an interior node,
+        #   sigmah(z) >= 0 if uh(z) = lb(z), sigmah(z) <= 0 if uh(z) = ub(z),
+        #   and sigmah(z) = 0 if neither.  So a strictly signed node is active,
+        #   and the sign says against which obstacle.
         # step 1: residual as a cofunction; the "- inner(grad(uh), n) * phi * ds" term
         #   is NSV03's boundary flux correction (page 169) -- it vanishes identically
         #   at interior nodes z, since phi_h^z restricted to any boundary facet not
@@ -1071,14 +1132,36 @@ class VIAMR(OptionsManager, AVMMixin):
         #   as at interior nodes; following NSV03 page 169, it is instead defined as
         #   the *positive part* of the boundary-corrected residual above, and only kept
         #   nonzero where z's whole star U_h(z) is active -- otherwise sigmah(z) = 0.
-        starwhollyactive = self._starwhollyactive(uh, lb, boxside="lower")
-        bdryval = Function(CG1).interpolate(
-            starwhollyactive * conditional(sigmah > 0.0, sigmah, 0.0)
-        )
+        #   Bilaterally this is formula (3.14) of box.tex: keep the positive part
+        #   on a wholly lower-active star, the negative part on a wholly
+        #   upper-active star, and zero elsewhere.  The two stars are disjoint
+        #   because lb < ub, so the two contributions never overlap.
+        bdry_ufl = Constant(0.0)
+        if lb is not None:
+            starlo = self._starwhollyactive(uh, lb, boxside="lower")
+            bdry_ufl = bdry_ufl + starlo * conditional(sigmah > 0.0, sigmah, 0.0)
+        if ub is not None:
+            starup = self._starwhollyactive(uh, ub, boxside="upper")
+            bdry_ufl = bdry_ufl + starup * conditional(sigmah < 0.0, sigmah, 0.0)
+        bdryval = Function(CG1).interpolate(bdry_ufl)
         DirichletBC(CG1, bdryval, "on_boundary").apply(sigmah)
 
-        # check dual admissiblity (up to tolerance)
-        assert self._globalextreme(sigmah, minimum=True) >= -dualtol
+        # check dual admissiblity (up to tolerance).  Unilaterally that is the
+        #   global sign sigmah >= 0.  Bilaterally it is the nodal complementarity
+        #   of Proposition 3.4 of box.tex, namely that a strictly signed node is
+        #   active against the obstacle its sign names.
+        if ub is None:
+            assert self._globalextreme(sigmah, minimum=True) >= -dualtol
+        elif lb is None:
+            assert self._globalextreme(sigmah, minimum=False) <= dualtol
+        else:
+            nodallo = self._nodalactive(uh, lb, boxside="lower")
+            nodalup = self._nodalactive(uh, ub, boxside="upper")
+            signmisfit = Function(CG1).interpolate(
+                conditional(sigmah > dualtol, 1.0 - nodallo, 0.0)
+                + conditional(sigmah < -dualtol, 1.0 - nodalup, 0.0)
+            )
+            assert self._globalextreme(signmisfit, minimum=False) == 0.0
 
         # term 1
         # compute the R_\infty part of "practical estimator" in (7.1) in NSV03, from (3.7)
@@ -1098,7 +1181,20 @@ class VIAMR(OptionsManager, AVMMixin):
         # _facetjump() gives exterior facets the value zero, which is exactly the
         # "\setminus \partial \Omega" restriction wanted here.
         jumpu = self._elemmaxabs(self._facetjump(uh))
-        tactive = self.thinelemactive(uh, lb)
+        # Lambda_h, the element-wise contact set; bilaterally it is the union
+        # Lambda_h,bot cup Lambda_h^top of formula (3.11) in box.tex, and each
+        # half is one thinelemactive() call (Remark 3.7 there)
+        tlo = (
+            Function(DG0)
+            if lb is None
+            else self.thinelemactive(uh, lb, boxside="lower")
+        )
+        tup = (
+            Function(DG0)
+            if ub is None
+            else self.thinelemactive(uh, ub, boxside="upper")
+        )
+        tactive = Function(DG0).interpolate(max_value(tlo, tup))
         X_ufl = abs(f_ufl + tactive * sigmah)
         # note pages 188-189 in NSV03 regarding use of DG7, to deal with the fact
         # that f_ufl is generally not in CG1:
@@ -1122,23 +1218,31 @@ class VIAMR(OptionsManager, AVMMixin):
         Rinf = self._elemmaxabs(Rinf)
 
         # term 3
-        # The sup is over {sigma_h > 0} \cap T -- NSV03 writes {sigma_h < 0} in (7.1),
-        # in their opposite sign convention -- so an element contributes only if it
-        # lies *in* that set, which is tested by requiring every vertex to have a
-        # strictly active multiplier.
-        # Note that with chi_ufl=None this term is identically zero:
-        # complementarity makes the gap vanish at exactly the nodes where the
-        # multiplier is active.  That is the honest value under that assumption.
-        # NSV03's Remark 5.8, where this term drives the initial refinement,
-        # relies on the *continuous* chi in (u_h - chi)^+, which is available
-        # only when the caller supplies chi_ufl.
-        # Compare nsv05mark(), whose Lambda_h of (2.20) is a union of whole stars,
-        # so there the analogous term does not degenerate.
-        elemincontact = self._elemextreme(
-            sigmah, minimum=True, defaultval=PETSc.INFINITY
+        # The two localized detachment terms, each measured over a star-dilated
+        # strict contact set of formula (5.5) in box.tex,
+        #     omega_bot = U_h({sigma_h > 0}),   omega_top = U_h({sigma_h < 0}).
+        # A star dilation of a nodal set is a single node -> element max, so an
+        # element lands in omega_bot exactly when *some* vertex has a strictly
+        # positive multiplier.  NSV03 (7.1) uses the bare set instead, an
+        # element -> min requiring *every* vertex; Remark 5.2 of box.tex explains
+        # why the box constraint forces the dilation, and notes that the dilated
+        # set contains the bare one, so the unilateral estimator stays reliable.
+        # Because of that enlargement the term does not degenerate when
+        # continuum obstacle is absent, in contrast to the bare set, where
+        # complementarity makes the gap vanish at exactly the nodes tested.  This is the situation of
+        # NSV03's Remark 5.8, where this term drives the initial refinement.
+        # Compare nsv05mark(), whose Lambda_h of (2.20) is likewise a union of
+        # whole stars.
+        nodalstrictlo = Function(CG1).interpolate(
+            conditional(sigmah > dualtol, 1.0, 0.0)
         )
-        blockgap_ufl = conditional(elemincontact > dualtol, gap, 0.0)
-        blockgap = Function(DG0).interpolate(blockgap_ufl)
+        ombot = self._elemextreme(nodalstrictlo, minimum=False, defaultval=0.0)
+        blockgaplo = Function(DG0).interpolate(ombot * gaplo)
+        nodalstrictup = Function(CG1).interpolate(
+            conditional(sigmah < -dualtol, 1.0, 0.0)
+        )
+        omtop = self._elemextreme(nodalstrictup, minimum=False, defaultval=0.0)
+        blockgapup = Function(DG0).interpolate(omtop * gapup)
 
         # term 4
         # This is a sup norm over \partial \Omega \cap T, so it is computed as the
@@ -1155,7 +1259,14 @@ class VIAMR(OptionsManager, AVMMixin):
 
         # finally compute eta_inf; see doc string above for formula
         residterm = Function(DG0).interpolate(C0 * hT ** 2 * Rinf)
-        etainf_ufl = residterm + obstacleerr + blockgap + bdryerr
+        etainf_ufl = (
+            residterm
+            + obstacleerrlo
+            + obstacleerrup
+            + blockgaplo
+            + blockgapup
+            + bdryerr
+        )
         etainf = Function(DG0, name="eta_inf").interpolate(etainf_ufl)
 
         # first marking pass: eta_infty over the whole domain
@@ -1180,14 +1291,18 @@ class VIAMR(OptionsManager, AVMMixin):
             mark = self.unionmarks(mark, markd)
 
         # the estimator Etilde_h of (7.1), accumulating each term in its own norm;
-        # see doc string above.  The four sup-norm terms are maximized separately,
+        # see doc string above.  The sup-norm terms are maximized separately,
         # because (7.1) adds the global norms rather than maximizing their
         # elementwise sum eta_inf; and eta_d, being an L^d(Lambda_h) norm, is
-        # accumulated as a sum of d-th powers.
+        # accumulated as a sum of d-th powers.  The upper-obstacle terms are
+        # identically zero when ub is None, so this is (6.1) of box.tex in both
+        # the bilateral and unilateral cases.
         Eh = (
             self._globalextreme(residterm, minimum=False)
-            + self._globalextreme(obstacleerr, minimum=False)
-            + self._globalextreme(blockgap, minimum=False)
+            + self._globalextreme(obstacleerrlo, minimum=False)
+            + self._globalextreme(obstacleerrup, minimum=False)
+            + self._globalextreme(blockgaplo, minimum=False)
+            + self._globalextreme(blockgapup, minimum=False)
             + self._globalextreme(bdryerr, minimum=False)
             + self._globalpnorm(etad, d)
         )
@@ -1196,11 +1311,11 @@ class VIAMR(OptionsManager, AVMMixin):
     def nsv05mark(
         self,
         uh,
-        lb,
+        bounds,
         g,
         f_ufl,
         g_ufl,
-        chi_ufl=None,
+        bounds_ufl=(None, None),
         method="max",
         theta=0.5,
         C0=0.02,
@@ -1273,12 +1388,12 @@ class VIAMR(OptionsManager, AVMMixin):
 
         Here h_min = min_z h_z as in NSV05.  Dividing by the bounding box makes the argument dimensionless, so the estimator is invariant under a rescaling of the geometry.  The reason for keeping the log factor is that a bare 0.02 is not reliable.  In the examples of NSV05 section 3 the solution vanishes in a neighborhood of the boundary, so the localized residual is never the binding term there.  However, example 7.2 of NSV03 (2003 paper), reveals the flaw: it has a large inactive set on which u is smooth and nonzero, and the pointwise error there is ordinary P1 interpolation error, ||u - u_h||_{inf;T} ~ h^2 |D^2 u| / 8.  Meanwhile eta_z ~ h^2 |D^2 u|, since the load enters only through its oscillation and the jump term has to carry the whole residual, so the prefactor on max_z eta_z must be at least about 1/8.  A bare 0.02 is roughly eight times too small.  On quasi-uniform meshes this stays hidden, because the obstacle term ||(u_h - chi)^+||_{inf;Lambda_h} is then the largest term in E_h, but adaptive refinement drives that term down much faster than the residual term, and the estimator then falls below the error.  With the logarithmic factor restored, |log(h_min / diam Omega)|^2 is 20 to 35 on the meshes that example generates, so the effective prefactor is 0.4 to 0.7 and E_h dominates at every level.
 
-        2.  The obstacle chi is the *continuum* one, supplied as the UFL expression chi_ufl; see _obstacleterms().  Both obstacle terms use it, since the barrier arguments of Propositions 2.5 and 2.6 compare u_h against chi itself.  With chi_ufl=None we assume instead that the a posteriori method only has access to the discrete obstacle on the current mesh, i.e. chi = chi_h = lb.  Then ||(chi - u_h)^+||_inf vanishes, because we *assert primal admissibility* against chi_h, and the blocked gap reduces to u_h - lb.  That default matters most for a curved obstacle, which is not representable in u_h's space: there u_h touches chi_h rather than chi, and the difference can be all of ||u - u_h||_{0,inf;Omega}, leaving the estimator blind to the dominant error.
+        2.  The obstacle chi is the *continuum* one, supplied as the UFL expression lb_ufl, the first entry of bounds_ufl; see _obstacleterms().  Both obstacle terms use it, since the barrier arguments of Propositions 2.5 and 2.6 compare u_h against chi itself.  With lb_ufl=None we assume instead that the a posteriori method only has access to the discrete obstacle on the current mesh, i.e. chi = chi_h = lb.  Then ||(chi - u_h)^+||_inf vanishes, because we *assert primal admissibility* against chi_h, and the blocked gap reduces to u_h - lb.  That default matters most for a curved obstacle, which is not representable in u_h's space: there u_h touches chi_h rather than chi, and the difference can be all of ||u - u_h||_{0,inf;Omega}, leaving the estimator blind to the dominant error.
 
         3. Note that E_h is a single number: a max over nodes plus global sup norms.  Localizing it to elements for marking purposes is not spelled out in NSV05, so we follow what section 7.1 of NSV03 does for its own estimator.  Define
 
             eta_T = CC max_{z a vertex of T} eta_z                localized residual on element
-                    + ||(chi - u_h)^+||_{inf; T}                  obstacle approximation (zero if chi_ufl is None)
+                    + ||(chi - u_h)^+||_{inf; T}                  obstacle approximation (zero if lb_ufl is None)
                     + ||(u_h - chi)^+||_{inf; Lambda_h cap T}     inactive overlap with negative residual set
                     + ||g - I_h g||_{inf; partial Omega cap T}.   boundary data approximation
 
@@ -1327,6 +1442,18 @@ class VIAMR(OptionsManager, AVMMixin):
           * there is no quadrature estimator and no second marking pass
           * the blocked gap is restricted to a union of stars, not to elements
         """
+        # the discrete obstacles, and the continuum ones.  NSV05's theory is
+        #   unilateral, so only a lower obstacle is accepted here; nsv03mark()
+        #   is the box-constrained estimator.
+        lb, ub = bounds
+        lb_ufl, ub_ufl = bounds_ufl
+        assert lb is not None, "nsv05mark() requires a lower obstacle"
+        if ub is not None or ub_ufl is not None:
+            raise NotImplementedError(
+                "nsv05mark() is unilateral: NSV05's theory has no upper obstacle, "
+                "so bounds must be (lb, None).  Use nsv03mark() for a box constraint."
+            )
+
         # mesh quantities
         mesh = uh.function_space().mesh()
         CG1, DG0 = self.spaces(mesh)
@@ -1435,12 +1562,13 @@ class VIAMR(OptionsManager, AVMMixin):
         etaR = self._elemextreme(etaz, minimum=False, defaultval=0.0)
 
         # primal admissibility check; this is a property of the discrete solution,
-        #   asserted against the discrete obstacle whether or not chi_ufl is given.
-        #   With chi_ufl=None it is also what removes "(chi - u_h)^+" from the
-        #   estimator, since then chi = lb is representable in u_h's space.
+        #   asserted against the discrete obstacle whether or not lb_ufl is given.
+        #   With lb_ufl=None it is also what removes the obstacle-approximation
+        #   term from the estimator, since the continuum obstacle is then lb
+        #   itself, which is representable in u_h's space.
         gaph = Function(CG1).interpolate(uh - lb)
         assert self._globalextreme(gaph, minimum=True) >= 0.0
-        obstacleerr, gap = self._obstacleterms(uh, lb, chi_ufl, fdegree)
+        obstacleerr, gap = self._obstacleterms(uh, lb, lb_ufl, fdegree)
 
         # dual admissibility (up to tolerance): NSV05 gives s_z <= 0 at interior
         # nodes.  The scale for s_z is that of int f phi_z.
