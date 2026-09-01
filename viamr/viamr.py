@@ -74,22 +74,20 @@ class VIAMR(OptionsManager, AVMMixin):
       amr = VIAMR()
       fbmark = amr.udomark(uh, lb)                             # free-boundary targeted marking method
       fbmark = amr.vcdmark(uh, lb)                             # same, but based on diffusion
-      imark, _, _ = amr.gradrecinactivemark(uh, lb)            # classical gradient recovery in inactive set
-      imark, _, _ = amr.brinactivemark(uh, lb, res_ufl)        # classical BR78 estimator in inactive set
-      imark, _, _ = amr.brinactivemark(uh, lb, res_ufl, Z=Z)   # weighted estimator (BV00) in inactive set
-      mark, _, _, _, _ = amr.nsv03mark(uh, (lb, ub), g, f_ufl, g_ufl)  # method from NSV03, box-constrained
-      mark, _, _, _, _ = amr.nsv05mark(uh, (lb, None), g, f_ufl, g_ufl)  # method from NSV05, lower obstacle only
+      imark, _, _ = amr.gradrecinactivemark(uh, (lb, ub))      # classical gradient recovery in inactive set
+      imark, _, _ = amr.brinactivemark(uh, (lb, ub), res_ufl)  # classical BR78 estimator in inactive set
+      imark, _, _ = amr.brinactivemark(uh, (lb, ub), res_ufl, Z=Z)  # weighted estimator (BV00) in inactive set
+      mark, _, _, _, _ = amr.nsv03mark(uh, (lb, ub), g, f_ufl, g_ufl)  # method from NSV03, with new box-constraint extension
+      mark, _, _, _, _ = amr.nsv05mark(uh, (lb, None), g, f_ufl, g_ufl)  # method from NSV05 [lower obstacle only]
       mark, ethresh = amr.fixedratemark(eta, theta=0.5, method="total")  # threshold a DG0 estimator eta
       mark = amr.unionmarks(fbmark, imark)                     # mark if either is marked
       rmesh = amr.refinesbr2D(mesh, mark)                      # PETSc DMPlexTransform for skeleton-based refinement
 
-    Regarding the arguments: uh is a computed VI solution, lb is a lower-bound obstacle, res_ufl is a UFL expression for the residual (applicable in the inactive set), Z is a weighting field (see examples), f_ufl is the source term in Poisson equation, and g_ufl are the boundary values.
+    Regarding the arguments: uh is a computed VI solution, lb is a lower-bound obstacle, ub is an upper-bound obstacle, res_ufl is a UFL expression for the residual (applicable in the inactive set), Z is a weighting field (see examples), f_ufl is the source term in Poisson equation, and g_ufl are the boundary values.
 
-    The methods above generalize to upper-bound obstacles by passing ub in the same position as lb and adding the boxside="upper" kwarg; see each method's own docstring.  Note that unionmarks() can be used to apply both lower and upper bounds.
+    Note that unionmarks() can be used to refine along free boundaries computed by udomark() and/or vcdmark(), from both lower and upper bounds.
 
-    nsv03mark() and nsv05mark() also take bounds = (lb, ub), plus bounds_ufl = (lb_ufl, ub_ufl) for the *continuum* obstacles when those are not representable in u_h's space; see _obstacleterms().  nsv03mark() computes the genuinely box-constrained estimator of doc/nsv-box/box.tex, so it accepts either or both obstacles; its estimator is not a sum of two unilateral ones.  nsv05mark() is unilateral, NSV05's theory having no upper obstacle, so it requires bounds = (lb, None).
-
-    TODO: every method should be considered for the bounds=(lb,ub) signature feature, i.e. foo(..., bounds=(lb,ub), ...), replacing the bound plus boxside="lower"/"upper" pair everywhere.  So far only nsv03mark() and nsv05mark() have it.  A caller then never builds an artificial infinite obstacle, which is what a PETSc VI solve requires and which VIAMR has no reason to require.
+    TODO: every method should be considered for the bounds=(lb,ub) signature feature, i.e. foo(..., bounds=(lb,ub), ...), replacing the bound plus boxside="lower"/"upper" pair everywhere.  So far gradrecinactivemark(), brinactivemark(), nsv03mark(), and nsv05mark() have it, while udomark(), vcdmark(), and the set-indicator methods do not.  A caller then never builds an artificial infinite obstacle, which is what a PETSc VI solve requires and which VIAMR has no reason to require.
 
     TODO: safeactiveunmark() is not yet generalized this way.
 
@@ -345,6 +343,36 @@ class VIAMR(OptionsManager, AVMMixin):
         )
         nodetouchesinactive = self._elemtonodemax(elemtouchesinactive, CG1)
         return Function(CG1).interpolate(1.0 - nodetouchesinactive)
+
+    def _inactivemask(self, uh, bounds, strong=False):
+        """Compute the DG0 indicator of the computed inactive set, as used by the
+        marking methods which restrict an estimator to it.  Inactive elements get
+        value 1.0.
+
+        Here bounds is the pair (lb, ub) defining the constraint lb <= uh <= ub.
+        Either entry may be None, for a problem constrained on one side only, so
+        (lb, None) is a lower obstacle alone and (None, ub) an upper one alone.
+        A caller therefore never has to build an artificial infinite obstacle,
+        which is what a PETSc VI solve does require.
+
+        When both entries are given the inactive set is the *intersection* of the
+        two one-sided inactive sets, i.e. the elements touching neither obstacle.
+        One side alone will not do: the set inactive with respect to lb still
+        contains the whole of ub's contact set, where uh is pinned to the other
+        obstacle and the residual is large by construction, so an estimator
+        restricted there would mark inside a contact set rather than outside
+        both."""
+        lb, ub = bounds
+        assert not (lb is None and ub is None), "bounds must constrain a side"
+        if ub is None:
+            return self.eleminactive(uh, lb, boxside="lower", strong=strong)
+        if lb is None:
+            return self.eleminactive(uh, ub, boxside="upper", strong=strong)
+        _, DG0 = self.spaces(uh.function_space().mesh())
+        return Function(DG0, name="Element Inactive").interpolate(
+            self.eleminactive(uh, lb, boxside="lower", strong=strong)
+            * self.eleminactive(uh, ub, boxside="upper", strong=strong)
+        )
 
     def _elemborder(self, nodalactive):
         """From *nodal* active set indicator, computes bordering element indicator.  Uses the fact that the DG0 degree of freedom is strictly inside the element, so use with caution if z is not in CG1.  Returns 1.0 for elements with
@@ -866,11 +894,14 @@ class VIAMR(OptionsManager, AVMMixin):
         DG0 = eta.function_space()
         return Function(DG0, name=eta.name()).interpolate(eta * mask)
 
-    def gradrecinactivemark(self, uh, bound, boxside="lower", theta=0.5, method="max", safe=None):
+    def gradrecinactivemark(self, uh, bounds, theta=0.5, method="max", safe=None):
         """Return marking within the computed inactive set by using an
-        a posteriori gradient-recovery error indicator, for a unilateral
-        obstacle problem with the given bound (boxside="lower" or "upper";
-        see _nodalactive()).  See Chapter 4 of
+        a posteriori gradient-recovery error indicator, for an obstacle problem
+        with the given bounds = (lb, ub), meaning lb <= uh <= ub.  Either entry
+        may be None for a problem constrained on one side only, so (lb, None) is
+        a lower obstacle alone; see _inactivemask(), which also explains why a
+        box constraint restricts to the intersection of the two inactive sets.
+        See Chapter 4 of
           M. Ainsworth & J. T. Oden (2000).  A Posteriori Error Estimation in
           Finite Element Analysis, John Wiley & Sons, Inc., New York.
         The optional input safe is a DG0 {0,1} indicator, e.g. the output of
@@ -895,7 +926,7 @@ class VIAMR(OptionsManager, AVMMixin):
         eta = Function(DG0, name="eta on inactive set").interpolate(sqrt(eta_sq))  # eta from eta^2
         # restrict grad recovery eta to inactive set, further excluding any
         # certified-safe elements, before computing the threshold
-        imark = self.eleminactive(uh, bound, boxside=boxside)
+        imark = self._inactivemask(uh, bounds)
         mask = imark if safe is None else Function(DG0).interpolate(imark * (1.0 - safe))
         ieta = self._maskexclude(eta, mask)
         # compute mark in inactive set
@@ -904,14 +935,17 @@ class VIAMR(OptionsManager, AVMMixin):
         return (mark, ieta, total_error_est)
 
     def brinactivemark(
-        self, uh, bound, res, boxside="lower", theta=0.5, method="max", alpha=None, safe=None
+        self, uh, bounds, res, theta=0.5, method="max", alpha=None, safe=None
     ):
         """Return marking within the computed inactive set by using the
         a posteriori Babuška-Rheinboldt (1978) residual error indicator,
-        or a weighted version of it, for a unilateral obstacle problem with
-        the given bound (boxside="lower" or "upper"; see _nodalactive()).
+        or a weighted version of it, for an obstacle problem with the given
+        bounds = (lb, ub), meaning lb <= uh <= ub.  Either entry may be None for
+        a problem constrained on one side only, so (lb, None) is a lower obstacle
+        alone; see _inactivemask(), which also explains why a box constraint
+        restricts to the intersection of the two inactive sets.
 
-        The primary inputs are the current solution uh, the obstacle bound (to
+        The primary inputs are the current solution uh, the obstacle bounds (to
         restrict to the inactive set), and the residual res as a UFL expression.
 
         The optional input safe is a DG0 {0,1} indicator, e.g. the output of
@@ -1001,7 +1035,7 @@ class VIAMR(OptionsManager, AVMMixin):
         # restrict BR eta to inactive set; strong=True means all dofs must be inactive to
         # get imark=1; further exclude any certified-safe elements, before computing the
         # threshold
-        imark = self.eleminactive(uh, bound, boxside=boxside, strong=True)
+        imark = self._inactivemask(uh, bounds, strong=True)
         mask = imark if safe is None else Function(DG0).interpolate(imark * (1.0 - safe))
         ieta = self._maskexclude(eta, mask)
         mark, _ = self.fixedratemark(ieta, theta, method)

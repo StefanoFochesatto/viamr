@@ -121,7 +121,7 @@ def test_refine_gr():
     (x, y) = SpatialCoordinate(mesh)
     psi = Function(CG1).interpolate(_get_ball_obstacle(x, y))
     u = Function(CG1).interpolate(conditional(psi > 0.0, psi + 1.0, psi))
-    imark, _, _ = amr.gradrecinactivemark(u, psi, theta=0.5)
+    imark, _, _ = amr.gradrecinactivemark(u, (psi, None), theta=0.5)
     rmesh = amr.refinesbr2D(mesh, imark)
     rCG1, _ = amr.spaces(rmesh)
     assert rCG1.dim() == 165
@@ -136,7 +136,7 @@ def test_refine_br():
     psi = Function(CG1).interpolate(_get_ball_obstacle(x, y))
     u = Function(CG1).interpolate(conditional(psi > 0.0, psi + 1.0, psi))
     residual = -div(grad(u))  # largest near circle psi==0
-    (imark, _, _) = amr.brinactivemark(u, psi, residual, theta=0.5)
+    (imark, _, _) = amr.brinactivemark(u, (psi, None), residual, theta=0.5)
     rmesh = amr.refinesbr2D(mesh, imark)
     # VTKFile(f"result_brinactivemark_refined.pvd").write(rmesh)
     rCG1, _ = amr.spaces(rmesh)
@@ -152,7 +152,7 @@ def test_refine_br_total():
     psi = Function(CG1).interpolate(_get_ball_obstacle(x, y))
     u = Function(CG1).interpolate(conditional(psi > 0.0, psi + 1.0, psi))
     residual = -div(grad(u))  # largest near circle psi==0
-    (imark, _, _) = amr.brinactivemark(u, psi, residual, theta=0.8, method="total")
+    (imark, _, _) = amr.brinactivemark(u, (psi, None), residual, theta=0.8, method="total")
     rmesh = amr.refinesbr2D(mesh, imark)
     rCG1, _ = amr.spaces(rmesh)
     assert rCG1.dim() == 109
@@ -169,9 +169,9 @@ def test_refine_br_weighted():
     residual = -div(grad(u))  # largest near circle psi==0
     # non-constant, positive-everywhere coefficient
     alpha = x * x + y * y + 1.0
-    (imark, eta, tot_eta) = amr.brinactivemark(u, psi, residual, theta=0.5, alpha=alpha)
+    (imark, eta, tot_eta) = amr.brinactivemark(u, (psi, None), residual, theta=0.5, alpha=alpha)
     # weighting by a non-constant alpha should differ from alpha=None estimator
-    (imark0, eta0, tot_eta0) = amr.brinactivemark(u, psi, residual, theta=0.5)
+    (imark0, eta0, tot_eta0) = amr.brinactivemark(u, (psi, None), residual, theta=0.5)
     assert errornorm(eta, eta0) > 1.0e-10
     assert abs(tot_eta - tot_eta0) > 1.0e-10
     rmesh = amr.refinesbr2D(mesh, imark)
@@ -211,7 +211,7 @@ def test_nsv03mark_allinactive():
     assert total_err > 0.0
 
     # also exercises fixedratemark()'s "total" branch
-    tmark, ieta, tot2 = amr.gradrecinactivemark(u, lb, theta=0.5, method="total")
+    tmark, ieta, tot2 = amr.gradrecinactivemark(u, (lb, None), theta=0.5, method="total")
     assert tmark.function_space().ufl_element() == DG0.ufl_element()
     assert tot2 >= 0.0
 

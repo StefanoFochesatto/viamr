@@ -401,7 +401,7 @@ def applybr(uh, lb):
         residual = -div(grad(uh)) - Constant(args.fconst)
         Z = None
     (imark, _, tot_eta) = amr.brinactivemark(
-        uh, lb, residual, theta=args.thetaBR, method=args.methodBR, alpha=Z
+        uh, (lb, None), residual, theta=args.thetaBR, method=args.methodBR, alpha=Z
     )
     return imark, tot_eta
 

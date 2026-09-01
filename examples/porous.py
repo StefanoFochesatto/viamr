@@ -250,7 +250,7 @@ for amrtype in refinetypes:
             Zunreg = abs(uh + eps_final) ** (gamma - 1.0)
             res = - div(Zunreg * grad(uh)) - fsource
             imark, eta, tot_eta = amr.brinactivemark(
-                uh, Constant(0.0), res, alpha=(Zqn if useweightedBR else None), theta=0.5, method="total"
+                uh, (Constant(0.0), None), res, alpha=(Zqn if useweightedBR else None), theta=0.5, method="total"
             )
             fbmark = amr.udomark(uh, lb, n=1)
             mark = amr.unionmarks(fbmark, imark)
