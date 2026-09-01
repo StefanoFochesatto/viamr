@@ -1100,6 +1100,18 @@ class VIAMR(OptionsManager, AVMMixin):
 
         Regarding eta_d, NSV03 sec. 7.1 notes that it "exhibits different accumulation" than eta_infty.  That is, as a genuine L^d(Lambda_h) norm, it aggregates over T by an L^d-type sum.  Mixing both into one scalar before marking would let eta_d's different scaling distort the max-based threshold.  Following NSV03, we therefore mark in two separate passes.  First on eta_infty, then on eta_d restricted to Lambda_h, and then take the union.  NSV03 further qualifies that the second pass only runs "provided quadrature dominates the estimator," so the second pass runs only if max(eta_d) > etadratio * max(eta_infty).  NSV03 does not give a precise numerical criterion for "dominates", so etadratio is exposed as a parameter.
 
+        TODO: the upper-obstacle-only case, bounds = (None, ub), is written but
+        untested.  Every path here is symmetric in the two obstacles, so it should
+        work, but nothing exercises it: tests/test_refine.py's bilateral case uses
+        both obstacles and every other caller is lower-only.  What goes untested is
+        the lb is None branch of each of the four places which split by side,
+        namely the primal admissibility check, the boundary rule for sigma_h (where
+        the whole correction then rests on the upper-active stars alone), the
+        one-sided sign assertion sigma_h <= dualtol, and the Lambda_h assembly.  A
+        test could reflect the bilateral exact solution, or simply negate it: if u
+        solves the problem with data (f, lb, ub) then -u solves it with
+        (-f, -ub, -lb).
+
         Returns (mark, etainf, etad, sigmah, Eh).  Eh is the scalar estimator Etilde_h of (7.1) itself, so it is the quantity which bounds max(||u - u_h||_{0,inf;Omega}, ||sigma - sigmatilde_h||_{-2,inf;Omega}), and thus the right numerator for an effectivity index.  (Bilaterally, Theorem 6.6 of box.tex gives the ||u - u_h||_{0,inf;Omega} half of that bound; the residual half is Proposition 6.7 there, up to a constant.)  Each of its terms is accumulated in its own norm: the sup-norm terms are maximized separately, since (7.1) adds the global norms rather than maximizing their elementwise sum eta_infty; and eta_d is accumulated as an L^d-type sum of d-th powers.
         """
         # mesh quantities
