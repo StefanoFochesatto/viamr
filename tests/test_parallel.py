@@ -11,6 +11,7 @@ from test_basic import (
 from test_refine import (
     _NSV05_PYRAMID_COUNTS,
     _fixedrate_total_case,
+    _nsv03mark_bilateral,
     _nsv03mark_kink_decay,
     _nsv03mark_nontrivial,
     _nsv05mark_effectivity,
@@ -139,6 +140,18 @@ def test_nsv03mark_kink_decay_par():
 
 
 @pytest.mark.parallel(nprocs=2)
+def test_nsv03mark_bilateral_par():
+    # Confirms tests/test_refine.py::_nsv03mark_bilateral() gives the same
+    # result regardless of process count.  The bilateral path adds two star
+    # reductions which cross process boundaries: _starwhollyactive(), used for
+    # the two-case boundary-node rule for sigma_h, and the node -> element
+    # dilations giving omega_bot and omega_top.  A missing halo contribution
+    # would misclassify only along the partition boundaries, and would show up
+    # here as a sigma_h extreme short of +-48.
+    _nsv03mark_bilateral(VIAMR(debug=True))
+
+
+@pytest.mark.parallel(nprocs=2)
 def test_nsv05mark_pyramid_par():
     # Confirms tests/test_refine.py::_nsv05mark_pyramid() gives the identical
     # full-contact, deep-full-contact, and marked element counts regardless of
@@ -206,6 +219,7 @@ if __name__ == "__main__":
     test_fixedrate_total_par()
     test_nsv03mark_nontrivial_par()
     test_nsv03mark_kink_decay_par()
+    test_nsv03mark_bilateral_par()
     test_nsv05mark_pyramid_par()
     test_nsv05mark_effectivity_par()
     test_nsvmark_curvedobstacle_par()

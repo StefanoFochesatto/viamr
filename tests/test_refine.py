@@ -946,6 +946,168 @@ def test_safeactiveunmark_notimplemented():
         )
 
 
+def _nsv03mark_bilateral_soln(amr, m=32):
+    """Solve a *bilateral* obstacle problem with the Laplacian, in which both
+    obstacles are genuinely touched, and for which an exact solution is known.
+
+    We are not aware of such a benchmark in the literature; the bilateral
+    problems we could find are posed on advection-diffusion (as in
+    examples/pollutant.py) rather than on the Laplacian.  So this solution is
+    constructed here.  On Omega = (-2,2)^2, with constant obstacles chi_lo = -1
+    and chi_up = 1, u is radial:
+
+        r <= 0.5        upper contact,  u = 1
+        0.5 <= r <= 1   free,           u = 1 - 6s^2 + 4s^3,          s = 2r - 1
+        1 <= r <= 1.5   lower contact,  u = -1
+        1.5 <= r <= 2   free,           u = -1 + 6t^2 - 8t^3 + 3t^4,  t = 2r - 3
+        r >= 2          free,           u = 0
+
+    and the load is
+
+        f = 48                                   r <= 0.5
+        f = 48 - 96 s + 24 s(1-s)/r              0.5 <= r <= 1     (48 -> -48)
+        f = -48                                  1 <= r <= 1.5
+        f = -48 + 192 t - 144 t^2 - 24 t(1-t)^2/r  1.5 <= r <= 2   (-48 -> 0)
+        f = 0                                    r >= 2
+
+    Checks on the construction.  Writing sigma = -Lap(u) - f, in the sign
+    convention of doc/nsv-box/box.tex, we get sigma = -48 <= 0 on the
+    upper-contact disc and sigma = +48 >= 0 on the lower-contact annulus, which
+    are the two signs Proposition 3.4 there requires, and sigma = 0 on all three
+    free regions.  u is C^1 across every free boundary, since u' = -24 s(1-s)
+    and u' = 24 t(1-t)^2 both vanish at their endpoints, so no spurious measure
+    sits on a free boundary.  The quartic on the outer annulus is chosen to make
+    u'(2) = u''(2) = 0, which is what lets f be continuous everywhere, including
+    where u meets the u = 0 corner region.  Every boundary point of the square
+    has r >= 2, so g = 0.
+
+    A one-signed f can only reach one obstacle, so f must change sign here; that
+    is why the load is large compared to the obstacle gap.  Note the four free
+    boundaries are circles, so no triangulation aligns with them, and the
+    transition elements where sigma_h changes sign -- the set T_h^+, which is
+    what forces the star dilation of Remark 5.2 in box.tex -- are genuinely
+    present.
+
+    Shared by _nsv03mark_bilateral() here and
+    tests/test_parallel.py::test_nsv03mark_bilateral_par()."""
+    mesh = RectangleMesh(
+        m,
+        m,
+        2.0,
+        2.0,
+        originX=-2.0,
+        originY=-2.0,
+        diagonal="crossed",
+        distribution_parameters=VIAMR.PARALLEL_OVERLAP,
+    )
+    CG1, _ = amr.spaces(mesh)
+    x, y = SpatialCoordinate(mesh)
+    r = sqrt(x ** 2 + y ** 2)
+    # guards the u'/r terms, which are only ever used where r >= 0.5
+    rs = max_value(r, 0.25)
+    s = 2 * r - 1
+    t = 2 * r - 3
+    u_ufl = conditional(
+        r < 0.5,
+        Constant(1.0),
+        conditional(
+            r < 1.0,
+            1 - 6 * s ** 2 + 4 * s ** 3,
+            conditional(
+                r < 1.5,
+                Constant(-1.0),
+                conditional(
+                    r < 2.0,
+                    -1 + 6 * t ** 2 - 8 * t ** 3 + 3 * t ** 4,
+                    Constant(0.0),
+                ),
+            ),
+        ),
+    )
+    f_ufl = conditional(
+        r < 0.5,
+        Constant(48.0),
+        conditional(
+            r < 1.0,
+            48 - 96 * s + 24 * s * (1 - s) / rs,
+            conditional(
+                r < 1.5,
+                Constant(-48.0),
+                conditional(
+                    r < 2.0,
+                    -48 + 192 * t - 144 * t ** 2 - 24 * t * (1 - t) ** 2 / rs,
+                    Constant(0.0),
+                ),
+            ),
+        ),
+    )
+
+    lb = Function(CG1).interpolate(Constant(-1.0))
+    ub = Function(CG1).interpolate(Constant(1.0))
+    g = Function(CG1).interpolate(Constant(0.0))
+
+    uh = Function(CG1, name="uh")
+    vh = TestFunction(CG1)
+    F = inner(grad(uh), grad(vh)) * dx - f_ufl * vh * dx
+    bcs = DirichletBC(CG1, g, "on_boundary")
+    problem = NonlinearVariationalProblem(F, uh, bcs)
+    sp = {
+        "snes_type": "vinewtonrsls",
+        "ksp_type": "preonly",
+        "pc_type": "lu",
+        "pc_factor_mat_solver_type": "mumps",
+    }
+    solver = NonlinearVariationalSolver(problem, solver_parameters=sp, options_prefix="s")
+    solver.solve(bounds=(lb, ub))
+    return mesh, uh, lb, ub, f_ufl, g, u_ufl
+
+
+def _nsv03mark_bilateral(amr):
+    # Shared by test_nsv03mark_bilateral() here and
+    # tests/test_parallel.py::test_nsv03mark_bilateral_par(), so the two assert
+    # the same things from one definition.
+    mesh, uh, lb, ub, f_ufl, g, u_ufl = _nsv03mark_bilateral_soln(amr)
+    CG1, DG0 = amr.spaces(mesh)
+    assert amr.checkadmissible(uh, lb, boxside="lower")
+    assert amr.checkadmissible(uh, ub, boxside="upper")
+
+    # both obstacles must actually be touched, or this is not a bilateral test
+    nlo = amr.countmark(amr.elemactive(uh, lb, boxside="lower"))
+    nup = amr.countmark(amr.elemactive(uh, ub, boxside="upper"))
+    assert 0 < nlo < DG0.dim()
+    assert 0 < nup < DG0.dim()
+
+    mark, etainf, etad, sigmah, Eh = amr.nsv03mark(uh, (lb, ub), g, f_ufl, g)
+    assert mark.function_space().ufl_element() == DG0.ufl_element()
+    assert sigmah.function_space().ufl_element() == CG1.ufl_element()
+    assert 0 < amr.countmark(mark) < DG0.dim()  # marks something, not everything
+    assert amr.scalarrange(etad)[0] >= 0.0  # eta_d is a norm, so non-negative
+
+    # sigma_h must be strictly signed on *both* contact sets, and it recovers
+    # the exact multiplier values +-48 there.  This is the property no unilateral
+    # estimator can represent, so it is the heart of this test.
+    smin, smax = amr.scalarrange(sigmah)
+    assert abs(smin + 48.0) < 1.0e-8
+    assert abs(smax - 48.0) < 1.0e-8
+
+    # reliability against the known exact solution; see NSV03 (7.1) and Theorem
+    # 6.6 of doc/nsv-box/box.tex
+    CG4 = FunctionSpace(mesh, "CG", 4)
+    err = amr.scalarrange(Function(CG4).interpolate(abs(u_ufl - uh)))[1]
+    assert err > 0.0
+    assert Eh >= err
+
+    # the unilateral call must refuse this solution rather than silently
+    # returning a wrong estimator: sigma_h is genuinely negative on the
+    # upper-contact disc, which trips the global-sign assertion
+    with pytest.raises(AssertionError):
+        amr.nsv03mark(uh, (lb, None), g, f_ufl, g)
+
+
+def test_nsv03mark_bilateral():
+    _nsv03mark_bilateral(VIAMR(debug=True))
+
+
 def test_upper_obstacle_elasto():
     # Classical Laplacian *upper*-obstacle problem (elastic-plastic torsion):
     #   -Delta u = 2C,  u <= psi,  u = 0 on boundary,
@@ -1007,6 +1169,7 @@ if __name__ == "__main__":
     test_nsv03mark_allinactive()
     test_nsv03mark_nontrivial()
     test_nsv03mark_active_boundary()
+    test_nsv03mark_bilateral()
     test_nsv05mark_pyramid()
     test_nsv05mark_effectivity()
     test_nsv05mark_asserts()
