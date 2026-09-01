@@ -318,6 +318,30 @@ class VIAMR(OptionsManager, AVMMixin):
         )
         return Function(DG0, name="Thin Element Active").interpolate(1.0 - grown)
 
+    def _starwhollyactive(self, uh, bound, boxside="lower"):
+        """Compute a CG1 indicator of those nodes z whose entire star U_h(z) is
+        active against the given bound (boxside="lower" or "upper"; see
+        _nodalactive()).  Such nodes get value 1.0.  That is, this is the
+        indicator of
+            {z in N_h : U_h(z) subset {u_h = bound}},
+        which is the condition attached to boundary nodes by the definition of
+        the discrete residual sigma_h in section 2.1 of NSV03.
+
+        The computation dilates the *inactive* nodal set by one element ring
+        (node -> element max, then element -> node max) and negates, which is
+        the same one-ring erosion that thinelemactive() does elementwise.  Thus
+        thinelemactive() and this method are the element- and node-based forms
+        of the same "whole star is active" test."""
+        CG1, _ = self.spaces(uh.function_space().mesh())
+        nodalinactive = Function(CG1).interpolate(
+            1.0 - self._nodalactive(uh, bound, boxside=boxside)
+        )
+        elemtouchesinactive = self._elemextreme(
+            nodalinactive, minimum=False, defaultval=0.0
+        )
+        nodetouchesinactive = self._elemtonodemax(elemtouchesinactive, CG1)
+        return Function(CG1).interpolate(1.0 - nodetouchesinactive)
+
     def _elemborder(self, nodalactive):
         """From *nodal* active set indicator, computes bordering element indicator.  Uses the fact that the DG0 degree of freedom is strictly inside the element, so use with caution if z is not in CG1.  Returns 1.0 for elements with
           0 < nu_h(x_K) < 1
@@ -1047,15 +1071,7 @@ class VIAMR(OptionsManager, AVMMixin):
         #   as at interior nodes; following NSV03 page 169, it is instead defined as
         #   the *positive part* of the boundary-corrected residual above, and only kept
         #   nonzero where z's whole star U_h(z) is active -- otherwise sigmah(z) = 0.
-        #   "Whole star active" is computed by dilating the *inactive* nodal set by one
-        #   element ring (node -> element max, then element -> node max) and negating,
-        #   the same one-ring-erosion idea thinelemactive() uses elementwise.
-        nodalinactive = Function(CG1).interpolate(1.0 - self._nodalactive(uh, lb))
-        elemtouchesinactive = self._elemextreme(
-            nodalinactive, minimum=False, defaultval=0.0
-        )
-        nodetouchesinactive = self._elemtonodemax(elemtouchesinactive, CG1)
-        starwhollyactive = Function(CG1).interpolate(1.0 - nodetouchesinactive)
+        starwhollyactive = self._starwhollyactive(uh, lb, boxside="lower")
         bdryval = Function(CG1).interpolate(
             starwhollyactive * conditional(sigmah > 0.0, sigmah, 0.0)
         )
