@@ -973,7 +973,7 @@ def _nsv03mark_bilateral_soln(amr, m=32):
     Checks on the construction.  Writing sigma = -Lap(u) - f, in the sign
     convention of doc/nsv-box/box.tex, we get sigma = -48 <= 0 on the
     upper-contact disc and sigma = +48 >= 0 on the lower-contact annulus, which
-    are the two signs Proposition 3.4 there requires, and sigma = 0 on all three
+    are the two signs the nodal complementarity there requires, and sigma = 0 on all three
     free regions.  u is C^1 across every free boundary, since u' = -24 s(1-s)
     and u' = 24 t(1-t)^2 both vanish at their endpoints, so no spurious measure
     sits on a free boundary.  The quartic on the outer annulus is chosen to make
@@ -985,7 +985,7 @@ def _nsv03mark_bilateral_soln(amr, m=32):
     is why the load is large compared to the obstacle gap.  Note the four free
     boundaries are circles, so no triangulation aligns with them, and the
     transition elements where sigma_h changes sign -- the set T_h^+, which is
-    what forces the star dilation of Remark 5.2 in box.tex -- are genuinely
+    what forces the star dilation explained there -- are genuinely
     present.
 
     Shared by _nsv03mark_bilateral() here and
@@ -1090,8 +1090,8 @@ def _nsv03mark_bilateral(amr):
     assert abs(smin + 48.0) < 1.0e-8
     assert abs(smax - 48.0) < 1.0e-8
 
-    # reliability against the known exact solution; see NSV03 (7.1) and Theorem
-    # 6.6 of doc/nsv-box/box.tex
+    # reliability against the known exact solution; see NSV03 (7.1) and the
+    # reliability theorem of doc/nsv-box/box.tex
     CG4 = FunctionSpace(mesh, "CG", 4)
     err = amr.scalarrange(Function(CG4).interpolate(abs(u_ufl - uh)))[1]
     assert err > 0.0

@@ -91,7 +91,7 @@ class VIAMR(OptionsManager, AVMMixin):
 
     TODO: safeactiveunmark() is not yet generalized this way.
 
-    Regarding returned values: fbmark, imark, and mark are element markings in DG0 (Definition 4.2 in paper), rmesh is a refined mesh, and amesh is an adapted mesh.
+    Regarding returned values: fbmark, imark, and mark are element markings in DG0, i.e. indicator functions which are nonzero exactly on the marked elements, rmesh is a refined mesh, and amesh is an adapted mesh.
 
     There is also a mesh adaptation API which needs the animate library:
 
@@ -1064,8 +1064,8 @@ class VIAMR(OptionsManager, AVMMixin):
             a posteriori error control for elliptic obstacle problems.
             Numerische Mathematik, 95(1), 163-195.
 
-        With ub given this is the *box-constrained* form of that estimator, i.e.
-        formula (6.1) of doc/nsv-box/box.tex, which extends NSV03 to the two-sided
+        With ub given this is the *box-constrained* form of that estimator, the
+        one derived in doc/nsv-box/box.tex, which extends NSV03 to the two-sided
         constraint chi_lo <= u <= chi_up.  Both obstacles are then live, and the
         four terms below which refer to an obstacle come in symmetric pairs.  The
         default ub=None is the unilateral problem of NSV03 itself, in which the
@@ -1092,27 +1092,15 @@ class VIAMR(OptionsManager, AVMMixin):
 
               omega_bot = U_h({sigma_h > 0}),   omega_top = U_h({sigma_h < 0}),
 
-          so an element counts if *some* vertex has a strictly signed multiplier.  NSV03 (7.1) instead uses the bare set {sigma_h < 0} in their opposite sign convention, requiring *every* vertex; the dilation is forced by the box constraint, because on a transition element sigma_h changes sign and the affine argument justifying the bare set fails.  See Remark 5.2 of box.tex, which also notes that the dilated set contains the bare one, so this stays reliable unilaterally.  One consequence: unlike the bare set, omega_bot does not force the term to zero when the continuum obstacle is absent, since an element with one strictly active vertex and two inactive ones has a nonzero gap.
+          so an element counts if *some* vertex has a strictly signed multiplier.  NSV03 (7.1) instead uses the bare set {sigma_h < 0} in their opposite sign convention, requiring *every* vertex; the dilation is forced by the box constraint, because on a transition element sigma_h changes sign and the affine argument justifying the bare set fails.  The star dilation is explained in doc/nsv-box/box.tex, which also notes that the dilated set contains the bare one, so this stays reliable unilaterally.  One consequence: unlike the bare set, omega_bot does not force the term to zero when the continuum obstacle is absent, since an element with one strictly active vertex and two inactive ones has a nonzero gap.
 
           term 4:  Estimates the boundary interpolation error, and we use a formula which is correct if g is in CG4.  Being a sup norm over partial Omega cap T, it is computed as the elementwise sup of |g - I_h g| over the elements touching the boundary.
 
-          term eta_d:  Controls the mass-lumping/quadrature error incurred when computing sigma_h (see sec. 6.3 and 7.1 in NSV03).  sigma_h is CG1, so grad(sigma_h) is elementwise constant, and its L^d(T) norm is |grad(sigma_h)|_T * |T|^{1/d}.  Localized to Lambda_h (the discrete contact set, approximated here by tactive below, the same "neighborhood active" indicator used for term 1's X) because sigma = 0 off the contact set (see (1.2) in NSV03), so grad(sigma_h) there is quadrature noise rather than signal.  Bilaterally Lambda_h is the union of the lower and upper element-wise contact sets, formula (3.11) of box.tex.  C_1=0.01 is the practical value used by NSV03 in (7.1).
+          term eta_d:  Controls the mass-lumping/quadrature error incurred when computing sigma_h (see sec. 6.3 and 7.1 in NSV03).  sigma_h is CG1, so grad(sigma_h) is elementwise constant, and its L^d(T) norm is |grad(sigma_h)|_T * |T|^{1/d}.  Localized to Lambda_h (the discrete contact set, approximated here by tactive below, the same "neighborhood active" indicator used for term 1's X) because sigma = 0 off the contact set (see (1.2) in NSV03), so grad(sigma_h) there is quadrature noise rather than signal.  Bilaterally Lambda_h is the union of the lower and upper element-wise contact sets.  C_1=0.01 is the practical value used by NSV03 in (7.1).
 
         Regarding eta_d, NSV03 sec. 7.1 notes that it "exhibits different accumulation" than eta_infty.  That is, as a genuine L^d(Lambda_h) norm, it aggregates over T by an L^d-type sum.  Mixing both into one scalar before marking would let eta_d's different scaling distort the max-based threshold.  Following NSV03, we therefore mark in two separate passes.  First on eta_infty, then on eta_d restricted to Lambda_h, and then take the union.  NSV03 further qualifies that the second pass only runs "provided quadrature dominates the estimator," so the second pass runs only if max(eta_d) > etadratio * max(eta_infty).  NSV03 does not give a precise numerical criterion for "dominates", so etadratio is exposed as a parameter.
 
-        TODO: the upper-obstacle-only case, bounds = (None, ub), is written but
-        untested.  Every path here is symmetric in the two obstacles, so it should
-        work, but nothing exercises it: tests/test_refine.py's bilateral case uses
-        both obstacles and every other caller is lower-only.  What goes untested is
-        the lb is None branch of each of the four places which split by side,
-        namely the primal admissibility check, the boundary rule for sigma_h (where
-        the whole correction then rests on the upper-active stars alone), the
-        one-sided sign assertion sigma_h <= dualtol, and the Lambda_h assembly.  A
-        test could reflect the bilateral exact solution, or simply negate it: if u
-        solves the problem with data (f, lb, ub) then -u solves it with
-        (-f, -ub, -lb).
-
-        Returns (mark, etainf, etad, sigmah, Eh).  Eh is the scalar estimator Etilde_h of (7.1) itself, so it is the quantity which bounds max(||u - u_h||_{0,inf;Omega}, ||sigma - sigmatilde_h||_{-2,inf;Omega}), and thus the right numerator for an effectivity index.  (Bilaterally, Theorem 6.6 of box.tex gives the ||u - u_h||_{0,inf;Omega} half of that bound; the residual half is Proposition 6.7 there, up to a constant.)  Each of its terms is accumulated in its own norm: the sup-norm terms are maximized separately, since (7.1) adds the global norms rather than maximizing their elementwise sum eta_infty; and eta_d is accumulated as an L^d-type sum of d-th powers.
+        Returns (mark, etainf, etad, sigmah, Eh).  Eh is the scalar estimator Etilde_h of (7.1) itself, so it is the quantity which bounds max(||u - u_h||_{0,inf;Omega}, ||sigma - sigmatilde_h||_{-2,inf;Omega}), and thus the right numerator for an effectivity index.  (Bilaterally, the reliability theorem of doc/nsv-box/box.tex gives the ||u - u_h||_{0,inf;Omega} half of that bound, and its residual estimate gives the other half, up to a constant.)  Each of its terms is accumulated in its own norm: the sup-norm terms are maximized separately, since (7.1) adds the global norms rather than maximizing their elementwise sum eta_infty; and eta_d is accumulated as an L^d-type sum of d-th powers.
         """
         # mesh quantities
         mesh = uh.function_space().mesh()
@@ -1152,8 +1140,8 @@ class VIAMR(OptionsManager, AVMMixin):
         # compute residual sigmah in CG1 following section 2.1 of NSV03, page 169,
         #   but use opposite sign convention so sigmah >= 0.   complementarity is
         #   uh >= lb,  sigmah >= 0,  (uh - lb) sigmah = 0
-        # bilaterally sigmah has no global sign.  Proposition 3.4 of box.tex
-        #   gives instead a nodal complementarity: at an interior node,
+        # bilaterally sigmah has no global sign.  The box-constrained theory in
+        #   doc/nsv-box/box.tex gives instead a *nodal* complementarity, at an interior node:
         #   sigmah(z) >= 0 if uh(z) = lb(z), sigmah(z) <= 0 if uh(z) = ub(z),
         #   and sigmah(z) = 0 if neither.  So a strictly signed node is active,
         #   and the sign says against which obstacle.
@@ -1178,7 +1166,8 @@ class VIAMR(OptionsManager, AVMMixin):
         #   as at interior nodes; following NSV03 page 169, it is instead defined as
         #   the *positive part* of the boundary-corrected residual above, and only kept
         #   nonzero where z's whole star U_h(z) is active -- otherwise sigmah(z) = 0.
-        #   Bilaterally this is formula (3.14) of box.tex: keep the positive part
+        #   Bilaterally the same device applies to each obstacle, as in
+        #   doc/nsv-box/box.tex: keep the positive part
         #   on a wholly lower-active star, the negative part on a wholly
         #   upper-active star, and zero elsewhere.  The two stars are disjoint
         #   because lb < ub, so the two contributions never overlap.
@@ -1194,8 +1183,8 @@ class VIAMR(OptionsManager, AVMMixin):
 
         # check dual admissiblity (up to tolerance).  Unilaterally that is the
         #   global sign sigmah >= 0.  Bilaterally it is the nodal complementarity
-        #   of Proposition 3.4 of box.tex, namely that a strictly signed node is
-        #   active against the obstacle its sign names.
+        #   recalled above, namely that a strictly signed node is active against
+        #   the obstacle its sign names.
         if ub is None:
             assert self._globalextreme(sigmah, minimum=True) >= -dualtol
         elif lb is None:
@@ -1228,8 +1217,8 @@ class VIAMR(OptionsManager, AVMMixin):
         # "\setminus \partial \Omega" restriction wanted here.
         jumpu = self._elemmaxabs(self._facetjump(uh))
         # Lambda_h, the element-wise contact set; bilaterally it is the union
-        # Lambda_h,bot cup Lambda_h^top of formula (3.11) in box.tex, and each
-        # half is one thinelemactive() call (Remark 3.7 there)
+        # Lambda_h,bot cup Lambda_h^top of doc/nsv-box/box.tex, and each half is
+        # one thinelemactive() call
         tlo = (
             Function(DG0)
             if lb is None
@@ -1265,12 +1254,12 @@ class VIAMR(OptionsManager, AVMMixin):
 
         # term 3
         # The two localized detachment terms, each measured over a star-dilated
-        # strict contact set of formula (5.5) in box.tex,
+        # strict contact set of doc/nsv-box/box.tex,
         #     omega_bot = U_h({sigma_h > 0}),   omega_top = U_h({sigma_h < 0}).
         # A star dilation of a nodal set is a single node -> element max, so an
         # element lands in omega_bot exactly when *some* vertex has a strictly
         # positive multiplier.  NSV03 (7.1) uses the bare set instead, an
-        # element -> min requiring *every* vertex; Remark 5.2 of box.tex explains
+        # element -> min requiring *every* vertex; doc/nsv-box/box.tex explains
         # why the box constraint forces the dilation, and notes that the dilated
         # set contains the bare one, so the unilateral estimator stays reliable.
         # Because of that enlargement the term does not degenerate when
@@ -1341,8 +1330,8 @@ class VIAMR(OptionsManager, AVMMixin):
         # because (7.1) adds the global norms rather than maximizing their
         # elementwise sum eta_inf; and eta_d, being an L^d(Lambda_h) norm, is
         # accumulated as a sum of d-th powers.  The upper-obstacle terms are
-        # identically zero when ub is None, so this is (6.1) of box.tex in both
-        # the bilateral and unilateral cases.
+        # identically zero when ub is None, so this is the box-constrained
+        # estimator of doc/nsv-box/box.tex in both the bilateral and unilateral cases.
         Eh = (
             self._globalextreme(residterm, minimum=False)
             + self._globalextreme(obstacleerrlo, minimum=False)
