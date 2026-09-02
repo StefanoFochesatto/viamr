@@ -1108,6 +1108,64 @@ def test_nsv03mark_bilateral():
     _nsv03mark_bilateral(VIAMR(debug=True))
 
 
+def test_nsv03mark_upper_only():
+    """Exercise the bounds=(None, ub) path of nsv03mark(), i.e. an obstacle
+    problem with an upper obstacle and no lower one.  The construction is the
+    reflection noted in nsv03mark()'s docstring: if u solves the problem with
+    data (f, lb, ub) then -u solves it with (-f, -ub, -lb).  Applied to the
+    lower-only NSV03 Example 7.2 of _nsv03mark_nontrivial_soln(), this gives an
+    upper-only problem whose estimator must agree term by term, with sigma_h
+    negated.  The paths covered are the four places nsv03mark() splits by side:
+    the primal admissibility check, the boundary rule for sigma_h, the one-sided
+    sign assertion on sigma_h, and the assembly of Lambda_h."""
+    amr = VIAMR(debug=True)
+    mesh, uh, lb, f_ufl, g, g_ufl = _nsv03mark_nontrivial_soln(amr)
+    CG1, DG0 = amr.spaces(mesh)
+    mark, etainf, etad, sigmah, Eh = amr.nsv03mark(
+        uh, (lb, None), g, f_ufl, g_ufl, dualtol=1.0e-8
+    )
+
+    # the reflected problem: upper obstacle ub = -lb = 0, load -f, data -g
+    uhn = Function(CG1, name="uhn")
+    vh = TestFunction(CG1)
+    F = inner(grad(uhn), grad(vh)) * dx + f_ufl * vh * dx
+    gn = Function(CG1).interpolate(-g_ufl)
+    bcs = DirichletBC(CG1, gn, "on_boundary")
+    problem = NonlinearVariationalProblem(F, uhn, bcs)
+    ub = Function(CG1).interpolate(Constant(0.0))
+    lbn = Function(CG1).interpolate(Constant(-1.0e10))
+    sp = {
+        "snes_type": "vinewtonrsls",
+        "ksp_type": "preonly",
+        "pc_type": "lu",
+        "pc_factor_mat_solver_type": "mumps",
+    }
+    solver = NonlinearVariationalSolver(problem, solver_parameters=sp, options_prefix="s")
+    solver.solve(bounds=(lbn, ub))
+    assert amr.checkadmissible(uhn, ub, boxside="upper")
+    assert 0 < amr.countmark(amr.elemactive(uhn, ub, boxside="upper")) < DG0.dim()
+
+    markn, etainfn, etadn, sigmahn, Ehn = amr.nsv03mark(
+        uhn, (None, ub), gn, -f_ufl, -g_ufl, dualtol=1.0e-8
+    )
+
+    # the two discrete solutions, and the two multipliers, are exact negatives
+    assert amr.scalarrange(Function(CG1).interpolate(abs(uhn + uh)))[1] < 1.0e-10
+    assert amr.scalarrange(Function(CG1).interpolate(abs(sigmahn + sigmah)))[1] < 1.0e-8
+
+    # every estimator quantity is sign-blind, so all of them must agree
+    assert amr.scalarrange(Function(DG0).interpolate(abs(etainfn - etainf)))[1] < 1.0e-10
+    assert amr.scalarrange(Function(DG0).interpolate(abs(etadn - etad)))[1] < 1.0e-10
+    assert abs(Ehn - Eh) < 1.0e-10 * Eh
+    assert amr.countmark(markn) == amr.countmark(mark)
+    assert amr.countmark(Function(DG0).interpolate(abs(markn - mark))) == 0
+
+    # the unilateral *lower* call must refuse the reflected solution, since
+    # sigma_h is negative on its contact set
+    with pytest.raises(AssertionError):
+        amr.nsv03mark(uhn, (ub, None), gn, -f_ufl, -g_ufl, dualtol=1.0e-8)
+
+
 def test_upper_obstacle_elasto():
     # Classical Laplacian *upper*-obstacle problem (elastic-plastic torsion):
     #   -Delta u = 2C,  u <= psi,  u = 0 on boundary,
@@ -1170,6 +1228,7 @@ if __name__ == "__main__":
     test_nsv03mark_nontrivial()
     test_nsv03mark_active_boundary()
     test_nsv03mark_bilateral()
+    test_nsv03mark_upper_only()
     test_nsv05mark_pyramid()
     test_nsv05mark_effectivity()
     test_nsv05mark_asserts()
