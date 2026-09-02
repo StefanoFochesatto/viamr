@@ -75,9 +75,11 @@ The VIAMR library (\href{https://github.com/StefanoFochesatto/viamr}{github.com/
 
 However, for classical obstacle problems, namely unilateral problems where the operator is the (weak) Laplacian and the corresponding PDE is the Poisson equation, the library also implements element marking using the fully-rigorous \emph{a posteriori} estimators from Nochetto, Siebert, \& Veeser \cite{NSV03,NSV05}.  Reliability (error $\preceq$ estimator) and efficiency (estimator $\preceq$ error) are proven in the $L^\infty$ pointwise norm for these estimators, plus localization for the latter.  Such precision is generally not available for nonlinear and/or degenerating operators, and it is not proven for the partly-heuristic methods in the library.
 
-This paper extends \cite{NSV03}'s proof of reliability and efficiency to the bilateral case, that is, with continuous lower \emph{and upper} bounds.  The sequence of topics here, and much of the notation, generally follows the original.  Note that the operator must still be the ordinary linear Laplacian; this is not changed.
+This paper extends \cite{NSV03}'s proof of reliability and efficiency to the bilateral case, that is, with continuous lower \emph{and upper} bounds, and it takes up the refinements of \cite{NSV05} in the same setting.  The sequence of topics through \S \ref{sec:efficiency}, and much of the notation, generally follows \cite{NSV03}.  Note that the operator must still be the ordinary linear Laplacian; this is not changed.
 
 We are not aware of any pointwise \emph{a posteriori} theory for the bilateral problem, which is why we write this out.  Relatedly, Ot\'arola, Rankin, \& Salgado \cite{Otarolaetal2019} prove reliable and efficient maximum-norm \emph{a posteriori} bounds for a problem with genuine box constraints, using the machinery of \cite{NSV03}, but their constrained variable is a control, and it is determined by a pointwise projection of the adjoint state, so there is no free boundary of the present kind, and no pointwise barrier construction of the sort in \S \ref{sec:barriers}.  (Our constrained variable is the solution of the VI itself.)
+
+The sections fall into three groups.  Sections \ref{sec:setup} and \ref{sec:discretization} state the bilateral problem, quantify the separation of its two contact sets, and build the discretization; nothing there is specific to either estimator, and everything after uses it unchanged.  Sections \ref{sec:estimator} through \ref{sec:efficiency} are the bilateral form of the estimator of \cite{NSV03}, which is assembled from element-wise contact sets, and they prove reliability and efficiency.  Sections \ref{sec:localized} and \ref{sec:barriersets} concern \cite{NSV05}, namely its fully localized, star-based estimator and its barrier sets, that is, computable regions containing a free boundary; these two are not yet written, and each states what its bilateral form requires.
 
 
 \section{Continuum problem and setup} \label{sec:setup}
@@ -414,6 +416,8 @@ where $|D^2\varphi|_{\mathrm{var}} := \sum_{i=1}^d |D\partial_i\varphi|_{\mathrm
 
 
 \section{A posteriori estimator} \label{sec:estimator}
+
+This section begins the bilateral form of \cite{NSV03} proper, which runs through \S \ref{sec:efficiency}.  Its estimator is assembled from the element-wise contact sets $\Thbot,\Thtop$ of \eqref{eq:Thsplit}, and it localizes to the star-dilated sets \eqref{eq:omegas} rather than to the contact sets themselves; removing that gap is what \S \ref{sec:localized} is for.
 
 \subsection{The Galerkin functional}
 
@@ -760,7 +764,7 @@ The local lower bounds of \cite[Prop.~6.3]{NSV03} for the localized term are sta
 
 \begin{remark}[Full localization and barrier sets]
 \label{rem:localization}
-Our estimator localizes to the star-dilated sets \eqref{eq:omegas} and not to the contact sets themselves; see Remark~\ref{rem:unilateral}.  For the unilateral problem, \cite{NSV05} closes the corresponding gap, producing estimators which, apart from obstacle resolution, vanish identically within the full-contact set, and then uses the pointwise bounds to construct barrier sets, that is, computable regions containing the free boundary, under a stability condition there.  We regard the bilateral analogues of both refinements as open, and intend to pursue them.  Note that the bilateral problem has two free boundaries, so bilateral barrier sets would have to be shown disjoint before they localize either one; Proposition~\ref{prop:separation} is the natural tool, since $r_0$ bounds $\operatorname{dist}(\Cbot,\Ctop)$ from below in terms of the data.
+Our estimator localizes to the star-dilated sets \eqref{eq:omegas} and not to the contact sets themselves; see Remark~\ref{rem:unilateral}.  For the unilateral problem, \cite{NSV05} closes the corresponding gap, producing estimators which, apart from obstacle resolution, vanish identically within the full-contact set, and then uses the pointwise bounds to construct barrier sets, that is, computable regions containing the free boundary, under a stability condition there.  We regard the bilateral analogues of both refinements as open, and intend to pursue them; \S\S \ref{sec:localized} and \ref{sec:barriersets} say what each requires.  Note that the bilateral problem has two free boundaries, so bilateral barrier sets would have to be shown disjoint before they localize either one; Proposition~\ref{prop:separation} is the natural tool, since $r_0$ bounds $\operatorname{dist}(\Cbot,\Ctop)$ from below in terms of the data.
 \end{remark}
 
 Bounding $\|w\|_{0,\infty;\Om}$ is a question about the linear problem \eqref{eq:w} only, and it is taken up next.
@@ -1200,13 +1204,17 @@ It is worth recording where the bilateral case actually cost something.  In \S \
 
 
 
-%% TODO: bilateral analogues of NSV05, i.e. following the NSV05 work rather
-%% than NSV03.  This list replaces the one-line item which used to stand here,
-%% and it expands Remark \ref{rem:localization}.  NSV05 omits the proofs of
-%% its own lower bounds (Thm. 2.9) and cites NSV03 sec. 6 for them, so the
-%% prerequisite is now in place: \S \ref{sec:efficiency} is the bilateral
-%% form of NSV03 sec. 6.  Four issues, of which only (a) has no unilateral
-%% analogue at all.
+\section{A fully localized estimator} \label{sec:localized}
+
+This section is not yet written.  Its subject is \cite{NSV05}, the successor of \cite{NSV03}, whose estimator vanishes identically inside the discrete full-contact set, apart from obstacle resolution, rather than merely localizing to the dilated sets \eqref{eq:omegas}; Remark~\ref{rem:localization} explains the gap being closed.  The machinery is nodal and star-based rather than element-based: a nodal multiplier $s_z$, a set $C_h$ of full-contact nodes cut out by sign conditions on $f$ and on the facet jumps over the star of $z$, and a star-based residual indicator.
+
+Sections \ref{sec:setup} and \ref{sec:discretization} carry over unchanged, and three things have to be settled before the rest can be written.  First, the sign conditions defining $C_h$ are one-sided, so a bilateral $C_h = C_{h,\bot} \cup C_h^\top$ needs the opposite conditions on the same load $f$, each tested on its own star.  Second, \cite[Lemma 2.1]{NSV05} supplies the global sign $\sigma_h \le 0$, which the barrier propositions there use; bilaterally only the nodal complementarity of Proposition~\ref{prop:nodalsign} is available, which is the same obstruction \S \ref{sec:barriers} met and answered with the star dilation of Remark~\ref{rem:whystar}.  Whether that answer costs the full localization which is the point of \cite{NSV05} is the question on which this section turns.  Third, the set which gates the blocked-gap term is one-sided and has to split, as the two localized terms of \eqref{eq:barrierbound} already do.
+
+Efficiency should be the cheaper half.  \cite[Theorem 2.9]{NSV05} states its lower bounds and omits their proofs, citing \cite[\S 6]{NSV03}, whose bilateral form is \S \ref{sec:efficiency} above.
+
+%% TODO: the three issues behind the section above, in detail.  Item (d),
+%% on barrier sets, now stands under \S \ref{sec:barriersets} instead.
+%% Only (a) has no unilateral analogue at all.
 %%
 %%  (a) Opposite sign conditions on the same f.  NSV05's full-contact nodes
 %%      are C_h = {z : u_h = chi_h at z, f <= 0 on omega_z, J_h <= 0 on
@@ -1230,12 +1238,6 @@ It is worth recording where the bilateral case actually cost something.  In \S \
 %%      (s_z < 0) and Lambda_h^top (s_z > 0), each gating its own gap term,
 %%      matching the two localized terms in \eqref{eq:barrierbound}.
 %%
-%%  (d) Barrier sets (NSV05 sec. 4) need nondegeneracy on both sides, namely
-%%      f + Lap(psilo) <= -lambda near the lower free boundary and
-%%      f + Lap(psiup) >= lambda near the upper, and then the two strips must
-%%      be shown disjoint before either one localizes a free boundary.  This
-%%      is where r_0 of Proposition \ref{prop:separation} finally has a job.
-%%
 %% One definitional trap runs through all of these.  With C_h = C_h,bot union
 %% C_h^top, the test "sum_{z in C_h} phi_z = 1" of NSV05 wrongly admits an
 %% element having vertices in both.  Define Omega_h^{0,bot} and
@@ -1245,6 +1247,18 @@ It is worth recording where the bilateral case actually cost something.  In \S \
 %% localization near the transition but stays reliable.  Note C_h,bot and
 %% C_h^top are disjoint as node sets for free, since psiloh < psiuph at nodes,
 %% so no hypothesis on h is needed here either.
+
+
+\section{Barrier sets} \label{sec:barriersets}
+
+This section is not yet written either, and it depends on \S \ref{sec:localized}.  Section 4 of \cite{NSV05} converts pointwise error control into \emph{barrier sets}, that is, computable regions which contain the exact contact set and the exact free boundary, under a nondegeneracy condition on the data near the free boundary.  Bilaterally there are two free boundaries, so there are two such conditions, of opposite sign, and the two regions they produce must be shown disjoint before either one localizes anything.  Proposition~\ref{prop:separation} is the natural tool, since its constant $r_0$ bounds $\operatorname{dist}(\Cbot,\Ctop)$ from below in terms of the data alone.
+
+%%  (d) Barrier sets (NSV05 sec. 4) need nondegeneracy on both sides, namely
+%%      f + Lap(psilo) <= -lambda near the lower free boundary and
+%%      f + Lap(psiup) >= lambda near the upper, and then the two strips must
+%%      be shown disjoint before either one localizes a free boundary.  This
+%%      is where r_0 of Proposition \ref{prop:separation} finally has a job.
+%%
 
 \bibliographystyle{siamplain}
 \bibliography{box}
