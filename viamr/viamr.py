@@ -72,7 +72,7 @@ class VIAMR(OptionsManager, AVMMixin):
     .. code-block:: python3
 
       amr = VIAMR()
-      fbmark = amr.udomark(uh, lb)                             # free-boundary targeted marking method
+      fbmark = amr.udomark(uh, lb)                             # free-boundary-targeted marking method
       fbmark = amr.vcdmark(uh, lb)                             # same, but based on diffusion
       imark, _, _ = amr.gradrecinactivemark(uh, (lb, ub))      # classical gradient recovery in inactive set
       imark, _, _ = amr.brinactivemark(uh, (lb, ub), res_ufl)  # classical BR78 estimator in inactive set
@@ -684,17 +684,18 @@ class VIAMR(OptionsManager, AVMMixin):
         return Function(DG0).interpolate(mark * large)
 
     def udomark(self, uh, bound, boxside="lower", n=1, restrict=None):
-        """Mark mesh using Unstructured Dilation Operator (UDO) algorithm, for a
-        unilateral obstacle problem with the given bound (boxside="lower" or
-        "upper"; see _nodalactive()).  The algorithm
-        first computes an element-wise indicator for the free boundary.  Then the elements
-        which neighbor free-boundary elements are added, and so on iteratively through n
-        levels.  Note that n=0 already minimally marks the free boundary.  Optionally the
-        marking can be restricted to the active side of the initially-marked elements
+        """Mark the vicinity of the free-boundary using the Unstructured Dilation Operator (UDO) algorithm, for a unilateral obstacle problem with the given bound (boxside="lower"|"upper"; see _nodalactive()).
+
+        The algorithm first computes an element-wise indicator for the free boundary.  Then the elements which neighbor free-boundary elements are added, and so on iteratively through n levels.  Note that n=0 already marks the free boundary.  The output is an element-wise marking for those elements near the free boundary which should be refined.
+
+        Optionally the marking can be restricted to the active side of the initially-marked elements
         (restrict="active"), or to the inactive side (="inactive").
 
-        The output is an element-wise marking for those elements near the free boundary
-        which should be refined."""
+        Bilateral obstacle problems, with box bounds lb <= uh <= ub, are straightforwardly addressed by this sequence:
+            markL = udomark(uh, lb, boxside="lower")
+            markU = udomark(uh, ub, boxside="upper")
+            mark = unionmarks(markL, markU)
+        """
 
         # get mesh and border mark; added flag for restriction
         if restrict is not None:
