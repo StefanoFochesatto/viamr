@@ -316,7 +316,9 @@ class VIAMR(OptionsManager, AVMMixin):
         CG1, DG0 = self.spaces(mesh)
         inactive = self.eleminactive(uh, bound, boxside=boxside)
         grown = self._elemextreme(
-            self._elemtonodemax(inactive, CG1), minimum=False, defaultval=0.0
+            self._elemtonodeextreme(inactive, CG1, minimum=False, defaultval=0.0),
+            minimum=False,
+            defaultval=0.0
         )
         return Function(DG0, name="Thin Element Active").interpolate(1.0 - grown)
 
@@ -341,7 +343,9 @@ class VIAMR(OptionsManager, AVMMixin):
         elemtouchesinactive = self._elemextreme(
             nodalinactive, minimum=False, defaultval=0.0
         )
-        nodetouchesinactive = self._elemtonodemax(elemtouchesinactive, CG1)
+        nodetouchesinactive = self._elemtonodeextreme(
+            elemtouchesinactive, CG1, minimum=False, defaultval=0.0
+        )
         return Function(CG1).interpolate(1.0 - nodetouchesinactive)
 
     def _inactivemask(self, uh, bounds, strong=False):
@@ -435,41 +439,8 @@ class VIAMR(OptionsManager, AVMMixin):
     def _elemmaxabs(self, source):
         return self._elemextreme(source, minimum=False, absolute=True, defaultval=0.0)
 
-    def _elemtonodemax(self, elemfield, nodalspace):
-        """Scatter a DG0 element field into nodalspace (e.g. CG1), broadcasting
-        each cell's value to all of its local nodes and taking the max where
-        multiple cells share a node.  Applies a PyOP2 parallel loop; correct in
-        parallel via Firedrake's own halo exchange, with no DMPlex access needed."""
-        target = Function(nodalspace).assign(0.0)
-        kernel = op2.Kernel(
-            """
-        void elem_to_node_max(double *target, double const *source)
-        {
-        for (int i = 0; i < %(ndofs)s; i++) {
-            target[i] = source[0];
-        }
-        }"""
-            % {"ndofs": nodalspace.finat_element.space_dimension()},
-            "elem_to_node_max",
-        )
-        op2.par_loop(
-            kernel,
-            nodalspace.mesh().cell_set,
-            target.dat(op2.MAX, target.cell_node_map()),
-            elemfield.dat(op2.READ, elemfield.cell_node_map()),
-        )
-        return target
-
     def _elemtonodeextreme(self, elemfield, nodalspace, minimum=False, defaultval=None):
-        """Scatter a DG0 element field into nodalspace (e.g. CG1), broadcasting each
-        cell's value to all of its local nodes and taking the extreme value where
-        multiple cells share a node.  Thus the node value is the extreme over the
-        star U_h(z) of the element values.  Either computes the maximum or (optionally)
-        the minimum; the user must set the default value, which initializes the
-        reduction.  (In contrast, _elemtonodemax() always initializes to 0.0, so it
-        is only correct for nonnegative fields.)  Applies a PyOP2 parallel loop;
-        correct in parallel via Firedrake's own halo exchange, with no DMPlex access
-        needed."""
+        """Scatter a DG0 element field into nodalspace (e.g. CG1), broadcasting each cell's value to all of its local nodes and taking the extreme value where multiple cells share a node.  Thus the node value is the extreme over the star U_h(z) of the element values.  Either computes the maximum or (optionally) the minimum; the user must set the default value, which initializes the reduction.  Applies a PyOP2 parallel loop; correct in parallel via Firedrake's own halo exchange, with no DMPlex access needed."""
         assert defaultval is not None
         target = Function(nodalspace).assign(defaultval)
         kernel = op2.Kernel(
@@ -761,7 +732,9 @@ class VIAMR(OptionsManager, AVMMixin):
         # No DMPlex access, and thus no special mesh overlap requirement.
         for _ in range(n):
             border = self._elemextreme(
-                self._elemtonodemax(border, CG1), minimum=False, defaultval=0.0
+                self._elemtonodeextreme(border, CG1, minimum=False, defaultval=0.0),
+                minimum=False,
+                defaultval=0.0
             )
 
         return Function(DG0, name="mark (udomark)").interpolate(
