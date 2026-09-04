@@ -1,5 +1,3 @@
-\begin{figure}[ht]
-\centering
 %%%%%%%%%%%%%%%% left: the nodal contact sets
 \begin{tikzpicture}[x=0.78cm,y=0.78cm]
   \draw[gray!55,line width=0.3pt]
@@ -55,6 +53,3 @@
   \draw[gray,line width=0.3pt] (4.67,2.33) -- (5.5,1.7);
   \node[gray,right,inner sep=1pt] at (5.5,1.7) {$\Thplus$};
 \end{tikzpicture}
-\caption{Nodal and element-wise contact sets on a demonstration triangulation $\Th$ (incidentally a structured mesh).  Left: the nodal sets $\Nhbot$ and $\Nhtop$ of Proposition~\ref{prop:nodalsign}, with the remaining nodes of $\Nh$ in gray.  Right: the unions $\Lamhbot$ and $\Lamhtop$ of the element sets $\Thbot$ and $\Thtop$ from \eqref{eq:Thsplit}, darker colors, with $\Thplus$ unshaded.  The pale-colored elements have all active vertices, but they do not survive the erosion because their stars $\Uh(T)$ are not fully active.}
-\label{fig:nodalelem}
-\end{figure}

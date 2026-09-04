@@ -180,7 +180,12 @@ $r \ge r_0$, and $\operatorname{dist}(\Cbot,\Ctop) \ge r_0$ follows.
 
 Figure~\ref{fig:separation} illustrates the geometry.  The gap $\delta_{\min}$ is vertical, and determined by the obstacles alone, whereas $r_0$ is a horizontal distance in $\Om$ which also depends on the H\"older regularity of $u$.
 
+\begin{figure}[ht]
+\centering
 \input{tikz/separation}
+\caption{A notional illustration of Proposition~\ref{prop:separation}, which converts the vertical gap $\delta_{\min}$ into the horizontal separation $r_0$.  Left: profile $A-A'$, with $u$ drawn heavy where it contacts an obstacle.  Right: plan view of $\Om$.}
+\label{fig:separation}
+\end{figure}
 
 
 Separation hypotheses of this kind are expected in the bilateral setting.  For the displacement obstacle problem of clamped Kirchhoff plates, a fourth-order bilateral problem, Brenner et al.~\cite{Brenneretal2012} assume that the two obstacles are separated from each other and from the boundary values, and under that hypothesis obtain $L^\infty$ convergence rates and approximation of the coincidence set, though \emph{a priori} in both cases.  Here, by contrast, $\delta_{\min}$ in \eqref{eq:deltamin} and $r_0$ in \eqref{eq:r0} are computed from the data rather than assumed.
@@ -322,10 +327,14 @@ Then define $\Lamhbot$ and $\Lamhtop$ as the corresponding unions of elements,
 \begin{equation}
 \Lamhbot = \bigcup_{T \in \Thbot} T, \qquad \Lamhtop = \bigcup_{T \in \Thtop} T.
 \end{equation}
-These subsets of $\bar\Omega$ are discrete lower- and upper-contact active sets, but \emph{element-wise}, in contrast to the nodal sets of Proposition \ref{prop:nodalsign}.
-  Figure~\ref{fig:nodalelem} shows both kinds of set on a common mesh.
+These subsets of $\bar\Omega$ are defined \emph{element-wise}, in contrast to the nodal sets of Proposition \ref{prop:nodalsign}.  Figure~\ref{fig:nodalelem} shows both kinds of set on a common mesh.
 
+\begin{figure}[ht]
+\centering
 \input{tikz/nodalelem}
+\caption{Nodal and element-wise contact sets on a triangulation $\Th$ (incidentally a structured mesh).  Left: the nodal view of Proposition~\ref{prop:nodalsign}.  Right: $\Lamhbot$, $\Lamhtop$ union the elements in $\Thbot$, $\Thtop$ from \eqref{eq:Thsplit} (darker colors).  Pale-colored elements have active vertices but their stars $\Uh(T)$ are not fully active.}
+\label{fig:nodalelem}
+\end{figure}
 
 \begin{remark}[The library computes $\Thbot$, $\Thtop$]
 \label{rem:thinactive}
@@ -638,7 +647,12 @@ because if $\sigma_h(x) < 0$ then, $\sigma_h$ being affine on any element $T$ co
 
 Figure~\ref{fig:stardilate} illustrates \eqref{eq:Nhpm} and \eqref{eq:omegas} on the mesh of Figure~\ref{fig:nodalelem}.
 
+\begin{figure}[ht]
+\centering
 \input{tikz/stardilate}
+\caption{A notional illustration of strictly-signed nodal sets, and their star dilations, on the mesh of Figure~\ref{fig:nodalelem}.  Left: $\Nh^+$ and $\Nh^-$ from \eqref{eq:Nhpm} as filled dots, with the remaining nodes of $\Nhbot$ and $\Nhtop$, but where $\sigma_h=0$, as open circles.  Right: the star dilations $\ombot = \Uh(\Nh^+)$ and $\omtop = \Uh(\Nh^-)$ from \eqref{eq:omegas}, each one ring of elements larger than the node set generating it.}
+\label{fig:stardilate}
+\end{figure}
 
 \begin{remark}[Why the star, and not the bare set $\{\sigma_h<0\}$]
 \label{rem:whystar}
