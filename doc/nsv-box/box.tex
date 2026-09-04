@@ -18,9 +18,10 @@ urlcolor=blue,
 \newtheorem{theorem}{Theorem}
 \newtheorem{proposition}{Proposition}
 \newtheorem{lemma}{Lemma}
-\newtheorem{assumption}{Assumption}
+\newtheorem{corollary}{Corollary}
 
 \theoremstyle{definition}
+\newtheorem{assumption}{Assumption}
 \newtheorem{remark}{Remark}
 
 \newcommand{\eps}{\epsilon}
@@ -82,7 +83,7 @@ We are not aware of any pointwise \emph{a posteriori} theory for the bilateral p
 The paper is organized into sections, which group into three informal parts.  As the first part, Sections \ref{sec:setup} and \ref{sec:discretization} state the continuum bilateral problem, quantify the separation of its two contact sets, and build the discretization; nothing in this part is specific to the constructed estimators.  In the second part, Sections \ref{sec:estimator} through \ref{sec:efficiency} are the bilateral form of the estimator of \cite{NSV03}, which is assembled from continuous barrier functions and element-wise contact sets, and they prove reliability and efficiency.  Sections \ref{sec:localized} and \ref{sec:barriersets} form the third part, and concern \cite{NSV05}, namely its fully-localized, star-based estimator and its barrier sets, that is, computable regions containing a free boundary; FIXME these two are not yet written, and each states what its bilateral form requires.
 
 
-\section{Continuum problem and setup} \label{sec:setup}
+\section{Continuum problem} \label{sec:setup}
 
 \subsection{The variational inequality, and its residual}  Let $\Om$ be a bounded, polyhedral, not necessarily convex domain in $\mathbb{R}^d$ with $d \in \{2,3\}$.  Suppose $\psilo, \psiup \in H^1(\Om) \cap C^{0,\alpha}(\bar\Om)$, $0 < \alpha \le 1$, are continuous lower and upper obstacles, respectively, which satisfy a fundamental non-degeneracy assumption:
 \begin{equation}
@@ -178,7 +179,7 @@ $L^\top r^\alpha < \delta_{\min}/2$ and $L_u r^\beta < \delta_{\min}/2$, by defi
 $r \ge r_0$, and $\operatorname{dist}(\Cbot,\Ctop) \ge r_0$ follows.
 \end{proof}
 
-Figure~\ref{fig:separation} illustrates the geometry.  The gap $\delta_{\min}$ is vertical, and determined by the obstacles alone, whereas $r_0$ is a horizontal distance in $\Om$ which also depends on the H\"older regularity of $u$.
+Proposition~\ref{prop:separation} gives an explicit, data-determined lower bound $r_0$ on the spatial separation of the bilateral contact sets $\Cbot, \Ctop$.  Figure~\ref{fig:separation} illustrates the geometry.  The gap $\delta_{\min}$ is vertical, and determined directly by the obstacles alone, whereas $r_0$ is a horizontal distance in $\Om$ depending partly on the H\"older regularity of the solution $u$.  (Thus $r_0$ is controlled by the data functions $f,g,\psilo,\psiup$ through the regularity theory \cite{KinderlehrerStampacchia1980}.)  As it turns out, discretization \S \ref{sec:discretization}, next, does \emph{not} need to impose $h < c\,r_0$ as a hypothesis for the estimator to be well-defined and correct.  Instead, $r_0$'s role is to bound the width of the transition band so that the discrete classification tracks the true contact sets closely.
 
 \begin{figure}[ht]
 \centering
@@ -187,37 +188,36 @@ Figure~\ref{fig:separation} illustrates the geometry.  The gap $\delta_{\min}$ i
 \label{fig:separation}
 \end{figure}
 
-
-Separation hypotheses of this kind are expected in the bilateral setting.  For the displacement obstacle problem of clamped Kirchhoff plates, a fourth-order bilateral problem, Brenner et al.~\cite{Brenneretal2012} assume that the two obstacles are separated from each other and from the boundary values, and under that hypothesis obtain $L^\infty$ convergence rates and approximation of the coincidence set, though \emph{a priori} in both cases.  Here, by contrast, $\delta_{\min}$ in \eqref{eq:deltamin} and $r_0$ in \eqref{eq:r0} are computed from the data rather than assumed.
-
-Proposition~\ref{prop:separation} gives an explicit, data-determined lower bound $r_0$ on the spatial separation of the two contact sets  $\Cbot, \Ctop$.  The lower bound $r_0$ is controlled by the data functions $f,g,\psilo,\psiup$ through the regularity theory \cite{KinderlehrerStampacchia1980}.  As it turns out, \S \ref{sec:discretization} does \emph{not} need to impose $h < c\,r_0$ as a hypothesis for the estimator to be well-defined and correct.  Instead, $r_0$'s role is to bound the width of the transition band so that the discretization's classification tracks the true contact sets closely.
+Separation hypotheses of this kind are expected in the bilateral setting.  For example, in the displacement obstacle problem of clamped Kirchhoff plates, a fourth-order bilateral problem, Brenner et al.~\cite{Brenneretal2012} assume that the two obstacles are separated from each other and from the boundary values, and under that hypothesis obtain $L^\infty$ convergence rates and approximation of the coincidence set, though \emph{a priori} in both cases.
 
 
 \section{Discretization} \label{sec:discretization}
 
-Let $\{\Th\}$ be a sequence of conforming partitions of $\bar\Om$ into \emph{closed} simplices, namely triangles or tetrahedra in dimensions $d=2,3$, respectively.  Let $\Nh$ be the node set of $\Th$ and $\Nhr \subset \Nh$ the interior nodes.  Finally, let $\Sh$ be the interior sides, i.e.~the interior edges or faces in $d=2,3$.
+Let $\{\Th\}$ be a sequence of conforming partitions of $\bar\Om$ into \emph{closed} simplices, namely triangles or tetrahedra in dimensions $d=2,3$, respectively.  Let $\Nh$ be the node set of $\Th$ and $\Nhr \subset \Nh$ the interior nodes.  Finally, let $\Sh$ be the interior sides, i.e.~the interior edges or faces.
 
-Given a (closed) simplex $T$, $h_T$ is its diameter and $\rho_T$ is the maximal radius of a ball contained in $T$.  We assume shape-regularity, namely a bound $h_T/\rho_T \le \gamma^*$ for all $T \in \Th$, with $\gamma^*$ independent of $h$.  We also write $h$ for the piecewise-constant \emph{mesh-size function} with $h|_T = h_T$, and $h_S$ for the diameter of a side $S$; expressions like $\|h^2 R\|_{0,\infty;\Om}$ below are to be read with this function.
+Given a (closed) simplex $T$, $h_T$ is its diameter and $\rho_T$ is the maximal radius of a ball contained in $T$.  We assume shape-regularity, namely a bound $h_T/\rho_T \le \gamma^*$ for all $T \in \Th$, with $\gamma^*$ independent of $h$.  We also write $h$ for the piecewise-constant \emph{mesh-size function} with $h|_T = h_T$, and $h_S$ for the diameter of a side $S$.
 
 For $\omega \subset \bar\Om$ any subset, define its \emph{star} as
 \begin{equation}
 \label{eq:star}
 \Uh(\omega) := \bigcup\{T \in \Th : T \cap \omega \ne \emptyset\}.
 \end{equation}
-This closed set is a (finite) union of the closed simplices $T$.  Note that ``$T \cap \omega \ne \emptyset$'' only requires $T$ to meet $\omega$ in a single point, so for example $\Uh(T)$ for a simplex $T$ includes every simplex with a shared vertex, edge, or face.  For a node $z \in \Nh$, its star \cite{Langeetal2016} is $\Uh(z) := \Uh(\{z\}) = \operatorname{supp} \phi_h^z= \overline{\{x\,:\,\phi_h^z(x) > 0\}}$.
+This set is a finite union of closed simplices, thus closed.  Note that ``$T \cap \omega \ne \emptyset$'' only requires $T$ to meet $\omega$ in a single point, so for example $\Uh(T)$ includes every simplex with a shared vertex, edge, or face.  For a node $z \in \Nh$, its star \cite{Langeetal2016} is $\Uh(z) := \Uh(\{z\})$.
+
+
+\subsection{Piecewise-linear elements and nodal interpolation}
 
 Let $\Vh$ be the space of continuous piecewise-linear finite elements over $\Th$, with
-$\Vhr := \Vh \cap H_0^1(\Om)$ the subspace with zero boundary values.  We denote the nodal basis of $\Vh$ by $(\phi_h^z)_{z \in \Nh}$.  Let $\Ih$ be the Lagrange interpolation operator onto $\Vh$, specifically $\Ih:C(\bar\Om) \to \Vh$.  As in \cite{NSV03} we write $\left< \cdot,\cdot\right>_h$ for the lumped $L_2$ scalar product,
+$\Vhr := \Vh \cap H_0^1(\Om)$ the subspace with zero boundary values.  We denote the nodal basis of $\Vh$ by $(\phi_h^z)_{z \in \Nh}$, and note $\Uh(z)=\operatorname{supp} \phi_h^z$.
+
+Let $\Ih$ be the Lagrange interpolation operator onto $\Vh$, specifically $\Ih:C(\bar\Om) \to \Vh$.  As in \cite{NSV03} we write $\left< \cdot,\cdot\right>_h$ for the lumped $L_2$ scalar product,
 \begin{equation}
 \label{eq:lumped}
 \left< v_h, w_h\right>_h := \int_\Om \Ih(v_h w_h), \qquad v_h, w_h \in \Vh.
 \end{equation}
 Also as in \cite{NSV03}, in what follows $C$ denotes different constants depending only on $\gamma^*$, $\Om$, and $d$, and $\preceq$ indicates $\le$ up to such a constant.
 
-
-\subsection{Monotonicity of nodal interpolation, and \texorpdfstring{$\Kh$}{Kh}}
-
-Let us start with two properties special to affine functions and piecewise-\emph{linear} interpolation, which need no acuteness or mesh-fineness assumption on $\Th$.  They do not hold generally for higher-order elements.
+The following two properties are special to piecewise-\emph{linear} interpolation.  They need no acuteness or mesh-fineness assumption on $\Th$, and they do not hold generally for higher-order elements.
 
 \begin{lemma}[Vanishing affine functions on simplices]
 \label{lem:affine}
@@ -243,20 +243,23 @@ Set $\psiloh := \Ih \psilo$ and $\psiuph := \Ih \psiup$.  Applying Lemma~\ref{le
 \label{eq:disc-nondeg}
   \psiuph - \psiloh \ \ge\ \delta_{\min} \ >\ 0 \qquad \text{on } \bar\Om.
 \end{equation}
-Note this holds for \emph{every} mesh, not just fine ones. The compatibility condition \eqref{eq:compat} gives a second consequence, $\psiloh \le \Ih g \le \psiuph$ on $\dOm$, but here Lemma~\ref{lem:monotone} cannot be applied directly: $\psilo \le g \le \psiup$ is assumed only on $\dOm$, not on all of $\bar\Om$.  Instead we apply the Lemma face by face.  Each boundary face $F$ of a simplex is itself a simplex, whose vertices are nodes, and the trace of $\Ih w$ on $F$ depends only on the values of $w$ at those vertices.  Hence the Lemma, applied on $F$ to functions given on $F$ alone, yields the comparison there, and $\dOm$ is the union of such faces.
+Note this holds for \emph{every} mesh, not just fine ones. The compatibility condition \eqref{eq:compat} gives a second consequence, $\psiloh \le \Ih g \le \psiuph$ on $\dOm$.  (Lemma~\ref{lem:monotone} cannot be applied directly.  However, noting that $\psilo \le g \le \psiup$ is assumed only on $\dOm$, not on all of $\bar\Om$, we apply the idea face by face over $\dOm$.)
 
-Thus we define the discrete constraint set just as in \eqref{eq:K}:
+
+\subsection{The finite-dimensional problem}
+
+Define the discrete constraint set as in \eqref{eq:K}:
 \begin{equation}
 \label{eq:Kh}
   \Kh := \{v_h \in \Vh \mid \psiloh \le v_h \le \psiuph \text{ in } \Om,
     \ v_h = \Ih g \text{ on } \dOm\},
 \end{equation}
-This set is closed and convex, and it is non-empty: choose $v_h \in \Vh$ nodally, equal to $\Ih g$ at boundary nodes and anywhere in the non-empty interval $[\psiloh(z),\psiuph(z)]$ at interior nodes, and Lemma~\ref{lem:affine} promotes these nodal inequalities to all of $\bar\Om$.  As noted by \cite{NSV03} for the unilateral case, $\Kh$ is in general not a subset of $\mathcal{K}$ defined by \eqref{eq:K}, so in this sense our approximation is non-conforming.
+This set is closed and convex, and it is non-empty.  (To show it is non-empty, choose $v_h \in \Vh$ nodally, equal to $\Ih g$ at boundary nodes and anywhere in the non-empty interval $[\psiloh(z),\psiuph(z)]$ at interior nodes, and Lemma~\ref{lem:affine} promotes these nodal inequalities to all of $\bar\Om$.)  As noted by \cite{NSV03} for the unilateral case, $\Kh$ is in general not a subset of $\mathcal{K}$ defined by \eqref{eq:K}, so in this sense our approximation is non-conforming.
 
-Because the constraints in \eqref{eq:Kh} compare piecewise-linear functions, admissibility is decided at the nodes alone.  Indeed, for $v_h \in \Vh$ the differences $v_h - \psiloh$ and $\psiuph - v_h$ are affine on each $T \in \Th$, so Lemma~\ref{lem:affine} promotes nodal inequalities to pointwise ones and so we observe
+Because the constraints in \eqref{eq:Kh} compare piecewise-linear functions, admissibility is decided at the nodes alone.  Indeed, for $v_h \in \Vh$ the differences $v_h - \psiloh$ and $\psiuph - v_h$ are affine on each $T \in \Th$, so Lemma~\ref{lem:affine} promotes nodal inequalities to pointwise ones.  For functions satisfying $v_h = \Ih g$, we observe
 \begin{equation}
 \label{eq:nodalKh}
-  v_h \in \Kh \quad\iff\quad v_h = \Ih g \text{ on } \dOm \ \text{ and } \ \psiloh(z) \le v_h(z) \le \psiuph(z) \ \text{ for all } z \in \Nh.
+  v_h \in \Kh \quad\iff\quad \psiloh(z) \le v_h(z) \le \psiuph(z) \ \text{ for all } z \in \Nh.
 \end{equation}
 
 The discrete problem corresponding to \eqref{eq:VI} reads
@@ -278,8 +281,8 @@ For interior nodes $z \in \Nhr$, define $\sigma_h \in \Vh$ nodally by
   = \left< \nabla u_h, \nabla \phi_h^z \right> - \left< f, \phi_h^z \right>,
 \end{equation}
 whence $\sigma_h(z) = \bigl(\int_\Om \phi_h^z\bigr)^{-1}
-\bigl(\left< \nabla u_h, \nabla \phi_h^z\right> - \left< f, \phi_h^z\right>\bigr)$.  This is \cite[formula (2.1)]{NSV03}, but here with the same sign convention as for $\sigma$ itself (see \eqref{eq:sigma}).  Note that while $\sigma \in H^{-1}(\Om)$ is a quite general object, generally a measure, $\sigma_h$ simply assigns a real value for each interior node in the mesh.  (On the other hand, the reader may regard $\sigma_h$ as a collection of delta measures at points.)  Definition \eqref{eq:sigmah} is extended to boundary nodes below.
-% also, \eqref{eq:sigmah} is the Galerkin (weak-form) instance of the strong-form nodal residual underlying \cite{BuelerFarrell2024}'s mixed complementarity classification in their \S 7, and it matches the convention already used by \texttt{viamr}'s \texttt{nsv03mark()}
+\bigl(\left< \nabla u_h, \nabla \phi_h^z\right> - \left< f, \phi_h^z\right>\bigr)$.  This is \cite[formula (2.1)]{NSV03}, but here with the same sign convention as for $\sigma$ itself (see \eqref{eq:sigma}).  Note that while $\sigma \in H^{-1}(\Om)$ is a quite general object, generally a measure, $\sigma_h \in \Vh$ is a piecewise-linear function which merely assigns a real value for each interior node in the mesh.  (On the other hand, the reader may regard $\sigma_h$ as a collection of delta measures at points.)  Definition \eqref{eq:sigmah} is extended to boundary nodes below.
+% also, \eqref{eq:sigmah} is the Galerkin (weak-form) instance of the strong-form nodal residual underlying \cite{BuelerFarrell2024}'s mixed complementarity classification in their \S 7, and it matches the convention already used by viamr's \texttt{nsv03mark()}
 
 Observation \eqref{eq:nodalKh} above has a strong consequence for the sign of $\sigma_h$ at interior nodes.
 
@@ -295,7 +298,7 @@ Combining these, if $z \in \Nhr$ is an interior node then $\sigma_h(z) > 0$ impl
 \end{proposition}
 
 \begin{proof}
-For $t \in \mathbb{R}$ set $v_h := u_h + t \phi_h^z \in \Vh$.  Since $z$ is an interior node, $\phi_h^z$ vanishes on $\dOm$, so $v_h = u_h = \Ih g$ there.  At any node $z' \ne z$ we have $\phi_h^z(z') = 0$, hence $v_h(z') = u_h(z')$, which satisfies the bounds in \eqref{eq:nodalKh} because $u_h \in \Kh$; and $v_h(z) = u_h(z) + t$.  So, by \eqref{eq:nodalKh},
+For $z\in \Nhr$ and $t \in \mathbb{R}$ set $v_h := u_h + t \phi_h^z \in \Vh$, so $v_h(z)=u_h(z)+t$.  Since $z$ is an interior node, $\phi_h^z$ vanishes on $\dOm$, so $v_h = u_h = \Ih g$ there.  At any node $z' \ne z$ we have $\phi_h^z(z') = 0$, hence $v_h(z') = u_h(z')$, which satisfies the bounds in \eqref{eq:nodalKh}, because $u_h \in \Kh$, so
 \begin{equation}
 \label{eq:tfeasible}
   v_h \in \Kh \quad\iff\quad \psiloh(z) - u_h(z) \ \le\ t \ \le\ \psiuph(z) - u_h(z).
@@ -309,9 +312,9 @@ This is a condition at the single node $z$; no hypothesis about the rest of $z$'
 Suppose $z \in \Nhbot$, so $u_h(z) = \psiloh(z)$.  Then $\psiuph(z) - u_h(z) \ge \delta_{\min} > 0$ by \eqref{eq:disc-nondeg}, so every $t \in (0,\delta_{\min}]$ is feasible in \eqref{eq:tfeasible}; dividing \eqref{eq:tsigma} by $t > 0$ preserves the inequality and gives $\sigma_h(z) \ge 0$.  Symmetrically, if $z \in \Nhtop$ then every $t \in [-\delta_{\min},0)$ is feasible, and dividing by $t < 0$ \emph{reverses} the inequality, giving $\sigma_h(z) \le 0$.  Finally, if $z$ lies in neither set then $\psiloh(z) < u_h(z) < \psiuph(z)$, so all $t$ of sufficiently small modulus are feasible, of either sign; both preceding conclusions then apply and $\sigma_h(z) = 0$.  The three cases are exhaustive, and the first two are mutually exclusive, because $\Nhbot \cap \Nhtop = \emptyset$ by \eqref{eq:disc-nondeg}.
 \end{proof}
 
-In the unilateral setting of \cite{NSV03}, under our sign convention, $\sigma_h \ge 0$ holds \emph{throughout} $\bar\Om$.  In that case, raising $u_h$ by a non-negative multiple of any nodal basis function can never violate a one-sided lower bound, so \eqref{eq:tsigma} is available with $t > 0$ at every interior node.  With two obstacles that fails, and $\sigma_h$ has no global sign.  The nodal statement in Proposition~\ref{prop:nodalsign} is what takes its place.  It is precisely the discrete form of the complementarity structure \eqref{eq:sigmasign}.
+In the unilateral setting of \cite{NSV03}, $\sigma_h \ge 0$ holds \emph{throughout} $\bar\Om$ (under our sign convention).  In that case, raising $u_h$ by a non-negative multiple of any nodal basis function preserves admissibility, so \eqref{eq:tsigma} is available with $t > 0$ at every interior node.  With two obstacles that fails, and $\sigma_h$ has no global sign.  The nodal statement in Proposition~\ref{prop:nodalsign} takes its place; it is the discrete form of complementarity structure \eqref{eq:sigmasign}.
 
-Note that $\sigma_h$ vanishes at every strictly inactive interior node, so the nodal values of $\sigma_h$ can be non-zero only on the nodal active sets $\Nhbot \cup \Nhtop$.  However, if we take the piecewise-linear form of $\sigma_h$ then Proposition \ref{prop:nodalsign}'s nodal complementarity does not extend into the elements; if $\sigma_h$ is regarded as piecewise-linear then it can be non-zero throughout any element having an active vertex in $\Nhbot \cup \Nhtop$.
+Note that $\sigma_h$ vanishes at every strictly inactive interior node, so the nodal values of $\sigma_h$ can be non-zero only on the nodal active sets $\Nhbot \cup \Nhtop$.  However, if we take the piecewise-linear form of $\sigma_h$ then Proposition \ref{prop:nodalsign}'s nodal complementarity does not extend into the elements; if $\sigma_h$ is regarded as piecewise-linear then it can be non-zero in any element having an active vertex in $\Nhbot \cup \Nhtop$.
 
 
 \subsection{Thinned/eroded element-wise active sets}
@@ -323,7 +326,7 @@ Extending \cite{NSV03}, for elements we partition $\Th$ into three parts accordi
   \Thtop &:= \{T \in \Th : \Uh(T) \subset \{u_h = \psiuph\}\}, \notag \\
   \Thplus &:= \Th \setminus (\Thbot \cup \Thtop). \notag
 \end{align}
-Then define $\Lamhbot$ and $\Lamhtop$ as the corresponding unions of elements,
+The contact (active) sets $\Lamhbot$ and $\Lamhtop$ are defined as the corresponding unions of elements,
 \begin{equation}
 \Lamhbot = \bigcup_{T \in \Thbot} T, \qquad \Lamhtop = \bigcup_{T \in \Thtop} T.
 \end{equation}
@@ -336,42 +339,40 @@ These subsets of $\bar\Omega$ are defined \emph{element-wise}, in contrast to th
 \label{fig:nodalelem}
 \end{figure}
 
-\begin{remark}[The library computes $\Thbot$, $\Thtop$]
+\begin{remark}[The VIAMR library computes $\Thbot$, $\Thtop$]
 \label{rem:thinactive}
-The active element sets in \eqref{eq:Thsplit} are exactly what the \texttt{VIAMR.thinelemactive()} method marks.  An element is marked only if it \emph{and every element sharing a node with it} is active.  This erodes, by one element ring, the more obvious element-wise active set computed by \texttt{VIAMR.elemactive()}, which marks an element active if all its nodes are active, i.e.~they are in $\Nhbot,\Nhtop$ respectively.  The thinning/erosion is precisely the content of ``$\Uh(T) \subset \{u_h = \psiloh\}$'' because $\Uh(T)$ includes the ring of neighbors of $T$, i.e.~every $T' \in \Th$ meeting $T$ in a node or edge.  The library calls are
-\begin{align*}
-\Thbot &= \texttt{thinelemactive(uh, psiloh, boxside="lower")} \\
-\Thtop &= \texttt{thinelemactive(uh, psiuph, boxside="upper")}.
-\end{align*}
+The active element sets in \eqref{eq:Thsplit} are exactly what the library's \texttt{thinelemactive()} method marks.  An element is marked only if it \emph{and every element sharing a node with it} is active.  This erodes, by one element ring, the larger element-wise active set computed by \texttt{elemactive()}, which marks an element active if all its nodes are active, i.e.~they are in $\Nhbot,\Nhtop$ respectively.  The thinning/erosion is precisely the content of ``$\Uh(T) \subset \{u_h = \psiloh\}$'' because $\Uh(T)$ includes the ring of neighbors of $T$, every $T' \in \Th$ meeting $T$ in a node or edge.  The library calls are
+\begin{equation*}
+\Thbot|\Thtop = \texttt{thinelemactive(uh, psiloh, boxside="lower"|"upper")}
+\end{equation*}
+Regarding the implementation, both \texttt{elemactive()} and \texttt{thinelemactive()} decide activity by evaluating the gap at a single DG0 degree of freedom, the cell centroid, and comparing to a tolerance, rather than by testing every vertex.  For piecewise-linear $u_h$ and $\psiloh$ the centroid value of $u_h - \psiloh$ is the average of the vertex values, and this gap is non-negative because $u_h \in \Kh$, so at zero tolerance the two tests agree.  At a tolerance \texttt{tol}$>0$ the centroid test is slightly weaker, but the tests coincide in the \texttt{tol}$\to 0$ limit.
 \end{remark}
 
-\begin{remark}[The library tests a centroid value against a tolerance]
-\label{rem:activetol}
-Both \texttt{elemactive()} and \texttt{thinelemactive()} decide activity by evaluating the gap at a single DG0 degree of freedom, the cell centroid, and comparing to a tolerance \texttt{activetol}, rather than by testing every vertex.  For piecewise-linear $u_h,\psiloh$ the centroid value of $u_h - \psiloh$ is the average of the vertex values, and this gap is non-negative because $u_h \in \Kh$, so at zero tolerance the two tests agree.  At a positive tolerance the centroid test is slightly weaker: a triangle with vertex gaps $0,0,1.5\,\texttt{tol}$ has centroid gap $0.5\,\texttt{tol}$ and is marked active, though one of its vertices is not.  Of course, the identifications are exact in the limit $\texttt{tol}\to 0$.
-\end{remark}
+The element-wise sets \eqref{eq:Thsplit} promote the nodal signs of Proposition \ref{prop:nodalsign} to pointwise ones within the elements.  Suppose $z$ is an interior node and a vertex of $T \in \Thbot$, thus $\sigma_h(z) \ge 0$ by Proposition \ref{prop:nodalsign}.  If instead $z$ is a boundary node then, because every element containing $z$ meets $T$, we have $\Uh(z) \subset \Uh(T) \subset \{u_h = \psiloh\}$, and the boundary-node definition \eqref{eq:sigmah-bnd} below gives $\sigma_h(z) = \hat\sigma_h(z)^+ \ge 0$.  On $\Thplus$ elements no pointwise sign is claimed, but the discrete residual $\sigma_h$ is signed on the thinned contact elements.
 
-The element-wise sets \eqref{eq:Thsplit} promote the nodal signs of Proposition \ref{prop:nodalsign} to pointwise ones within the elements.  Suppose $z$ is an interior node and a vertex of $T \in \Thbot$, thus $\sigma_h(z) \ge 0$ by Proposition \ref{prop:nodalsign}.  If instead $z$ is a boundary node then, because every element containing $z$ meets $T$, we have $\Uh(z) \subset \Uh(T) \subset \{u_h = \psiloh\}$, and the boundary-node definition \eqref{eq:sigmah-bnd} below gives $\sigma_h(z) = \hat\sigma_h(z)^+ \ge 0$.  Either way $\sigma_h \ge 0$ at each vertex of $T$, whence $\sigma_h \ge 0$ throughout $T$ by Lemma \ref{lem:affine}; symmetrically $\sigma_h \le 0$ on each $T \in \Thtop$.  On $\Thplus$ elements no pointwise sign is claimed.
+\begin{corollary} $T \in \Thbot \implies \sigma_h \ge 0$ on $T$, and symmetrically $T \in \Thtop \implies \sigma_h \le 0$ on $T$.
+\end{corollary}
 
 \begin{remark}[Conceptual importance of separation distance]
 \label{rem:sepconcept}
-Proposition~\ref{prop:separation}'s constant $r_0$ plays no role in the correctness of what follows.  However, $r_0$ still matters for \emph{sharpness}.  One expects that once $h \lesssim r_0$, $\Thplus$ separates the discrete free boundaries, rather than swallowing-up contact elements that should have been classified into $\Thbot$ or $\Thtop$.  Though this element-wise separation of the bilateral contact sets is seen in examples, we do not prove that it happens under refinement.
+Proposition~\ref{prop:separation}'s constant $r_0$ plays no role in the correctness of what follows, but it matters for \emph{sharpness}.  One expects that once $h \lesssim r_0$, $\Thplus$ separates the discrete free boundaries, rather than swallowing-up contact elements that should have been classified into $\Thbot$ or $\Thtop$.  Under refinement this element-wise separation of the bilateral contact sets is seen in the examples, but we do not prove it.
 \end{remark}
 
 
 \subsection{The residual at boundary nodes}
 
-For a boundary node $z \in \Nh \setminus \Nhr$, the hat function $\phi_h^z$ obviously does not vanish along $\dOm$, and an admissible $v_h\in\Kh$ satisfies $v_h = \Ih g$ there (by definition \eqref{eq:Kh}), so the stationarity argument of Proposition~\ref{prop:nodalsign} cannot be applied.  Therefore we define $\sigma_h(z)$ at boundary nodes by a diagnostic construction, following \cite[\S 2.1]{NSV03}.
+For a boundary node $z \in \Nh \setminus \Nhr$, the hat function $\phi_h^z$ does not vanish along $\dOm$, and an admissible $v_h\in\Kh$ satisfies $v_h = \Ih g$ there, so the stationarity argument of Proposition~\ref{prop:nodalsign} cannot be applied.  Following \cite[\S 2.1]{NSV03} we therefore define $\sigma_h(z)$ at boundary nodes by a diagnostic construction.
 
-If $z\in\dOm$ then the bracket in \eqref{eq:sigmah} is no longer the whole residual: integrating $\left<\nabla u_h,\nabla\phi_h^z\right>$ by parts elementwise picks up an extra boundary flux term, $\left<\!\left<\partial_n u_h,\phi_h^z\right>\!\right> := \int_{\dOm} (\partial_n u_h)\,\phi_h^z$, where $\partial_n$ is the outward-normal derivative, taken elementwise. Write
+If $z\in\dOm$ then the bracket in \eqref{eq:sigmah} is no longer the whole residual: integrating $\left<\nabla u_h,\nabla\phi_h^z\right>$ by parts elementwise picks up an extra boundary flux term $\int_{\dOm} (\partial_n u_h)\,\phi_h^z$, where $\partial_n$ is the outward-normal derivative, taken elementwise. Write
 \begin{equation}
 \label{eq:sigmahat}
   \hat\sigma_h(z) := \Bigl(\int_\Om \phi_h^z\Bigr)^{-1}
-  \Bigl[\left<\nabla u_h,\nabla\phi_h^z\right> - \left< f,\phi_h^z\right> - \left<\!\left<\partial_n u_h,\phi_h^z\right>\!\right>\Bigr],
+  \Bigl[\left<\nabla u_h,\nabla\phi_h^z\right> - \left< f,\phi_h^z\right> - \int_{\dOm} (\partial_n u_h)\,\phi_h^z\Bigr],
   \qquad z \in \Nh\setminus\Nhr,
 \end{equation}
 for this boundary-corrected nodal residual, normalized exactly as in \eqref{eq:sigmah}.
 
-Since \eqref{eq:sigmahat} is not derived from a stationarity argument using VI \eqref{eq:discVI}, $\hat\sigma_h(z)$ carries no guaranteed sign, but \cite{NSV03} handles this by keeping only the part which has the sign which convention \eqref{eq:sigmasign} demands, and discarding the rest.  We extend the same device to both obstacles, defining, for $z \in \Nh\setminus\Nhr$,
+Since \eqref{eq:sigmahat} is not derived from a stationarity argument using VI \eqref{eq:discVI}, $\hat\sigma_h(z)$ carries no guaranteed sign, but \cite{NSV03} handles this by keeping only the part which has the sign which convention \eqref{eq:sigmasign} demands, and discarding the rest.  We extend the same device to both obstacles, defining, for boundary nodes $z \in \Nh\setminus\Nhr$,
 \begin{equation}
 \label{eq:sigmah-bnd}
   \sigma_h(z) := \begin{cases}
@@ -382,14 +383,14 @@ Since \eqref{eq:sigmahat} is not derived from a stationarity argument using VI \
 \end{equation}
 where $v^+ := \max\{v,0\}$ and $v^- := -\min\{v,0\}$ are the positive and negative parts of $v$.  Since $\hat\sigma_h(z)^+ \ge 0$ and $-\hat\sigma_h(z)^- \le 0$ by construction, \eqref{eq:sigmah-bnd} satisfies the discrete version of \eqref{eq:sigmasign} for boundary nodes by fiat.
 
-Thus, at a boundary node whose star lies wholly in one active set, we keep the correctly-signed part of $\hat\sigma_h(z)$ and zero out the rest; at any other boundary node, including one whose star meets both contact types or neither, $\sigma_h(z)$ is simply set to zero.  Up to the sign flip already noted, the first case of \eqref{eq:sigmah-bnd} is exactly \cite[formula (2.2)]{NSV03}, and the second case, for upper-contact boundary nodes, is appropriately symmetric.
+Thus, at a boundary node whose star lies wholly in one active set, we keep the correctly-signed part of $\hat\sigma_h(z)$; at any other boundary node, including one whose star meets both contact types or neither, $\sigma_h(z)$ is simply set to zero.  Up to the sign convention already noted, the first case of \eqref{eq:sigmah-bnd} is exactly \cite[formula (2.2)]{NSV03}.
 
 
 \subsection{Positivity-preserving interpolation}
 
-We record here the ball-averaging interpolation operator of Chen \& Nochetto \cite{ChenNochetto2000}, since the Galerkin-functional and barrier constructions to come both use it.  The construction does not depend on the obstacles at all, so it is unchanged for the box-constrained case; we simply state it following \cite[\S 2.2]{NSV03}, and cite \cite{ChenNochetto2000} for proofs.
+We record here the ball-averaging interpolation operator of Chen \& Nochetto \cite{ChenNochetto2000}, since the constructions in \S 4 and \S 5 both use it.  The construction does not depend on the obstacles, so it is unchanged for the box-constrained case; we simply state it following \cite[\S 2.2]{NSV03}, and cite \cite{ChenNochetto2000} for proofs.
 
-To define the interpolation operator $\Pih : L_1(\Om) \to \Vhr$, fix the mesh $\Th$ first, and then, for each $z \in \Nhr$, fix a ball $B(z) \subset \Uh(z)$, i.e.~centered at $z$ and contained in its star, whose radius is comparable to the local mesh size near $z$.  On a graded or adapted mesh the radius will vary from node to node; $B(z)$ is generally \emph{not} one ball translated throughout $\Om$.  The precise choice of radius, needed only for \eqref{eq:Pihprops} below to hold uniformly in $h$, does not concern us here; see \cite[\S 6]{NSV03}.
+To define the interpolation operator $\Pih : L_1(\Om) \to \Vhr$, fix the mesh $\Th$ and then, for each $z \in \Nhr$, fix a ball $B(z) \subset \Uh(z)$, centered at $z$ and contained in its star, with radius comparable to the local mesh size near $z$.  On a non-uniform mesh the radius will vary from node to node; $B(z)$ is generally \emph{not} one ball translated throughout $\Om$.  The precise choice of radius, needed for \eqref{eq:Pihprops} to hold uniformly in $h$, does not concern us, but see \cite[\S 6]{NSV03}.
 
 For $\varphi \in L_1(\Om)$, set
 \begin{equation}
@@ -411,7 +412,7 @@ If in addition $\varphi \in \mathring W^{1,1}(\Om)$ and $\nabla\varphi \in BV(\O
   \|\varphi-\Pih\varphi\|_{0,1;T} &\preceq h_T^2\, |D^2\varphi|_{\mathrm{var}}(\Uh(T)), \\
   \|\varphi-\Pih\varphi\|_{0,1;S} &\preceq h_S\, |D^2\varphi|_{\mathrm{var}}(\Uh(S)), \notag
 \end{align}
-where $|D^2\varphi|_{\mathrm{var}} := \sum_{i=1}^d |D\partial_i\varphi|_{\mathrm{var}}$ sums the variation measures of the components of $\nabla\varphi$, and $|D^2\varphi|_{\mathrm{var}}(\omega) = \|D^2\varphi\|_{0,1;\omega}$ whenever $\varphi \in W^{2,1}(\Om)$ and $\omega \subset \Om$ is measurable.  We will need the properties \eqref{eq:Pihprops} and \eqref{eq:PihBV} in following sections.
+where $|D^2\varphi|_{\mathrm{var}} := \sum_{i=1}^d |D\partial_i\varphi|_{\mathrm{var}}$ sums the variation measures of the components of $\nabla\varphi$, and $|D^2\varphi|_{\mathrm{var}}(\omega) = \|D^2\varphi\|_{0,1;\omega}$ whenever $\varphi \in W^{2,1}(\Om)$ and $\omega \subset \Om$ is measurable.  We will need the properties \eqref{eq:Pihprops} and \eqref{eq:PihBV} in following sections; observe that they the interpolation error bound using stars.
 
 
 \section{A posteriori estimator} \label{sec:estimator}
