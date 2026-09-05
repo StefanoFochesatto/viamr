@@ -350,7 +350,8 @@ Regarding the implementation, both \texttt{elemactive()} and \texttt{thinelemact
 
 The element-wise sets \eqref{eq:Thsplit} promote the nodal signs of Proposition \ref{prop:nodalsign} to pointwise ones within the elements.  Suppose $z$ is an interior node and a vertex of $T \in \Thbot$, thus $\sigma_h(z) \ge 0$ by Proposition \ref{prop:nodalsign}.  If instead $z$ is a boundary node then, because every element containing $z$ meets $T$, we have $\Uh(z) \subset \Uh(T) \subset \{u_h = \psiloh\}$, and the boundary-node definition \eqref{eq:sigmah-bnd} below gives $\sigma_h(z) = \hat\sigma_h(z)^+ \ge 0$.  On $\Thplus$ elements no pointwise sign is claimed, but the discrete residual $\sigma_h$ is signed on the thinned contact elements.
 
-\begin{corollary} $T \in \Thbot \implies \sigma_h \ge 0$ on $T$, and symmetrically $T \in \Thtop \implies \sigma_h \le 0$ on $T$.
+\begin{corollary} \label{cor:sigmahsign}
+$T \in \Thbot \implies \sigma_h \ge 0$ on $T$, and symmetrically $T \in \Thtop \implies \sigma_h \le 0$ on $T$.
 \end{corollary}
 
 \begin{remark}[Conceptual importance of separation distance]
@@ -559,7 +560,7 @@ Bound \eqref{eq:Ghbound} is \cite[formula (3.10)]{NSV03}.  As with the Galerkin 
 
 \section{Barriers} \label{sec:barriers}
 
-Following \cite[\S 4]{NSV03}, we now bracket the exact solution between continuous \emph{barriers}, $u_\bot \le u \le u^\top$, built from the discrete solution $u_h$, the data $g,\psi_\bot,\psi_\top$, and a correction $w$ which solves a linear problem.
+Following \cite[\S 4]{NSV03}, we now bracket the exact solution between continuous \emph{barriers}, $u_\bot \le u \le u^\top$, built from the discrete solution $u_h$, the data $g,\psi_\bot,\psi_\top$, and a Galerkin correction $w$.
 
 In fact, $w \in H_0^1(\Om)$ is defined as the Riesz representation of the Galerkin functional:
 \begin{equation}
@@ -571,24 +572,24 @@ As in \cite[\S 4]{NSV03}, $w$ is continuous; Lemma~\ref{lem:holder} below establ
 
 \subsection{Reduction to two pairings}
 
-Formulas \eqref{eq:candtop} and \eqref{eq:candbot} state candidate barriers, with values of ``$c$'' to be determined.  The gradient of each barrier is $\nabla u_h + \nabla w$ and thus certain reductions apply.
+The next Lemma considers candidate barriers, with values of ``$c$'' to be determined.  The gradient of each barrier is $\nabla u_h + \nabla w$, and thus certain reductions apply, and we find sufficient conditions in terms of $\sigma$ and $\tilde\sigma_h$, so that the candidates are in fact barriers.  These conditions will be satisfied in Propositions \ref{prop:upperbarrier} and \ref{prop:lowerbarrier} below.
 
 \begin{lemma}[Barrier criterion]
 \label{lem:barriercrit}
-If $c \ge \|g - \Ih g\|_{0,\infty;\dOm}$ is any constant then the functions
+If $c \ge \|g - \Ih g\|_{0,\infty;\dOm}$ is a constant then the functions
 \begin{align}
-u^\top &:= u_h + w + c \label{eq:candtop} \\
-u_\bot &:= u_h + w - c \label{eq:candbot}
+u^\top &:= u_h + w + c \label{eq:candc} \\
+u_\bot &:= u_h + w - c \notag
 \end{align}
 satisfy
 \begin{itemize}
-\item[(i)] If $v := (u - u^\top)^+$ then $v \ge 0$, $v \in H_0^1(\Om) \cap C(\bar\Om)$, and
+\item[(a)] If $v := (u - u^\top)^+$ then $v \ge 0$, $v \in H_0^1(\Om) \cap C(\bar\Om)$, and
 \begin{equation}
 \label{eq:barrierenergy}
   \|\nabla v\|_{0,2;\Om}^2 = \left<\sigma,v\right> - \left<\tilde\sigma_h,v\right>.
 \end{equation}
 Thus if $\left<\sigma,v\right> \le 0$ and $\left<\tilde\sigma_h,v\right> \ge 0$ then $u \le u^\top$ in $\Om$.
-\item[(ii)] If $v := (u_\bot - u)^+$ then $v \ge 0$, $v \in H_0^1(\Om) \cap C(\bar\Om)$, and
+\item[(b)] If $v := (u_\bot - u)^+$ then $v \ge 0$, $v \in H_0^1(\Om) \cap C(\bar\Om)$, and
 \begin{equation}
 \|\nabla v\|_{0,2;\Om}^2 = \left<\tilde\sigma_h,v\right> - \left<\sigma,v\right>.
 \end{equation}
@@ -597,9 +598,9 @@ Thus if $\left<\sigma,v\right> \ge 0$ and $\left<\tilde\sigma_h,v\right> \le 0$ 
 \end{lemma}
 
 \begin{proof}
-We prove (i); part (ii) is the same computation with the roles of the two functions in $v$ exchanged and the sign of $c$ reversed.
+We prove (a); part (b) is the same computation with the roles of the two functions in $v$ exchanged and the sign of $c$ reversed.
 
-Since $w \in H_0^1(\Om)$ is continuous it vanishes on $\dOm$, while $u = g$ and $u_h = \Ih g$ there.  Hence $(u - u^\top)|_{\dOm} = (g - \Ih g) - c \le 0$, by the hypothesis on $c$, so $v$ vanishes on $\dOm$.  Also $v \ge 0$ by definition, and $v$ is continuous because $u$, $u_h$, and $w$ are.  For \eqref{eq:barrierenergy}, recall $\nabla v = \nabla(u-u^\top)$ almost everywhere on $\{v > 0\}$ and $\nabla v = 0$ almost everywhere elsewhere.  Therefore, using $\nabla u^\top = \nabla u_h + \nabla w$, and then using \eqref{eq:w} and \eqref{eq:Ghagain} as well,
+Since $w \in H_0^1(\Om)$ is continuous it vanishes on $\dOm$, while $u = g$ and $u_h = \Ih g$ there.  Hence $(u - u^\top)|_{\dOm} = (g - \Ih g) - c \le 0$, by the hypothesis on $c$, so $v$ vanishes on $\dOm$.  Also $v \ge 0$ by definition, and $v$ is continuous because $u$, $u_h$, and $w$ are, so $v\in H_0^1(\Om) \cap C(\bar\Om)$.  For \eqref{eq:barrierenergy}, recall $\nabla v = \nabla(u-u^\top)$ almost everywhere on $\{v > 0\}$ and $\nabla v = 0$ almost everywhere elsewhere.  Therefore, using $\nabla u^\top = \nabla u_h + \nabla w$, and then using \eqref{eq:w} and \eqref{eq:Ghagain} as well,
 \[
   \|\nabla v\|_{0,2;\Om}^2 = \int_\Om \nabla(u - u^\top)\cdot\nabla v
   = \left<\nabla(u-u_h),\nabla v\right> - \left<\Gh,v\right>
@@ -608,39 +609,39 @@ Since $w \in H_0^1(\Om)$ is continuous it vanishes on $\dOm$, while $u = g$ and 
 Finally, if the two pairings have the stated signs then $\|\nabla v\|_{0,2;\Om} = 0$, so $v$ is constant, and $v \in H_0^1(\Om)$ then forces $v \equiv 0$.  That is, $u \le u^\top$.
 \end{proof}
 
-This Lemma isolates what $c$ must accomplish.  In applying this Lemma we will use different $c$ for the two barriers, but each will satisfy $c \ge \|g - \Ih g\|_{0,\infty;\dOm}$, thus absorbing the boundary interpolation error.
+In applying this Lemma we will use different $c$ for the two barriers, but each will satisfy $c \ge \|g - \Ih g\|_{0,\infty;\dOm}$.
 
 Consider the upper barrier, so that we need $\left<\sigma,v\right> \le 0$ and $\left<\tilde\sigma_h,v\right> \ge 0$.  In either part of the Lemma the function $v$ is continuous and non-negative, so, $\sigma$ being a signed Radon measure (\S \ref{sec:setup}), the pairing is integration \cite[Theorem 6.9]{KinderlehrerStampacchia1980}, and the Jordan decomposition $\sigma = \mu_\bot - \mu_\top$ gives
 \begin{equation}
 \label{eq:sigmapairing}
   \left<\sigma,v\right> = \int_\Om v\,d\mu_\bot - \int_\Om v\,d\mu_\top \ \le\ \int_\Om v\,d\mu_\bot .
 \end{equation}
-So the upper-contact measure is harmless for the upper barrier, and it suffices that $v$ vanish on $\Cbot$, where $\mu_\bot$ is supported.  This is the only role of the lower obstacle here (and it is the mechanism \cite{NSV03} already uses).
+So the upper-contact measure is harmless for the upper barrier, and it suffices that $v$ vanish on $\Cbot$, where $\mu_\bot$ is supported.  This is the only role of the lower obstacle here, and it is the mechanism \cite{NSV03} already uses.
 
 To show $\left<\tilde\sigma_h,v\right> \ge 0$ for the upper barrier, recall that definition \eqref{eq:sigmatilde} gives
 \begin{equation}
 \label{eq:sigmatildesplit}
   \left<\tilde\sigma_h,v\right> = \sum_{T\in\Thbot}\int_T \sigma_h v \ +\ \sum_{T\in\Thtop}\int_T \sigma_h v \ +\ \sum_{T\in\Thplus}\int_T \Ih(\sigma_h \Pih v),
 \end{equation}
-in which the first sum is already non-negative, because $\sigma_h \ge 0$ pointwise on each $T \in \Thbot$ (\S \ref{sec:discretization}) and $v \ge 0$.  The box constraint is relevant in the second and third sums: $\sigma_h \le 0$ on $\Thtop$ elements, and $\sigma_h$ has no sign at all on $\Thplus$ elements, so both can contribute negatively.  (In the unilateral case of \cite{NSV03} this does not happen, since there $\sigma_h \ge 0$ on all of $\bar\Om$ and hence $\left<\tilde\sigma_h,v\right> \ge 0$ for every $v \ge 0$.)  The upper barrier must therefore contain a second mechanism, which forces $v$ to vanish wherever $\sigma_h < 0$ can influence \eqref{eq:sigmatildesplit}.
+in which the first sum is already non-negative, because $\sigma_h \ge 0$ pointwise on each $T \in \Thbot$ (Corollary \ref{cor:sigmahsign}) and $v \ge 0$.  The box constraint is relevant in the second and third sums: $\sigma_h \le 0$ on $\Thtop$ elements, and $\sigma_h$ has no determined sign on $\Thplus$ elements, so both can contribute negatively.  (In the unilateral case of \cite{NSV03} this does not happen, since there $\sigma_h \ge 0$ on all of $\bar\Om$ and hence $\left<\tilde\sigma_h,v\right> \ge 0$ for every $v \ge 0$.)  The upper barrier must therefore contain a second mechanism, which forces $v$ to vanish wherever $\sigma_h < 0$ can influence \eqref{eq:sigmatildesplit}.
 
-Proposition \ref{prop:upperbarrier} will set $c$ so that these considerations apply and we can get $u\le u^\top$.  The lower barrier is symmetric in every respect.
+Proposition \ref{prop:upperbarrier} below will set $c$ so that these considerations apply and we can get $u\le u^\top$.  The lower barrier is symmetric in every respect.
 
 
 \subsection{Star-dilated strict contact sets}
 
-Let
+Recalling definition \eqref{eq:sigmah}, let
 \begin{equation}
 \label{eq:Nhpm}
   \Nh^+ := \{z \in \Nh \,:\, \sigma_h(z) > 0\}, \qquad
   \Nh^- := \{z \in \Nh \,:\, \sigma_h(z) < 0\}
 \end{equation}
-be the nodes at which the discrete residual is strictly signed, and let
+be nodes at which the original discrete residual $\sigma_h$ is strictly signed, and let
 \begin{equation}
 \label{eq:omegas}
   \ombot := \Uh(\Nh^+), \qquad \omtop := \Uh(\Nh^-)
 \end{equation}
-be their star-dilations, each a union of closed elements by \eqref{eq:star}.  By Proposition~\ref{prop:nodalsign} at interior nodes, and by the first two cases of \eqref{eq:sigmah-bnd} at boundary nodes, $\Nh^+ \subset \Nhbot$ and $\Nh^- \subset \Nhtop$; a strictly-signed node is active, and the sign says against which obstacle.
+be their star-dilations, each a union of closed elements by definition \eqref{eq:star}.  By Proposition~\ref{prop:nodalsign} at interior nodes, and by the first two cases of \eqref{eq:sigmah-bnd} at boundary nodes, $\Nh^+ \subset \Nhbot$ and $\Nh^- \subset \Nhtop$; a strictly-signed node is active, and the sign says against which obstacle.
 
 The barrier proofs use two consequences of \eqref{eq:omegas}.  Regarding $\sigma_h$ as a piecewise-linear function, first note that
 \begin{equation}
@@ -664,7 +665,7 @@ The corresponding set in \cite[formula (4.6)]{NSV03} is not dilated.  There the 
 \end{remark}
 
 
-\subsection{Upper barrier}
+\subsection{Defining the barrier functions}
 
 \begin{proposition}[Upper barrier]
 \label{prop:upperbarrier}
@@ -677,40 +678,41 @@ satisfies $u \le u^\top$ in $\Om$.
 \end{proposition}
 
 \begin{proof}
-Let $c$ denote the sum of the four constants in \eqref{eq:ubarupper}, so that $u^\top = u_h + w + c$ and $c \ge \|g - \Ih g\|_{0,\infty;\dOm}$.  Set $v := (u - u^\top)^+$.  By Lemma~\ref{lem:barriercrit}(i) it suffices to show $\left<\sigma,v\right> \le 0$ and $\left<\tilde\sigma_h,v\right> \ge 0$.
+Let $c$ denote the sum of the four constants in \eqref{eq:ubarupper}, so that $u^\top = u_h + w + c$ and $c \ge \|g - \Ih g\|_{0,\infty;\dOm}$.  Set $v := (u - u^\top)^+$.  By Lemma~\ref{lem:barriercrit}(a) it suffices to show $\left<\sigma,v\right> \le 0$ and $\left<\tilde\sigma_h,v\right> \ge 0$.
 
-Everything follows from two pointwise lower bounds for $u^\top$.  Because $w + \|w\|_{0,\infty;\Om} \ge 0$ and the remaining constants in \eqref{eq:ubarupper} are non-negative,
-\begin{equation}
-\label{eq:utopbounds}
-  u^\top \ \ge\ u_h + (\psilo - u_h)^+ \ \ge\ \psilo \quad\text{in } \Om,
-  \qquad\text{and}\qquad
-  u^\top \ \ge\ u_h + (\psiup - u_h)^+ \ \ge\ \psiup \quad\text{on } \omtop.
-\end{equation}
+Everything follows from two pointwise lower bounds for $u^\top$.  Because $w + \|w\|_{0,\infty;\Om} \ge 0$ and the remaining constants in \eqref{eq:ubarupper} are non-negative, we have:
+\begin{align}
+\label{eq:utopboundOm}
+  u^\top &\ge\ u_h + (\psilo - u_h)^+ \ \ge\ \psilo \quad\text{in } \Om, \\
+\label{eq:utopboundomtop}
+  u^\top &\ge\ u_h + (\psiup - u_h)^+ \ \ge\ \psiup \quad\text{on } \omtop.
+\end{align}
 
-For the first pairing, the first bound in \eqref{eq:utopbounds} gives $\{v>0\} = \{u > u^\top\} \subset \{u > \psilo\} = \Om \setminus \Cbot$.  Thus $v = 0$ on $\Cbot$, which supports $\mu_\bot$, and \eqref{eq:sigmapairing} gives $\left<\sigma,v\right> \le \int_\Om v \,d\mu_\bot = 0$.
+For the first pairing $\left<\sigma,v\right>$, bound \eqref{eq:utopboundOm} gives $\{v>0\} = \{u > u^\top\} \subset \{u > \psilo\} = \Om \setminus \Cbot$.  Thus $v = 0$ on $\Cbot$, which supports $\mu_\bot$, and \eqref{eq:sigmapairing} gives $\left<\sigma,v\right> \le \int_\Om v \,d\mu_\bot = 0$.
 
-For the second pairing, the second bound in \eqref{eq:utopbounds}, together with $u \le \psiup$ in $\Om$, gives
+For the second pairing $\left<\tilde\sigma_h,v\right>$, bound \eqref{eq:utopboundomtop}, together with $u \le \psiup$ in $\Om$, gives
 \begin{equation}
 \label{eq:vzerotop}
   v \equiv 0 \quad \text{on } \omtop.
 \end{equation}
-We show that each of the three sums in \eqref{eq:sigmatildesplit} is non-negative.
+It follows that each of the three sums in representation \eqref{eq:sigmatildesplit} is non-negative.
+\renewcommand{\labelenumi}{(\roman{enumi})}
+\begin{enumerate}
+\item If $T \in \Thbot$ then $\sigma_h \ge 0$ pointwise on $T$ and $v \ge 0$, so $\int_T \sigma_h v \ge 0$.
 
-If $T \in \Thbot$ then $\sigma_h \ge 0$ pointwise on $T$ and $v \ge 0$, so $\int_T \sigma_h v \ge 0$.
+\item If $T \in \Thtop$ then $\sigma_h \le 0$ is affine on $T$, so either $\sigma_h \equiv 0$ on $T$, and $\int_T \sigma_h v = 0$, or $\sigma_h(z) < 0$ at some vertex $z$ of $T$.  In the latter case $z \in \Nh^-$, hence $T \subset \Uh(z) \subset \omtop$, and $\int_T \sigma_h v = 0$ by \eqref{eq:vzerotop}.
 
-If $T \in \Thtop$ then $\sigma_h \le 0$ is affine on $T$, so either $\sigma_h \equiv 0$ on $T$, and $\int_T \sigma_h v = 0$, or $\sigma_h(z) < 0$ at some vertex $z$ of $T$.  In the latter case $z \in \Nh^-$, hence $T \subset \Uh(z) \subset \omtop$, and $\int_T \sigma_h v = 0$ by \eqref{eq:vzerotop}.
-
-If $T \in \Thplus$, let $z_0,\dots,z_d$ be its vertices.  Since $\Ih(\sigma_h \Pih v)$ is affine on $T$, its integral is $|T|$ times the average of its vertex values:
+\item If $T \in \Thplus$, let $z_0,\dots,z_d$ be its vertices.  Since $\Ih(\sigma_h \Pih v)$ is affine on $T$, its integral is $|T|$ times the average of its vertex values:
 \[
   \int_T \Ih(\sigma_h \Pih v) = \frac{|T|}{d+1}\sum_{i=0}^d \sigma_h(z_i)\,(\Pih v)(z_i).
 \]
 A boundary vertex contributes nothing, because $\Pih v \in \Vhr$ vanishes there.  At an interior vertex $z_i$ we have $(\Pih v)(z_i) \ge 0$, by $v \ge 0$ and positivity of $\Pih$, so the $i$th term is non-negative unless $\sigma_h(z_i) < 0$.  But if $\sigma_h(z_i) < 0$ then $z_i \in \Nh^-$, so $B(z_i) \subset \omtop$, and then \eqref{eq:Pih} and \eqref{eq:vzerotop} give $(\Pih v)(z_i) = |B(z_i)|^{-1}\int_{B(z_i)} v = 0$.  Hence every term of the sum is non-negative.
+\end{enumerate}
+
+\noindent The conditions of Lemma \ref{lem:barriercrit}(a) hold, so $u\le u^\top$ in $\Om$.
 \end{proof}
 
-The first two sums used the pointwise signs of $\sigma_h$ on wholly-active elements, from \S\ref{sec:discretization}, while the third used only nodal values of $\sigma_h$ and the ball averages defining $\Pih$.  In particular no hypothesis relating $h$ to the geometry of the contact sets is needed, and the separation constant $r_0$ of Proposition~\ref{prop:separation} again plays no role.
-
-
-\subsection{Lower barrier}
+When using representation \eqref{eq:sigmatildesplit} in the above proof, the first two sums used the pointwise signs of $\sigma_h$ on wholly-active elements, while the third used only nodal values of $\sigma_h$ and the ball averages defining $\Pih$.  In particular no hypothesis relating $h$ to the geometry of the contact sets is needed, and the separation constant $r_0$ of Proposition~\ref{prop:separation} plays no role.
 
 \begin{proposition}[Lower barrier]
 \label{prop:lowerbarrier}
@@ -737,7 +739,12 @@ Now consider \eqref{eq:sigmatildesplit} term by term.  If $T \in \Thtop$ then $\
 
 \subsection{Initial pointwise error estimate}
 
-Subtracting $u_h$ from the two barriers, Propositions~\ref{prop:upperbarrier} and~\ref{prop:lowerbarrier} give
+Subtracting $u_h$ from the two barriers gives
+\begin{equation}
+\label{eq:maxbarriers}
+|u-u_h| \le \max \{|u_\bot-u_h|, |u^\top-u_h|\}
+\end{equation}
+pointwise, thus Propositions~\ref{prop:upperbarrier} and~\ref{prop:lowerbarrier} give
 \begin{align}
 \label{eq:barrierbound}
   \|u-u_h\|_{0,\infty;\Om} \ \le\ & 2\|w\|_{0,\infty;\Om} + \|g-\Ih g\|_{0,\infty;\dOm} \\
