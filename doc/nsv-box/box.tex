@@ -695,7 +695,7 @@ For the second pairing $\left<\tilde\sigma_h,v\right>$, bound \eqref{eq:utopboun
 \label{eq:vzerotop}
   v \equiv 0 \quad \text{on } \omtop.
 \end{equation}
-It follows that each of the three sums in representation \eqref{eq:sigmatildesplit} is non-negative.
+It follows that each of the three sums in representation \eqref{eq:sigmatildesplit} is non-negative.  Here we look at these sums individually:
 \renewcommand{\labelenumi}{(\roman{enumi})}
 \begin{enumerate}
 \item If $T \in \Thbot$ then $\sigma_h \ge 0$ pointwise on $T$ and $v \ge 0$, so $\int_T \sigma_h v \ge 0$.
@@ -725,15 +725,15 @@ satisfies $u_\bot \le u$ in $\Om$.
 \end{proposition}
 
 \begin{proof}
-The construction mirrors Proposition~\ref{prop:upperbarrier}, exchanging $\bot \leftrightarrow \top$ and reversing all signs.  Writing $c$ for the sum of the four constants, $u_\bot = u_h + w - c$ with $c \ge \|g-\Ih g\|_{0,\infty;\dOm}$, and $v := (u_\bot - u)^+$, so Lemma~\ref{lem:barriercrit}(ii) asks for $\left<\sigma,v\right> \ge 0$ and $\left<\tilde\sigma_h,v\right> \le 0$.  The two pointwise upper bounds replacing \eqref{eq:utopbounds} are
-\[
-  u_\bot \ \le\ u_h - (u_h - \psiup)^+ \ \le\ \psiup \quad\text{in } \Om,
-  \qquad\text{and}\qquad
-  u_\bot \ \le\ u_h - (u_h - \psilo)^+ \ \le\ \psilo \quad\text{on } \ombot.
-\]
-The first gives $\{v>0\} \subset \Om \setminus \Ctop$, so $v$ vanishes on the support of $\mu_\top$ and \eqref{eq:sigmapairing} becomes $\left<\sigma,v\right> = \int_\Om v \,d\mu_\bot \ge 0$.  The second gives $v \equiv 0$ on $\ombot$, since $u \ge \psilo$ in $\Om$.
+The construction mirrors Proposition~\ref{prop:upperbarrier}, exchanging $\bot \leftrightarrow \top$ and reversing all signs.  Writing $c$ for the sum of the four constants, $u_\bot = u_h + w - c$ with $c \ge \|g-\Ih g\|_{0,\infty;\dOm}$, and $v := (u_\bot - u)^+$, so Lemma~\ref{lem:barriercrit}(b) asks for $\left<\sigma,v\right> \ge 0$ and $\left<\tilde\sigma_h,v\right> \le 0$.  The two pointwise upper bounds replacing \eqref{eq:utopboundOm} and \eqref{eq:utopboundomtop} are
+\begin{align*}
+  u_\bot &\le\ u_h - (u_h - \psiup)^+ \ \le\ \psiup \quad\text{in } \Om, \\
+  u_\bot &\le\ u_h - (u_h - \psilo)^+ \ \le\ \psilo \quad\text{on } \ombot.
+\end{align*}
 
-Now consider \eqref{eq:sigmatildesplit} term by term.  If $T \in \Thtop$ then $\sigma_h \le 0$ pointwise on $T$ and $v \ge 0$, so $\int_T \sigma_h v \le 0$.  If $T \in \Thbot$ then $\sigma_h \ge 0$ is affine on $T$, so either $\sigma_h \equiv 0$ on $T$, or $\sigma_h(z) > 0$ at some vertex $z$, in which case $z \in \Nh^+$ and $T \subset \Uh(z) \subset \ombot$, where $v$ vanishes; either way $\int_T\sigma_h v = 0$.  If $T \in \Thplus$ then, as before, $\int_T \Ih(\sigma_h\Pih v)$ is $|T|/(d+1)$ times $\sum_i \sigma_h(z_i)(\Pih v)(z_i)$, in which boundary vertices contribute nothing, interior vertices with $\sigma_h(z_i) \le 0$ contribute non-positively because $(\Pih v)(z_i) \ge 0$, and interior vertices with $\sigma_h(z_i) > 0$ have $B(z_i) \subset \ombot$ and hence $(\Pih v)(z_i) = 0$.  Therefore $\left<\tilde\sigma_h,v\right> \le 0$.
+The first of these inequalities gives $\{v>0\} \subset \Om \setminus \Ctop$, so $v$ vanishes on the support of $\mu_\top$ and \eqref{eq:sigmapairing} yields $\left<\sigma,v\right> = \int_\Om v \,d\mu_\bot \ge 0$.
+
+The second of the above inequalities gives $v \equiv 0$ on $\ombot$, since $u \ge \psilo$ in $\Om$.  As in the upper barrier case, consider \eqref{eq:sigmatildesplit} term by term.  If $T \in \Thtop$ then $\sigma_h \le 0$ pointwise on $T$ and $v \ge 0$, so $\int_T \sigma_h v \le 0$.  If $T \in \Thbot$ then $\sigma_h \ge 0$ is affine on $T$, so either $\sigma_h \equiv 0$ on $T$, or $\sigma_h(z) > 0$ at some vertex $z$, in which case $z \in \Nh^+$ and $T \subset \Uh(z) \subset \ombot$, where $v$ vanishes; either way $\int_T\sigma_h v = 0$.  If $T \in \Thplus$ then, as before, $\int_T \Ih(\sigma_h\Pih v)$ is $|T|$ times the average $(d+1)^{-1}\sum_i \sigma_h(z_i)(\Pih v)(z_i)$, in which boundary vertices contribute nothing, interior vertices with $\sigma_h(z_i) \le 0$ contribute non-positively because $(\Pih v)(z_i) \ge 0$, and interior vertices with $\sigma_h(z_i) > 0$ have $B(z_i) \subset \ombot$ and hence $(\Pih v)(z_i) = 0$.  Thus $\left<\tilde\sigma_h,v\right> \le 0$, and \eqref{eq:ubarlower} follows.
 \end{proof}
 
 
@@ -753,14 +753,15 @@ pointwise, thus Propositions~\ref{prop:upperbarrier} and~\ref{prop:lowerbarrier}
 \end{align}
 the box-constrained form of \cite[formula (4.8)]{NSV03}.  (A maximum of the two lines of obstacle terms would do, but we prefer the symmetric expression.)  Besides $\|w\|_{0,\infty;\Om}$, every term on the right is computable from the discrete solution and the given data.
 
-The four obstacle terms come in two different kinds.  The two on the middle line measure the failure of $u_h$ to be admissible for the continuum problem, and they are controlled by the obstacle interpolation errors: since $u_h \ge \psiloh$ and $u_h \le \psiuph$ in $\Om$,
+The four obstacle terms in \eqref{eq:barrierbound} come in two different kinds.  The two which are suprema over $\Om$ measure the failure of $u_h$ to be admissible for the continuum problem, and they are controlled by the obstacle interpolation errors: since $u_h \ge \psiloh$ and $u_h \le \psiuph$ in $\Om$,
 \begin{equation}
 \label{eq:violationbound}
-  \|(\psilo-u_h)^+\|_{0,\infty;\Om} \le \|\psilo-\psiloh\|_{0,\infty;\Om}
-  \qquad\text{and}\qquad
+  \|(\psilo-u_h)^+\|_{0,\infty;\Om} \le \|\psilo-\psiloh\|_{0,\infty;\Om}, \quad
   \|(u_h-\psiup)^+\|_{0,\infty;\Om} \le \|\psiup-\psiuph\|_{0,\infty;\Om},
 \end{equation}
-each therefore $O(h^2)$ for an obstacle in $W^{2,\infty}(\Om)$.  The two on the last line are not interpolation errors.  They measure how far $u_h$ has detached from an obstacle on the region where the discrete residual asserts that it is attached, and they are the box-constrained analogue of the localized term in \cite[formula (4.6)]{NSV03}.
+each therefore $O(h^2)$ for obstacles $\psilo,\psiloh \in W^{2,\infty}(\Om)$.
+
+The other two obstacle terms in \eqref{eq:barrierbound}, suprema over $\omtop,\ombot$ respectively, are not interpolation errors.  They measure how far $u_h$ has detached from an obstacle on the region where the discrete residual asserts that it is attached, and they are the box-constrained analogue of the localized term in \cite[formula (4.6)]{NSV03}.
 
 \begin{remark}[Optimal, non-computable choice]
 \label{rem:optimalchoice}
