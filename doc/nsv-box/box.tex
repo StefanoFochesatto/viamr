@@ -179,7 +179,7 @@ $L^\top r^\alpha < \delta_{\min}/2$ and $L_u r^\beta < \delta_{\min}/2$, by defi
 $r \ge r_0$, and $\operatorname{dist}(\Cbot,\Ctop) \ge r_0$ follows.
 \end{proof}
 
-Proposition~\ref{prop:separation} gives an explicit, data-determined lower bound $r_0$ on the spatial separation of the bilateral contact sets $\Cbot, \Ctop$.  Figure~\ref{fig:separation} illustrates the geometry.  The gap $\delta_{\min}$ is vertical, and determined directly by the obstacles alone, whereas $r_0$ is a horizontal distance in $\Om$ depending partly on the H\"older regularity of the solution $u$.  (Thus $r_0$ is controlled by the data functions $f,g,\psilo,\psiup$ through the regularity theory \cite{KinderlehrerStampacchia1980}.)  As it turns out, discretization \S \ref{sec:discretization}, next, does \emph{not} need to impose $h < c\,r_0$ as a hypothesis for the estimator to be well-defined and correct.  Instead, $r_0$'s role is to bound the width of the transition band so that the discrete classification tracks the true contact sets closely.
+Proposition~\ref{prop:separation} gives an explicit, data-determined lower bound $r_0$ on the spatial separation of the bilateral contact sets $\Cbot, \Ctop$.  Figure~\ref{fig:separation} illustrates the geometry.  The gap $\delta_{\min}$ is vertical, and determined directly by the obstacles alone, whereas $r_0$ is a horizontal distance in $\Om$ depending partly on the H\"older regularity of the solution $u$.  (Thus $r_0$ is controlled by the data functions $f,g,\psilo,\psiup$ through the regularity theory \cite{KinderlehrerStampacchia1980}.)  As it turns out, discretization \S \ref{sec:discretization}, next, does \emph{not} need to impose $h < c\,r_0$ as a hypothesis for the estimator to be well-defined and correct.  Instead, $r_0$'s role is to stop degeneration of the transition band, so that the discrete classification tracks the true contact sets closely.
 
 \begin{figure}[ht]
 \centering
@@ -256,7 +256,7 @@ Define the discrete constraint set as in \eqref{eq:K}:
 \end{equation}
 This set is closed and convex, and it is non-empty.  (To show it is non-empty, choose $v_h \in \Vh$ nodally, equal to $\Ih g$ at boundary nodes and anywhere in the non-empty interval $[\psiloh(z),\psiuph(z)]$ at interior nodes, and Lemma~\ref{lem:affine} promotes these nodal inequalities to all of $\bar\Om$.)  As noted by \cite{NSV03} for the unilateral case, $\Kh$ is in general not a subset of $\mathcal{K}$ defined by \eqref{eq:K}, so in this sense our approximation is non-conforming.
 
-Because the constraints in \eqref{eq:Kh} compare piecewise-linear functions, admissibility is decided at the nodes alone.  Indeed, for $v_h \in \Vh$ the differences $v_h - \psiloh$ and $\psiuph - v_h$ are affine on each $T \in \Th$, so Lemma~\ref{lem:affine} promotes nodal inequalities to pointwise ones.  For functions satisfying $v_h = \Ih g$, we observe
+Because the constraints in \eqref{eq:Kh} compare piecewise-linear functions, admissibility is decided at the nodes alone.  Indeed, for $v_h \in \Vh$ the differences $v_h - \psiloh$ and $\psiuph - v_h$ are affine on each $T \in \Th$, so Lemma~\ref{lem:affine} promotes nodal inequalities to pointwise ones.  For functions satisfying $v_h = \Ih g$ on $\dOm$, we observe
 \begin{equation}
 \label{eq:nodalKh}
   v_h \in \Kh \quad\iff\quad \psiloh(z) \le v_h(z) \le \psiuph(z) \ \text{ for all } z \in \Nh.
@@ -281,7 +281,7 @@ For interior nodes $z \in \Nhr$, define $\sigma_h \in \Vh$ nodally by
   = \left< \nabla u_h, \nabla \phi_h^z \right> - \left< f, \phi_h^z \right>,
 \end{equation}
 whence $\sigma_h(z) = \bigl(\int_\Om \phi_h^z\bigr)^{-1}
-\bigl(\left< \nabla u_h, \nabla \phi_h^z\right> - \left< f, \phi_h^z\right>\bigr)$.  This is \cite[formula (2.1)]{NSV03}, but here with the same sign convention as for $\sigma$ itself (see \eqref{eq:sigma}).  Note that while $\sigma \in H^{-1}(\Om)$ is a quite general object, generally a measure, $\sigma_h \in \Vh$ is a piecewise-linear function which merely assigns a real value for each interior node in the mesh.  (On the other hand, the reader may regard $\sigma_h$ as a collection of delta measures at points.)  Definition \eqref{eq:sigmah} is extended to boundary nodes below.
+\bigl(\left< \nabla u_h, \nabla \phi_h^z\right> - \left< f, \phi_h^z\right>\bigr)$.  This is the nodal residual of \cite[\S 2.1]{NSV03}, an unnumbered formula there, but here with the same sign convention as for $\sigma$ itself (see \eqref{eq:sigma}).  Note that while $\sigma \in H^{-1}(\Om)$ is a quite general object, generally a measure, $\sigma_h \in \Vh$ is a piecewise-linear function which merely assigns a real value for each interior node in the mesh.  (On the other hand, the reader may regard $\sigma_h$ as a collection of delta measures at points.)  Definition \eqref{eq:sigmah} is extended to boundary nodes below.
 % also, \eqref{eq:sigmah} is the Galerkin (weak-form) instance of the strong-form nodal residual underlying \cite{BuelerFarrell2024}'s mixed complementarity classification in their \S 7, and it matches the convention already used by viamr's \texttt{nsv03mark()}
 
 Observation \eqref{eq:nodalKh} above has a strong consequence for the sign of $\sigma_h$ at interior nodes.
@@ -348,7 +348,7 @@ The active element sets in \eqref{eq:Thsplit} are exactly what the library's \te
 Regarding the implementation, both \texttt{elemactive()} and \texttt{thinelemactive()} decide activity by evaluating the gap at a single DG0 degree of freedom, the cell centroid, and comparing to a tolerance, rather than by testing every vertex.  For piecewise-linear $u_h$ and $\psiloh$ the centroid value of $u_h - \psiloh$ is the average of the vertex values, and this gap is non-negative because $u_h \in \Kh$, so at zero tolerance the two tests agree.  At a tolerance \texttt{tol}$>0$ the centroid test is slightly weaker, but the tests coincide in the \texttt{tol}$\to 0$ limit.
 \end{remark}
 
-The element-wise sets \eqref{eq:Thsplit} promote the nodal signs of Proposition \ref{prop:nodalsign} to pointwise ones within the elements.  Suppose $z$ is an interior node and a vertex of $T \in \Thbot$, thus $\sigma_h(z) \ge 0$ by Proposition \ref{prop:nodalsign}.  If instead $z$ is a boundary node then, because every element containing $z$ meets $T$, we have $\Uh(z) \subset \Uh(T) \subset \{u_h = \psiloh\}$, and the boundary-node definition \eqref{eq:sigmah-bnd} below gives $\sigma_h(z) = \hat\sigma_h(z)^+ \ge 0$.  On $\Thplus$ elements no pointwise sign is claimed, but the discrete residual $\sigma_h$ is signed on the thinned contact elements.
+The element-wise sets \eqref{eq:Thsplit} promote the nodal signs of Proposition \ref{prop:nodalsign} to pointwise ones within the elements.  Suppose $z$ is an interior node and a vertex of $T \in \Thbot$, thus $\sigma_h(z) \ge 0$ by Proposition \ref{prop:nodalsign}.  If instead $z$ is a boundary node then, because every element containing $z$ meets $T$, we have $\Uh(z) \subset \Uh(T) \subset \{u_h = \psiloh\}$, and the boundary-node definition \eqref{eq:sigmah-bnd} below gives $\sigma_h(z) = \hat\sigma_h(z)^+ \ge 0$.  Either way $\sigma_h \ge 0$ at each vertex of $T$, whence $\sigma_h \ge 0$ throughout $T$ by Lemma \ref{lem:affine}; symmetrically $\sigma_h \le 0$ on each $T \in \Thtop$.  On $\Thplus$ elements no pointwise sign is claimed, but the discrete residual $\sigma_h$ is signed on the thinned contact elements.
 
 \begin{corollary} \label{cor:sigmahsign}
 $T \in \Thbot \implies \sigma_h \ge 0$ on $T$, and symmetrically $T \in \Thtop \implies \sigma_h \le 0$ on $T$.
@@ -384,7 +384,7 @@ Since \eqref{eq:sigmahat} is not derived from a stationarity argument using VI \
 \end{equation}
 where $v^+ := \max\{v,0\}$ and $v^- := -\min\{v,0\}$ are the positive and negative parts of $v$.  Since $\hat\sigma_h(z)^+ \ge 0$ and $-\hat\sigma_h(z)^- \le 0$ by construction, \eqref{eq:sigmah-bnd} satisfies the discrete version of \eqref{eq:sigmasign} for boundary nodes by fiat.
 
-Thus, at a boundary node whose star lies wholly in one active set, we keep the correctly-signed part of $\hat\sigma_h(z)$; at any other boundary node, including one whose star meets both contact types or neither, $\sigma_h(z)$ is simply set to zero.  Up to the sign convention already noted, the first case of \eqref{eq:sigmah-bnd} is exactly \cite[formula (2.2)]{NSV03}.
+Thus, at a boundary node whose star lies wholly in one active set, we keep the correctly-signed part of $\hat\sigma_h(z)$; at any other boundary node, including one whose star meets both contact types or neither, $\sigma_h(z)$ is simply set to zero.  Up to the sign convention already noted, the first case of \eqref{eq:sigmah-bnd} is exactly the boundary-node definition in \cite[\S 2.1]{NSV03}.
 
 
 \subsection{Positivity-preserving interpolation}
@@ -413,7 +413,7 @@ If in addition $\varphi \in W_0^{1,1}(\Om)$ and $\nabla\varphi \in BV(\Om)^d$, t
   \|\varphi-\Pih\varphi\|_{0,1;T} &\preceq h_T^2\, |D^2\varphi|_{\mathrm{var}}(\Uh(T)), \\
   \|\varphi-\Pih\varphi\|_{0,1;S} &\preceq h_S\, |D^2\varphi|_{\mathrm{var}}(\Uh(S)), \notag
 \end{align}
-where $|D^2\varphi|_{\mathrm{var}} := \sum_{i=1}^d |D\partial_i\varphi|_{\mathrm{var}}$ sums the variation measures of the components of $\nabla\varphi$, and $|D^2\varphi|_{\mathrm{var}}(\omega) = \|D^2\varphi\|_{0,1;\omega}$ whenever $\varphi \in W^{2,1}(\Om)$ and $\omega \subset \Om$ is measurable.  We will need the properties \eqref{eq:Pihprops} and \eqref{eq:PihBV} in following sections; observe that they the interpolation error bound using stars.
+where $|D^2\varphi|_{\mathrm{var}} := \sum_{i=1}^d |D\partial_i\varphi|_{\mathrm{var}}$ sums the variation measures of the components of $\nabla\varphi$, and $|D^2\varphi|_{\mathrm{var}}(\omega) = \|D^2\varphi\|_{0,1;\omega}$ whenever $\varphi \in W^{2,1}(\Om)$ and $\omega \subset \Om$ is measurable.  We will need the estimates \eqref{eq:Pihprops} and \eqref{eq:PihBV} in following sections; observe that these estimates bound the interpolation error using stars.
 
 
 \section{A posteriori estimator} \label{sec:estimator}
@@ -519,12 +519,12 @@ Note that the sign convention for jump \eqref{eq:jump} does not affect the local
 
 \subsection{Localized residual and quadrature estimators}
 
-Following \cite[\S\S 4--5]{NSV03}, our next task is to bound $\Gh$ in a dual space larger than $H_0^1(\Om)$ itself.  As in \cite[\S 3.2]{NSV03}, let
+Following \cite[\S\S 4--5]{NSV03}, our next task is to bound $\Gh$ in a dual space larger than $H^{-1}(\Om)$.  As in \cite[\S 3.2]{NSV03}, let
 \begin{equation}
 \label{eq:W}
   W := \{\varphi \in H_0^1(\Om) : \nabla\varphi \in BV(\Om)^d\},
 \end{equation}
-equipped with the seminorm $\varphi \mapsto |D^2\varphi|_{\mathrm{var}}(\Om)$ already used in \eqref{eq:PihBV}.  This space is slightly larger than $W^{2,1}(\Om) \cap H_0^1(\Om)$, because $\nabla\varphi \in W^{1,1}(\Om)^d$ implies $\nabla\varphi \in BV(\Om)^d$ but not conversely, and it still contains the discrete space $\Vhr$; both facts matter below.
+equipped with the seminorm $\varphi \mapsto |D^2\varphi|_{\mathrm{var}}(\Om)$ already used in \eqref{eq:PihBV}.  This space is slightly larger than $W^{2,1}(\Om) \cap H_0^1(\Om)$, because $\nabla\varphi \in W^{1,1}(\Om)^d$ implies $\nabla\varphi \in BV(\Om)^d$ but not conversely, and it still contains the discrete space $\Vhr$; both facts matter below.  Measuring $\Gh$ against $W$ rather than $H_0^1(\Om)$ tests it on fewer functions, but in a stronger seminorm, which is what makes the second-order bound \eqref{eq:Ghbound} available.
 
 For $1 \le p \le \infty$, with dual exponent $p' = p/(p-1)$, define the \emph{localized residual} $R_p$, element-wise over $T\in\Th$, by
 \begin{equation}
@@ -564,7 +564,7 @@ which is formula (3.10) in \cite{NSV03}.  As with the Galerkin functional itself
 
 \section{Barriers} \label{sec:barriers}
 
-Following \cite[\S 4]{NSV03}, we now bracket the exact solution between continuous \emph{barriers}, $u_\bot \le u \le u^\top$, built from the discrete solution $u_h$, the data $g,\psi_\bot,\psi_\top$, and a Galerkin correction $w$.
+Following \cite[\S 4]{NSV03}, we now bracket the exact solution between continuous \emph{barriers}, $u_\bot \le u \le u^\top$, built from the discrete solution $u_h$, the data $g,\psilo,\psiup$, and a Galerkin correction $w$.
 
 In fact, $w \in H_0^1(\Om)$ is defined as the Riesz representation of the Galerkin functional:
 \begin{equation}
@@ -716,7 +716,7 @@ A boundary vertex contributes nothing, because $\Pih v \in \Vhr$ vanishes there.
 \noindent The conditions of Lemma \ref{lem:barriercrit}(a) hold, so $u\le u^\top$ in $\Om$.
 \end{proof}
 
-When using representation \eqref{eq:sigmatildesplit} in the above proof, the first two sums used the pointwise signs of $\sigma_h$ on wholly-active elements, while the third used only nodal values of $\sigma_h$ and the ball averages defining $\Pih$.  In particular no hypothesis relating $h$ to the geometry of the contact sets is needed, and the separation constant $r_0$ of Proposition~\ref{prop:separation} plays no role.
+When using representation \eqref{eq:sigmatildesplit} in the above proof, the first two sums used the pointwise signs of $\sigma_h$ on wholly-active elements, while the third used only nodal values of $\sigma_h$ and the ball averages defining $\Pih$.  In particular no hypothesis relating $h$ to the geometry of the contact sets is needed, and the separation constant $r_0$ of Proposition~\ref{prop:separation} plays no role.  The same comment applies to the following proof.
 
 \begin{proposition}[Lower barrier]
 \label{prop:lowerbarrier}
@@ -763,7 +763,7 @@ The four obstacle terms in \eqref{eq:barrierbound} come in two different kinds. 
   \|(\psilo-u_h)^+\|_{0,\infty;\Om} \le \|\psilo-\psiloh\|_{0,\infty;\Om}, \quad
   \|(u_h-\psiup)^+\|_{0,\infty;\Om} \le \|\psiup-\psiuph\|_{0,\infty;\Om},
 \end{equation}
-each therefore $O(h^2)$ for obstacles $\psilo,\psiloh \in W^{2,\infty}(\Om)$.
+each therefore $O(h^2)$ for obstacles $\psilo,\psiup \in W^{2,\infty}(\Om)$.
 
 The other two obstacle terms in \eqref{eq:barrierbound}, suprema over $\omtop,\ombot$ respectively, are not interpolation errors.  They measure how far $u_h$ has detached from an obstacle on the region where the discrete residual asserts that it is attached, and they are the box-constrained analogue of the localized term in \cite[formula (4.6)]{NSV03}.
 
