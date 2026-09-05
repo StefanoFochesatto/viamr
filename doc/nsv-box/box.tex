@@ -400,14 +400,14 @@ For $\varphi \in L_1(\Om)$, set
 \end{equation}
 Linearity is clear, because the balls $B(z)$ only depend on the mesh and not the input $\varphi$, and positivity is immediate: the average of a non-negative function over a ball is non-negative.  (We call a linear operator $A$ \emph{positive} if $\varphi \ge 0$ implies $A\varphi \ge 0$.)  Note $\Pih$ is not a projection: $\Pih^2 \ne \Pih$ in general.
 
-Write $\|\cdot\|_{0,p;\omega}$ for the $L^p(\omega)$ norm over measurable $\omega \subset \bar\Om$.  Chen \& Nochetto \cite{ChenNochetto2000} show that, for every $1\le p\le\infty$, $T\in\Th$, and interior side $S\in\Sh$, and for $\varphi \in \mathring W^{1,p}(\Om)$,
+Write $\|\cdot\|_{0,p;\omega}$ for the $L^p(\omega)$ norm over measurable $\omega \subset \bar\Om$.  Chen \& Nochetto \cite{ChenNochetto2000} show that, for every $1\le p\le\infty$, $T\in\Th$, and interior side $S\in\Sh$, and for $\varphi \in W_0^{1,p}(\Om)$,
 \begin{align}
 \label{eq:Pihprops}
   \|\nabla\Pih\varphi\|_{0,p;T} &\preceq \|\nabla\varphi\|_{0,p;\Uh(T)}, \\
   \|\varphi - \Pih\varphi\|_{0,p;T} &\preceq h_T\|\nabla\varphi\|_{0,p;\Uh(T)}, \notag \\
   \|\varphi - \Pih\varphi\|_{0,p;S} &\preceq h_S^{1-1/p}\|\nabla\varphi\|_{0,p;\Uh(S)}. \notag
 \end{align}
-If in addition $\varphi \in \mathring W^{1,1}(\Om)$ and $\nabla\varphi \in BV(\Om)^d$, then also
+If in addition $\varphi \in W_0^{1,1}(\Om)$ and $\nabla\varphi \in BV(\Om)^d$, then also
 \begin{align}
 \label{eq:PihBV}
   \|\varphi-\Pih\varphi\|_{0,1;T} &\preceq h_T^2\, |D^2\varphi|_{\mathrm{var}}(\Uh(T)), \\
@@ -549,13 +549,17 @@ The second term $\left<\Qh,\Pih\varphi\right>$ in the representation formula \eq
 \end{equation}
 where $\Lamh := \Lamhbot \cup \Lamhtop = \bigcup_{T\in\ThC} T$ is the region combining all wholly-contact elements.  We have generalized from the unilateral case, namely \cite[formula (2.4)]{NSV03}, to bilateral in the obvious way.
 
-Both \eqref{eq:Rhbound} and \eqref{eq:Qhbound} control by the same seminorm $|D^2\varphi|_{\mathrm{var}}(\Om)$, so by \eqref{eq:Gh-repn} they combine into a bound on $\Gh$ in the corresponding dual norm:
-\begin{align}
+Bounds \eqref{eq:Rhbound} and \eqref{eq:Qhbound} use the same seminorm $|D^2\varphi|_{\mathrm{var}}(\Om)$, over $\varphi\in W$, so by \eqref{eq:Gh-repn} they combine to bound $\Gh$ in a dual norm.  Specifically, for an operator $\mathcal{A} \in H^{-1}(\Om)$ define
+\begin{equation}
+\label{eq:dualnormbv}
+\|\mathcal{A}\|_{-2,\infty;\Om} = \sup\bigl\{\left<\mathcal{A},\varphi\right> : \varphi\in W,\ |D^2\varphi|_{\mathrm{var}}(\Om)\le 1\bigr\}.
+\end{equation}
+Applying this to $\Gh$, \eqref{eq:Rhbound} and \eqref{eq:Qhbound} yield
+\begin{equation}
 \label{eq:Ghbound}
-  \|\Gh\|_{-2,\infty;\Om} &:= \sup\bigl\{\left<\Gh,\varphi\right> : \varphi\in W,\ |D^2\varphi|_{\mathrm{var}}(\Om)\le 1\bigr\} \\
-      &\preceq\ \|h^2 R_\infty\|_{0,\infty;\Om} \ +\ \|h^2\nabla\sigma_h\|_{0,d;\Lamh}. \notag
-\end{align}
-Bound \eqref{eq:Ghbound} is \cite[formula (3.10)]{NSV03}.  As with the Galerkin functional itself, nothing in its derivation distinguishes lower from upper contact.
+  \|\Gh\|_{-2,\infty;\Om} \preceq\ \|h^2 R_\infty\|_{0,\infty;\Om} \ +\ \|h^2\nabla\sigma_h\|_{0,d;\Lamh},
+\end{equation}
+which is formula (3.10) in \cite{NSV03}.  As with the Galerkin functional itself, nothing in its derivation distinguishes lower from upper contact.
 
 
 \section{Barriers} \label{sec:barriers}
@@ -795,7 +799,7 @@ The difficulty addressed here is a mismatch of orders.  What linear theory contr
 
 \subsection{A first-order bound on the Galerkin functional}
 
-Bound \eqref{eq:Ghbound} controls $\Gh$ in the dual norm \eqref{eq:Ghdualnorm}, which is built on the seminorm $|D^2\varphi|_{\mathrm{var}}(\Om)$.  The H\"older estimate needs instead the dual norm of $\mathring W^{1,p'}(\Om)$, built on $\|\nabla\varphi\|_{0,p';\Om}$, and this is where the first-order quantity arises.
+Bound \eqref{eq:Ghbound} controls $\Gh$ in the dual norm \eqref{eq:dualnormbv}, which is built on the seminorm $|D^2\varphi|_{\mathrm{var}}(\Om)$.  The H\"older estimate needs instead the dual norm of $W_0^{1,p'}(\Om)$, built on $\|\nabla\varphi\|_{0,p';\Om}$, and this is where the first-order quantity arises.
 
 \begin{lemma}[$L^p$ bound on $\Gh$]
 \label{lem:Ghp}
@@ -804,7 +808,7 @@ Let $1 \le p \le \infty$, with dual exponent $p' = p/(p-1)$.  Then
 \label{eq:Ghp}
   \bigl|\left<\Gh,\varphi\right>\bigr| \ \preceq\ \Bigl(\|h R_p\|_{0,p;\Om} + \|h^2\nabla\sigma_h\|_{0,p;\Lamh}\Bigr)\,\|\nabla\varphi\|_{0,p';\Om}
 \end{equation}
-for all $\varphi \in \mathring W^{1,p'}(\Om)$.
+for all $\varphi \in W_0^{1,p'}(\Om)$.
 \end{lemma}
 
 \begin{proof}
@@ -839,9 +843,9 @@ where the hidden constant depends on $\Om$ and $p$, and blows up as $p \downarro
 \begin{proof}
 The classical H\"older estimate of De Giorgi and Nash, applied to \eqref{eq:w}, gives $\|w\|_{C^{0,\alpha}(\bar\Om)} \preceq \|\Gh\|_{-1,p;\Om}$, where
 \[
-  \|\Gh\|_{-1,p;\Om} := \sup\bigl\{\left<\Gh,\varphi\right> \,:\, \varphi \in \mathring W^{1,p'}(\Om),\ \|\nabla\varphi\|_{0,p';\Om} \le 1\bigr\}
+  \|\Gh\|_{-1,p;\Om} := \sup\bigl\{\left<\Gh,\varphi\right> \,:\, \varphi \in W_0^{1,p'}(\Om),\ \|\nabla\varphi\|_{0,p';\Om} \le 1\bigr\}
 \]
-is the norm of the dual space of $\mathring W^{1,p'}(\Om)$; see \cite[Theorem C.2]{KinderlehrerStampacchia1980}.  Now apply Lemma~\ref{lem:Ghp}.
+is the norm of the dual space of $W_0^{1,p'}(\Om)$; see \cite[Theorem C.2]{KinderlehrerStampacchia1980}.  Now apply Lemma~\ref{lem:Ghp}.
 \end{proof}
 
 This justifies the continuity of $w$ used in \S \ref{sec:barriers}.  Note that the box constraint enters \eqref{eq:holder} only through $\ThC$ inside $R_p$, and through $\Lamh$; the linear theory behind the De Giorgi--Nash estimate knows nothing of the obstacles.
@@ -1006,12 +1010,12 @@ The two positive parts point in opposite directions.  Each retains the part of t
 \end{equation}
 and use this with $v_h = \psiloh$ and with $v_h = \psiuph$.
 
-Efficiency statements are local, so we need a local form of the dual seminorm \eqref{eq:Ghdualnorm}.  For $\omega \subset \bar\Om$ and $\rho \in W^*$ put
+Efficiency statements are local, so we need a local form of the dual seminorm \eqref{eq:dualnormbv}.  For $\omega \subset \bar\Om$ and $\rho \in W^*$ put
 \begin{equation}
 \label{eq:localdual}
   \|\rho\|_{-2,\infty;\omega} := \sup\bigl\{\left<\rho,\varphi\right> \,:\, \varphi \in W,\ |D^2\varphi|_{\mathrm{var}}(\omega) \le 1,\ \operatorname{supp}\varphi \subset \omega\bigr\},
 \end{equation}
-which reduces to \eqref{eq:Ghdualnorm} when $\omega = \bar\Om$.  Every test function used in this section has support in the interior of $\Om$, so no boundary terms will arise from integration by parts.  Finally, two patches around an element $T\in\Th$ appear, its star $\Uh(T)$ from \eqref{eq:star} and the smaller
+which reduces to \eqref{eq:dualnormbv} when $\omega = \bar\Om$.  Every test function used in this section has support in the interior of $\Om$, so no boundary terms will arise from integration by parts.  Finally, two patches around an element $T\in\Th$ appear, its star $\Uh(T)$ from \eqref{eq:star} and the smaller
 \begin{equation}
 \label{eq:Tstar}
   T^* := \bigcup\{T' \in \Th \,:\, T' \text{ shares at least one side with } T\} \ \subset\ \Uh(T),
