@@ -668,23 +668,28 @@ Figure~\ref{fig:stardilate} illustrates \eqref{eq:Nhpm} and \eqref{eq:omegas} on
 The corresponding set in \cite[formula (4.6)]{NSV03} is not dilated.  There the third sum in \eqref{eq:sigmatildesplit} is handled instead by an argument which needs the global sign: if $v > 0$ at an interior point of an element $T$, then $\sigma_h$ vanishes at that point, and an affine function of one sign on $T$ which vanishes at an interior point of $T$ vanishes identically on $T$, hence at the vertices of $T$ as well.  Bilaterally that reasoning fails exactly where it is needed.  A node $z \in \Nh^-$ can be a vertex of a transition element $T \in \Thplus$ on which $\sigma_h$ changes sign, and then $v > 0$ at a point of $T$ where $\sigma_h \ge 0$ is no contradiction, so nothing forces $(\Pih v)(z) = 0$.  Dilating by one ring of elements restores the conclusion directly, at the cost of measuring the barrier term on a slightly larger set.
 \end{remark}
 
+\begin{remark}[Star-dilated sets in unilateral cases]
+\label{rem:unilateralstars}
+Suppose the upper obstacle is absent or never attained, that is $\Nhtop = \emptyset$, whence $\{u_h = \psiuph\} = \emptyset$ by Lemma~\ref{lem:affine}.  Then $\sigma_h \ge 0$ at every node: at interior nodes by Proposition~\ref{prop:nodalsign}, whose second case is vacuous, and at boundary nodes because the second case of \eqref{eq:sigmah-bnd}, the only one which can return a negative value, requires $\Uh(z) \subset \{u_h = \psiuph\}$.  Therefore $\Nh^- = \emptyset$ and $\omtop = \Uh(\emptyset) = \emptyset$.  Symmetrically, if $\Nhbot = \emptyset$ then $\Nh^+ = \emptyset$ and $\ombot = \emptyset$.  Reading a supremum over the empty set as zero, the corresponding terms drop from \eqref{eq:cupper} or \eqref{eq:clower} below.
+\end{remark}
+
 
 \subsection{Defining the barrier functions}
 
 \begin{proposition}[Upper barrier]
 \label{prop:upperbarrier}
-The function
+Let
 \begin{equation}
-\label{eq:ubarupper}
-  u^\top := u_h + w + \|w\|_{0,\infty;\Om} + \|g-\Ih g\|_{0,\infty;\dOm} + \|(\psilo-u_h)^+\|_{0,\infty;\Om} + \|(\psiup-u_h)^+\|_{0,\infty;\omtop}
+\label{eq:cupper}
+  c^\top = \|w\|_{0,\infty;\Om} + \|g-\Ih g\|_{0,\infty;\dOm} + \|(\psilo-u_h)^+\|_{0,\infty;\Om} + \|(\psiup-u_h)^+\|_{0,\infty;\omtop}.
 \end{equation}
-satisfies $u \le u^\top$ in $\Om$.
+The function $u^\top = u_h + w + c^\top$ satisfies $u \le u^\top$ in $\Om$.
 \end{proposition}
 
 \begin{proof}
-Let $c$ denote the sum of the four constants in \eqref{eq:ubarupper}, so that $u^\top = u_h + w + c$ and $c \ge \|g - \Ih g\|_{0,\infty;\dOm}$.  Set $v := (u - u^\top)^+$.  By Lemma~\ref{lem:barriercrit}(a) it suffices to show $\left<\sigma,v\right> \le 0$ and $\left<\tilde\sigma_h,v\right> \ge 0$.
+Clearly $c^\top \ge \|g - \Ih g\|_{0,\infty;\dOm}$.
 
-Everything follows from two pointwise lower bounds for $u^\top$.  Because $w + \|w\|_{0,\infty;\Om} \ge 0$ and the remaining constants in \eqref{eq:ubarupper} are non-negative, we have:
+Set $v := (u - u^\top)^+$.  By Lemma~\ref{lem:barriercrit}(a) it suffices to show $\left<\sigma,v\right> \le 0$ and $\left<\tilde\sigma_h,v\right> \ge 0$.  Everything follows from two pointwise lower bounds for $u^\top$.  Because $w + \|w\|_{0,\infty;\Om} \ge 0$ and the remaining constants in \eqref{eq:cupper} are non-negative, we have:
 \begin{align}
 \label{eq:utopboundOm}
   u^\top &\ge\ u_h + (\psilo - u_h)^+ \ \ge\ \psilo \quad\text{in } \Om, \\
@@ -720,16 +725,16 @@ When using representation \eqref{eq:sigmatildesplit} in the above proof, the fir
 
 \begin{proposition}[Lower barrier]
 \label{prop:lowerbarrier}
-The function
+Let
 \begin{equation}
-\label{eq:ubarlower}
-  u_\bot := u_h + w - \|w\|_{0,\infty;\Om} - \|g-\Ih g\|_{0,\infty;\dOm} - \|(u_h-\psiup)^+\|_{0,\infty;\Om} - \|(u_h-\psilo)^+\|_{0,\infty;\ombot}
+\label{eq:clower}
+  c_\bot = \|w\|_{0,\infty;\Om} + \|g-\Ih g\|_{0,\infty;\dOm} + \|(u_h-\psiup)^+\|_{0,\infty;\Om} + \|(u_h-\psilo)^+\|_{0,\infty;\ombot}.
 \end{equation}
-satisfies $u_\bot \le u$ in $\Om$.
+The function $u_\bot = u_h + w - c_\bot$ satisfies $u_\bot \le u$ in $\Om$.
 \end{proposition}
 
 \begin{proof}
-The construction mirrors Proposition~\ref{prop:upperbarrier}, exchanging $\bot \leftrightarrow \top$ and reversing all signs.  Writing $c$ for the sum of the four constants, $u_\bot = u_h + w - c$ with $c \ge \|g-\Ih g\|_{0,\infty;\dOm}$, and $v := (u_\bot - u)^+$, so Lemma~\ref{lem:barriercrit}(b) asks for $\left<\sigma,v\right> \ge 0$ and $\left<\tilde\sigma_h,v\right> \le 0$.  The two pointwise upper bounds replacing \eqref{eq:utopboundOm} and \eqref{eq:utopboundomtop} are
+The construction mirrors Proposition~\ref{prop:upperbarrier}, exchanging $\bot \leftrightarrow \top$ and reversing all signs.  Again $c_\bot \ge \|g-\Ih g\|_{0,\infty;\dOm}$ is clear, we define $v := (u_\bot - u)^+$, and Lemma~\ref{lem:barriercrit}(b) asks for $\left<\sigma,v\right> \ge 0$ and $\left<\tilde\sigma_h,v\right> \le 0$.  The two pointwise upper bounds replacing \eqref{eq:utopboundOm} and \eqref{eq:utopboundomtop} are
 \begin{align*}
   u_\bot &\le\ u_h - (u_h - \psiup)^+ \ \le\ \psiup \quad\text{in } \Om, \\
   u_\bot &\le\ u_h - (u_h - \psilo)^+ \ \le\ \psilo \quad\text{on } \ombot.
@@ -737,18 +742,27 @@ The construction mirrors Proposition~\ref{prop:upperbarrier}, exchanging $\bot \
 
 The first of these inequalities gives $\{v>0\} \subset \Om \setminus \Ctop$, so $v$ vanishes on the support of $\mu_\top$ and \eqref{eq:sigmapairing} yields $\left<\sigma,v\right> = \int_\Om v \,d\mu_\bot \ge 0$.
 
-The second of the above inequalities gives $v \equiv 0$ on $\ombot$, since $u \ge \psilo$ in $\Om$.  As in the upper barrier case, consider \eqref{eq:sigmatildesplit} term by term.  If $T \in \Thtop$ then $\sigma_h \le 0$ pointwise on $T$ and $v \ge 0$, so $\int_T \sigma_h v \le 0$.  If $T \in \Thbot$ then $\sigma_h \ge 0$ is affine on $T$, so either $\sigma_h \equiv 0$ on $T$, or $\sigma_h(z) > 0$ at some vertex $z$, in which case $z \in \Nh^+$ and $T \subset \Uh(z) \subset \ombot$, where $v$ vanishes; either way $\int_T\sigma_h v = 0$.  If $T \in \Thplus$ then, as before, $\int_T \Ih(\sigma_h\Pih v)$ is $|T|$ times the average $(d+1)^{-1}\sum_i \sigma_h(z_i)(\Pih v)(z_i)$, in which boundary vertices contribute nothing, interior vertices with $\sigma_h(z_i) \le 0$ contribute non-positively because $(\Pih v)(z_i) \ge 0$, and interior vertices with $\sigma_h(z_i) > 0$ have $B(z_i) \subset \ombot$ and hence $(\Pih v)(z_i) = 0$.  Thus $\left<\tilde\sigma_h,v\right> \le 0$, and \eqref{eq:ubarlower} follows.
+The second of the above inequalities gives $v \equiv 0$ on $\ombot$, since $u \ge \psilo$ in $\Om$.  As in the upper barrier case, consider \eqref{eq:sigmatildesplit} term by term.  If $T \in \Thtop$ then $\sigma_h \le 0$ pointwise on $T$ and $v \ge 0$, so $\int_T \sigma_h v \le 0$.  If $T \in \Thbot$ then $\sigma_h \ge 0$ is affine on $T$, so either $\sigma_h \equiv 0$ on $T$, or $\sigma_h(z) > 0$ at some vertex $z$, in which case $z \in \Nh^+$ and $T \subset \Uh(z) \subset \ombot$, where $v$ vanishes; either way $\int_T\sigma_h v = 0$.  If $T \in \Thplus$ then, as before, $\int_T \Ih(\sigma_h\Pih v)$ is $|T|$ times the average $(d+1)^{-1}\sum_i \sigma_h(z_i)(\Pih v)(z_i)$, in which boundary vertices contribute nothing, interior vertices with $\sigma_h(z_i) \le 0$ contribute non-positively because $(\Pih v)(z_i) \ge 0$, and interior vertices with $\sigma_h(z_i) > 0$ have $B(z_i) \subset \ombot$ and hence $(\Pih v)(z_i) = 0$.  Thus $\left<\tilde\sigma_h,v\right> \le 0$, and $u_\bot\le u$ follows.
 \end{proof}
 
+\begin{figure}[ht]
+\centering
+\input{tikz/barrieruni}
+\caption{Notional barrier construction of Propositions \ref{prop:upperbarrier} and \ref{prop:lowerbarrier} in a unilateral case; see Remark~\ref{rem:unilateral}.  The barriers $u^\top,u_\bot$ are the corrected discrete solution $u_h+w$ shifted by constants, and $u$ (black) lies between them (shaded band).  The upper shift $c^\top$ \eqref{eq:cupper} carries no localized term because $\omtop=\emptyset$ (Remark \ref{rem:unilateralstars}), while shift $c_\bot$ \eqref{eq:clower} includes detachment of $u_h$ from $\psilo$ over the set marked.  Compared to \cite{NSV03} we use the star dilation $\ombot$ (pale strip) instead of $\{\sigma_h>0\}$.}
+\label{fig:barrieruni}
+\end{figure}
 
-\subsection{Initial pointwise error estimate}
+
+\subsection{Preliminary pointwise error estimate}
+
+Figure \ref{fig:barrieruni} illustrates the barriers constructed in Propositions \ref{prop:upperbarrier} and \ref{prop:lowerbarrier}, in a simplified unilateral case.  We can easily convert the results in these Propositions into a pointwise \emph{a posteriori} bound, but it remains to estimate $\|w\|_{0,\infty;\Om}$, so bound \eqref{eq:barrierbound} here is only preliminary.
 
 Subtracting $u_h$ from the two barriers gives
 \begin{equation}
 \label{eq:maxbarriers}
 |u-u_h| \le \max \{|u_\bot-u_h|, |u^\top-u_h|\}
 \end{equation}
-pointwise, thus Propositions~\ref{prop:upperbarrier} and~\ref{prop:lowerbarrier} give
+pointwise, thus the Propositions give
 \begin{align}
 \label{eq:barrierbound}
   \|u-u_h\|_{0,\infty;\Om} \ \le\ & 2\|w\|_{0,\infty;\Om} + \|g-\Ih g\|_{0,\infty;\dOm} \\
@@ -767,14 +781,11 @@ each therefore $O(h^2)$ for obstacles $\psilo,\psiup \in W^{2,\infty}(\Om)$.
 
 The other two obstacle terms in \eqref{eq:barrierbound}, suprema over $\omtop,\ombot$ respectively, are not interpolation errors.  They measure how far $u_h$ has detached from an obstacle on the region where the discrete residual asserts that it is attached, and they are the box-constrained analogue of the localized term in \cite[formula (4.6)]{NSV03}.
 
-\begin{remark}[Optimal, non-computable choice]
-\label{rem:optimalchoice}
-As in \cite[Remark 4.3]{NSV03}, the proofs of Propositions~\ref{prop:upperbarrier} and~\ref{prop:lowerbarrier} go through with $\|(u-u_h)^+\|_{0,\infty;\omtop}$ and $\|(u_h-u)^+\|_{0,\infty;\ombot}$ in place of the last two terms, since only $u \le u^\top$ on $\omtop$, and $u_\bot \le u$ on $\ombot$, were used.  These are the optimal choices, and they are trivially efficient, but they are not computable.
-\end{remark}
+Following Remark 4.3 in \cite{NSV03}, the proofs of Propositions~\ref{prop:upperbarrier} and~\ref{prop:lowerbarrier} would go through with $\|(u-u_h)^+\|_{0,\infty;\omtop}$ and $\|(u_h-u)^+\|_{0,\infty;\ombot}$ in place of the last two terms in \eqref{eq:barrierbound}, since only $u \le u^\top$ on $\omtop$, and $u_\bot \le u$ on $\ombot$, were used.  These would be the optimal choices, and they are trivially efficient, but they are not computable.
 
 \begin{remark}[The unilateral case]
 \label{rem:unilateral}
-If the upper obstacle is absent then $\sigma_h \ge 0$ throughout $\bar\Om$, so $\Nh^- = \emptyset$ and $\omtop = \emptyset$, and \eqref{eq:ubarupper} is exactly \cite[formula (4.2)]{NSV03}.  The lower barrier \eqref{eq:ubarlower} then reduces to \cite[formula (4.6)]{NSV03} except that our localized term is measured over $\ombot$ rather than over $\{\sigma_h>0\}$, which by \eqref{eq:omegacontains} is a subset.  As Remark~\ref{rem:whystar} explains, this one-ring enlargement is what replaces the global sign; we have not tried to remove it in the unilateral case.
+If the upper obstacle is absent then $\omtop = \emptyset$ by Remark~\ref{rem:unilateralstars}, and $u^\top = u_h + w + c^\top$ is exactly \cite[formula (4.2)]{NSV03}.  The lower barrier reduces to \cite[formula (4.6)]{NSV03} except that our localized term is measured over $\ombot$ rather than over $\{\sigma_h>0\}$, a subset by \eqref{eq:omegacontains}.  As Remark~\ref{rem:whystar} explains, this one-ring enlargement is what replaces the global sign; we keep it for simplicity of presentation in the unilateral case.
 \end{remark}
 
 \begin{remark}[Consequence for efficiency]
@@ -1127,7 +1138,7 @@ Note that the patch is still only $\omega_S$; this is because step 2 is local to
 
 \subsection{Efficiency of the localized detachment terms}
 
-The two remaining terms of $E_h$ are the localized detachment terms $\|(u_h-\psilo)^+\|_{0,\infty;\ombot}$ and $\|(\psiup-u_h)^+\|_{0,\infty;\omtop}$.  As \cite[\S 6.2]{NSV03} explains for the unilateral case, and as Remark~\ref{rem:optimalchoice} recalls here, these computable terms replace the non-computable optimal choices $\|(u_h-u)^+\|_{0,\infty;\ombot}$ and $\|(u-u_h)^+\|_{0,\infty;\omtop}$, which are trivially efficient.  What has to be shown is that the substitution costs only obstacle approximation.
+The two remaining terms of $E_h$ are the localized detachment terms $\|(u_h-\psilo)^+\|_{0,\infty;\ombot}$ and $\|(\psiup-u_h)^+\|_{0,\infty;\omtop}$.  As \cite[\S 6.2]{NSV03} explains for the unilateral case, these computable terms replace the non-computable optimal choices $\|(u_h-u)^+\|_{0,\infty;\ombot}$ and $\|(u-u_h)^+\|_{0,\infty;\omtop}$, which are trivially efficient.  What has to be shown is that the substitution costs only obstacle approximation.
 
 The mechanism is a discrete quadratic-growth statement, the discrete counterpart of \cite[formula (2.9)]{Baiocchi1977}: a nonnegative piecewise-linear function which vanishes at an interior node is controlled on the whole star of that node by the jumps of its normal derivative.  We state it as in \cite[Lemma 6.4]{NSV03}, whose proof concerns $\Vh$ alone and involves no obstacle.
 
