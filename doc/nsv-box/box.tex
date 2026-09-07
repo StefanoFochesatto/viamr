@@ -68,6 +68,11 @@ urlcolor=blue,
 \date{\today}
 
 \begin{document}
+
+\begin{abstract}
+TO DO.
+\end{abstract}
+
 \maketitle
 
 \section{Introduction and goals} \label{sec:intro}
@@ -418,7 +423,7 @@ where $|D^2\varphi|_{\mathrm{var}} := \sum_{i=1}^d |D\partial_i\varphi|_{\mathrm
 
 \section{A posteriori estimator} \label{sec:estimator}
 
-This section begins the construction of a bilateral form of the \cite{NSV03} estimator, which runs through \S \ref{sec:efficiency}.  Our estimator is assembled from the element-wise contact sets $\Thbot,\Thtop$ of \eqref{eq:Thsplit}, but it later localizes (\S \ref{sec:localized}) to the star-dilated contact sets which we define in \S \ref{sec:barriers}.
+This section begins the construction of a bilateral form of the \cite{NSV03} estimator, which runs through \S \ref{sec:efficiency}.  Our estimator is assembled from the element-wise contact sets $\Thbot,\Thtop$ of \eqref{eq:Thsplit}, but its detachment terms are localized to the star-dilated strict contact sets defined in \S \ref{sec:barriers}.
 
 Write $\ThC := \Thbot \cup \Thtop$ for the set of elements whose stars are in contact with the obstacles; note $\ThC$ is the analog of $\mathcal{T}_h^0$ in \cite{NSV03}.  Recalling \eqref{eq:Thsplit}, we have partitioned the elements as follows (Figure \ref{fig:nodalelem}, right):
 \begin{equation}
@@ -576,7 +581,7 @@ As in \cite[\S 4]{NSV03}, $w$ is continuous; Lemma~\ref{lem:holder} below establ
 
 \subsection{Reduction to two pairings}
 
-The next Lemma considers candidate barriers, with values of ``$c$'' to be determined.  The gradient of each barrier is $\nabla u_h + \nabla w$, and thus certain reductions apply, and we find sufficient conditions in terms of $\sigma$ and $\tilde\sigma_h$, so that the candidates are in fact barriers.  These conditions will be satisfied in Propositions \ref{prop:upperbarrier} and \ref{prop:lowerbarrier} below.
+The next Lemma considers candidate barriers, with values of ``$c$'' to be determined.  The barrier gradient is $\nabla u_h + \nabla w$, so certain reductions apply, and we find sufficient conditions in terms of $c$, $\sigma$, and $\tilde\sigma_h$ so that the candidates are in fact barriers.  These conditions will be satisfied in Propositions \ref{prop:upperbarrier} and \ref{prop:lowerbarrier} below, with different $c$ for the two barriers.
 
 \begin{lemma}[Barrier criterion]
 \label{lem:barriercrit}
@@ -613,9 +618,7 @@ Since $w \in H_0^1(\Om)$ is continuous it vanishes on $\dOm$, while $u = g$ and 
 Finally, if the two pairings have the stated signs then $\|\nabla v\|_{0,2;\Om} = 0$, so $v$ is constant, and $v \in H_0^1(\Om)$ then forces $v \equiv 0$.  That is, $u \le u^\top$.
 \end{proof}
 
-In applying this Lemma we will use different $c$ for the two barriers, but each will satisfy $c \ge \|g - \Ih g\|_{0,\infty;\dOm}$.
-
-Consider the upper barrier, so that we need $\left<\sigma,v\right> \le 0$ and $\left<\tilde\sigma_h,v\right> \ge 0$.  In either part of the Lemma the function $v$ is continuous and non-negative, so, $\sigma$ being a signed Radon measure (\S \ref{sec:setup}), the pairing is integration \cite[Theorem 6.9]{KinderlehrerStampacchia1980}, and the Jordan decomposition $\sigma = \mu_\bot - \mu_\top$ gives
+Consider the upper barrier, so that we need $\left<\sigma,v\right> \le 0$ and $\left<\tilde\sigma_h,v\right> \ge 0$.  Either function $v$ in the Lemma is continuous and non-negative, so, $\sigma$ being a signed Radon measure (\S \ref{sec:setup}), the pairing is integration \cite[Theorem 6.9]{KinderlehrerStampacchia1980}, and the Jordan decomposition $\sigma = \mu_\bot - \mu_\top$ gives
 \begin{equation}
 \label{eq:sigmapairing}
   \left<\sigma,v\right> = \int_\Om v\,d\mu_\bot - \int_\Om v\,d\mu_\top \ \le\ \int_\Om v\,d\mu_\bot .
@@ -627,9 +630,9 @@ To show $\left<\tilde\sigma_h,v\right> \ge 0$ for the upper barrier, recall that
 \label{eq:sigmatildesplit}
   \left<\tilde\sigma_h,v\right> = \sum_{T\in\Thbot}\int_T \sigma_h v \ +\ \sum_{T\in\Thtop}\int_T \sigma_h v \ +\ \sum_{T\in\Thplus}\int_T \Ih(\sigma_h \Pih v),
 \end{equation}
-in which the first sum is already non-negative, because $\sigma_h \ge 0$ pointwise on each $T \in \Thbot$ (Corollary \ref{cor:sigmahsign}) and $v \ge 0$.  The box constraint is relevant in the second and third sums: $\sigma_h \le 0$ on $\Thtop$ elements, and $\sigma_h$ has no determined sign on $\Thplus$ elements, so both can contribute negatively.  (In the unilateral case of \cite{NSV03} this does not happen, since there $\sigma_h \ge 0$ on all of $\bar\Om$ and hence $\left<\tilde\sigma_h,v\right> \ge 0$ for every $v \ge 0$.)  The upper barrier must therefore contain a second mechanism, which forces $v$ to vanish wherever $\sigma_h < 0$ can influence \eqref{eq:sigmatildesplit}.
+in which the first sum is already non-negative, because $\sigma_h \ge 0$ pointwise on each $T \in \Thbot$ (Corollary \ref{cor:sigmahsign}) and $v \ge 0$.  The box constraint is relevant in the second and third sums: $\sigma_h \le 0$ on $\Thtop$ elements, and $\sigma_h$ has no determined sign on $\Thplus$ elements, so both can contribute negatively.  (In the unilateral case of \cite{NSV03} this does not happen, since there $\sigma_h \ge 0$ on all of $\bar\Om$ and hence $\left<\tilde\sigma_h,v\right> \ge 0$ for every $v \ge 0$.)  The upper barrier therefore needs a second mechanism to force $v$ to vanish wherever $\sigma_h < 0$ can influence \eqref{eq:sigmatildesplit}.
 
-Proposition \ref{prop:upperbarrier} below will set $c$ so that these considerations apply and we can get $u\le u^\top$.  The lower barrier is symmetric in every respect.
+Proposition \ref{prop:upperbarrier} below will set $c$ so that these considerations apply, and we get $u\le u^\top$.  The lower barrier is symmetric in every respect.
 
 
 \subsection{Star-dilated strict contact sets}
@@ -640,37 +643,35 @@ Recalling definition \eqref{eq:sigmah}, let
   \Nh^+ := \{z \in \Nh \,:\, \sigma_h(z) > 0\}, \qquad
   \Nh^- := \{z \in \Nh \,:\, \sigma_h(z) < 0\}
 \end{equation}
-be nodes at which the original discrete residual $\sigma_h$ is strictly signed, and let
+be nodes at which the original discrete residual $\sigma_h$ is strictly signed; these are \emph{strict nodal contact sets}.  Now define
 \begin{equation}
 \label{eq:omegas}
-  \ombot := \Uh(\Nh^+), \qquad \omtop := \Uh(\Nh^-)
+  \ombot := \Uh(\Nh^+), \qquad \omtop := \Uh(\Nh^-),
 \end{equation}
-be their star-dilations, each a union of closed elements by definition \eqref{eq:star}.  By Proposition~\ref{prop:nodalsign} at interior nodes, and by the first two cases of \eqref{eq:sigmah-bnd} at boundary nodes, $\Nh^+ \subset \Nhbot$ and $\Nh^- \subset \Nhtop$; a strictly-signed node is active, and the sign says against which obstacle.
+their star-dilations, each a union of closed elements by definition \eqref{eq:star}.  By Proposition~\ref{prop:nodalsign} at interior nodes, and by the first two cases of \eqref{eq:sigmah-bnd} at boundary nodes, $\Nh^+ \subset \Nhbot$ and $\Nh^- \subset \Nhtop$; a strictly-signed node is active, and the sign says against which obstacle.  Figure~\ref{fig:stardilate} illustrates \eqref{eq:Nhpm} and \eqref{eq:omegas} on the mesh of Figure~\ref{fig:nodalelem}.
 
-The barrier proofs use two consequences of \eqref{eq:omegas}.  Regarding $\sigma_h$ as a piecewise-linear function, first note that
+\begin{figure}[ht]
+\centering
+\input{tikz/stardilate}
+\caption{An illustration of strict nodal contact sets and their star dilations.  Left: $\Nh^+$ and $\Nh^-$ from \eqref{eq:Nhpm} as filled dots, with the remaining nodes of $\Nhbot$ and $\Nhtop$, but where $\sigma_h=0$, as open circles.  Right: the star dilations $\ombot = \Uh(\Nh^+)$ and $\omtop = \Uh(\Nh^-)$ from \eqref{eq:omegas}, each one ring of elements larger than the node set generating it.}
+\label{fig:stardilate}
+\end{figure}
+
+The barrier proofs use two consequences of definitions \eqref{eq:omegas}.  Regarding $\sigma_h$ as a piecewise-linear function, first note that
 \begin{equation}
 \label{eq:omegacontains}
   \{\sigma_h < 0\} \subset \omtop \qquad \text{and} \qquad \{\sigma_h > 0\} \subset \ombot,
 \end{equation}
 because if $\sigma_h(x) < 0$ then, $\sigma_h$ being affine on any element $T$ containing $x$, some vertex $z$ of $T$ has $\sigma_h(z) < 0$, and then $T \subset \Uh(z) \subset \omtop$.  Second, $B(z) \subset \Uh(z) \subset \omtop$ for every $z \in \Nh^- \cap \Nhr$, by the construction of the balls in \S \ref{sec:discretization}, and symmetrically for $\ombot$.
 
-Figure~\ref{fig:stardilate} illustrates \eqref{eq:Nhpm} and \eqref{eq:omegas} on the mesh of Figure~\ref{fig:nodalelem}.
-
-\begin{figure}[ht]
-\centering
-\input{tikz/stardilate}
-\caption{A notional illustration of strictly-signed nodal sets, and their star dilations, on the mesh of Figure~\ref{fig:nodalelem}.  Left: $\Nh^+$ and $\Nh^-$ from \eqref{eq:Nhpm} as filled dots, with the remaining nodes of $\Nhbot$ and $\Nhtop$, but where $\sigma_h=0$, as open circles.  Right: the star dilations $\ombot = \Uh(\Nh^+)$ and $\omtop = \Uh(\Nh^-)$ from \eqref{eq:omegas}, each one ring of elements larger than the node set generating it.}
-\label{fig:stardilate}
-\end{figure}
-
-\begin{remark}[Why the star, and not the bare set $\{\sigma_h<0\}$]
+\begin{remark}[Why the star-dilation, and not the bare set $\{\sigma_h<0\}$]
 \label{rem:whystar}
-The corresponding set in \cite[formula (4.6)]{NSV03} is not dilated.  There the third sum in \eqref{eq:sigmatildesplit} is handled instead by an argument which needs the global sign: if $v > 0$ at an interior point of an element $T$, then $\sigma_h$ vanishes at that point, and an affine function of one sign on $T$ which vanishes at an interior point of $T$ vanishes identically on $T$, hence at the vertices of $T$ as well.  Bilaterally that reasoning fails exactly where it is needed.  A node $z \in \Nh^-$ can be a vertex of a transition element $T \in \Thplus$ on which $\sigma_h$ changes sign, and then $v > 0$ at a point of $T$ where $\sigma_h \ge 0$ is no contradiction, so nothing forces $(\Pih v)(z) = 0$.  Dilating by one ring of elements restores the conclusion directly, at the cost of measuring the barrier term on a slightly larger set.
+The corresponding set in \cite[formula (4.6)]{NSV03} is not dilated.  There the third sum in \eqref{eq:sigmatildesplit} is handled instead by an argument which needs the global sign: if $v > 0$ at an interior point of an element $T$, then $\sigma_h$ vanishes at that point, and an affine function of one sign on $T$ which vanishes at an interior point of $T$ vanishes identically on $T$, hence at the vertices of $T$ as well.  That reasoning fails in bilateral cases.  A node $z \in \Nh^-$ can be a vertex of a transition element $T \in \Thplus$ on which $\sigma_h$ changes sign, and then $v > 0$ at a point of $T$ where $\sigma_h \ge 0$ is no contradiction, so nothing forces $(\Pih v)(z) = 0$.  Dilating by one ring of elements restores the conclusion directly, at the cost of measuring the barrier term on a slightly larger set.
 \end{remark}
 
 \begin{remark}[Star-dilated sets in unilateral cases]
 \label{rem:unilateralstars}
-Suppose the upper obstacle is absent or never attained, that is $\Nhtop = \emptyset$, whence $\{u_h = \psiuph\} = \emptyset$ by Lemma~\ref{lem:affine}.  Then $\sigma_h \ge 0$ at every node: at interior nodes by Proposition~\ref{prop:nodalsign}, whose second case is vacuous, and at boundary nodes because the second case of \eqref{eq:sigmah-bnd}, the only one which can return a negative value, requires $\Uh(z) \subset \{u_h = \psiuph\}$.  Therefore $\Nh^- = \emptyset$ and $\omtop = \Uh(\emptyset) = \emptyset$.  Symmetrically, if $\Nhbot = \emptyset$ then $\Nh^+ = \emptyset$ and $\ombot = \emptyset$.  Reading a supremum over the empty set as zero, the corresponding terms drop from \eqref{eq:cupper} or \eqref{eq:clower} below.
+Suppose the upper obstacle is absent or never attained, that is $\Nhtop = \emptyset$, whence $\{u_h = \psiuph\} = \emptyset$ by Lemma~\ref{lem:affine}.  Then $\sigma_h \ge 0$ at every node: at interior nodes by Proposition~\ref{prop:nodalsign}, whose second case is vacuous, and at boundary nodes because the second case of \eqref{eq:sigmah-bnd} requires $\Uh(z) \subset \{u_h = \psiuph\}$.  Therefore $\Nh^- = \emptyset$ and $\omtop = \Uh(\emptyset) = \emptyset$.  Symmetrically, if $\Nhbot = \emptyset$ then $\Nh^+ = \emptyset$ and $\ombot = \emptyset$.  Reading $\sup \emptyset$ as zero, the corresponding terms drop from \eqref{eq:cupper} or \eqref{eq:clower} below.
 \end{remark}
 
 
@@ -683,13 +684,11 @@ Let
 \label{eq:cupper}
   c^\top = \|w\|_{0,\infty;\Om} + \|g-\Ih g\|_{0,\infty;\dOm} + \|(\psilo-u_h)^+\|_{0,\infty;\Om} + \|(\psiup-u_h)^+\|_{0,\infty;\omtop}.
 \end{equation}
-The function $u^\top = u_h + w + c^\top$ satisfies $u \le u^\top$ in $\Om$.
+The function $u^\top = u_h + w + c^\top$ is an upper barrier: $u \le u^\top$ in $\Om$.
 \end{proposition}
 
 \begin{proof}
-Clearly $c^\top \ge \|g - \Ih g\|_{0,\infty;\dOm}$.
-
-Set $v := (u - u^\top)^+$.  By Lemma~\ref{lem:barriercrit}(a) it suffices to show $\left<\sigma,v\right> \le 0$ and $\left<\tilde\sigma_h,v\right> \ge 0$.  Everything follows from two pointwise lower bounds for $u^\top$.  Because $w + \|w\|_{0,\infty;\Om} \ge 0$ and the remaining constants in \eqref{eq:cupper} are non-negative, we have:
+Clearly $c^\top \ge \|g - \Ih g\|_{0,\infty;\dOm}$, so set $v := (u - u^\top)^+$.  By Lemma~\ref{lem:barriercrit}(a) it suffices to show $\left<\sigma,v\right> \le 0$ and $\left<\tilde\sigma_h,v\right> \ge 0$.  Everything follows from two pointwise lower bounds for $u^\top$.  Because $w + \|w\|_{0,\infty;\Om} \ge 0$ and the remaining constants in \eqref{eq:cupper} are non-negative, we have:
 \begin{align}
 \label{eq:utopboundOm}
   u^\top &\ge\ u_h + (\psilo - u_h)^+ \ \ge\ \psilo \quad\text{in } \Om, \\
@@ -730,7 +729,7 @@ Let
 \label{eq:clower}
   c_\bot = \|w\|_{0,\infty;\Om} + \|g-\Ih g\|_{0,\infty;\dOm} + \|(u_h-\psiup)^+\|_{0,\infty;\Om} + \|(u_h-\psilo)^+\|_{0,\infty;\ombot}.
 \end{equation}
-The function $u_\bot = u_h + w - c_\bot$ satisfies $u_\bot \le u$ in $\Om$.
+The function $u_\bot = u_h + w - c_\bot$ is a lower barrier: $u_\bot \le u$ in $\Om$.
 \end{proposition}
 
 \begin{proof}
@@ -745,31 +744,36 @@ The first of these inequalities gives $\{v>0\} \subset \Om \setminus \Ctop$, so 
 The second of the above inequalities gives $v \equiv 0$ on $\ombot$, since $u \ge \psilo$ in $\Om$.  As in the upper barrier case, consider \eqref{eq:sigmatildesplit} term by term.  If $T \in \Thtop$ then $\sigma_h \le 0$ pointwise on $T$ and $v \ge 0$, so $\int_T \sigma_h v \le 0$.  If $T \in \Thbot$ then $\sigma_h \ge 0$ is affine on $T$, so either $\sigma_h \equiv 0$ on $T$, or $\sigma_h(z) > 0$ at some vertex $z$, in which case $z \in \Nh^+$ and $T \subset \Uh(z) \subset \ombot$, where $v$ vanishes; either way $\int_T\sigma_h v = 0$.  If $T \in \Thplus$ then, as before, $\int_T \Ih(\sigma_h\Pih v)$ is $|T|$ times the average $(d+1)^{-1}\sum_i \sigma_h(z_i)(\Pih v)(z_i)$, in which boundary vertices contribute nothing, interior vertices with $\sigma_h(z_i) \le 0$ contribute non-positively because $(\Pih v)(z_i) \ge 0$, and interior vertices with $\sigma_h(z_i) > 0$ have $B(z_i) \subset \ombot$ and hence $(\Pih v)(z_i) = 0$.  Thus $\left<\tilde\sigma_h,v\right> \le 0$, and $u_\bot\le u$ follows.
 \end{proof}
 
+Figure \ref{fig:barrieruni} illustrates the barriers constructed in Propositions \ref{prop:upperbarrier} and \ref{prop:lowerbarrier}, but in a unilateral case to avoid visual clutter.
+
 \begin{figure}[ht]
 \centering
 \input{tikz/barrieruni}
-\caption{Notional barrier construction of Propositions \ref{prop:upperbarrier} and \ref{prop:lowerbarrier} in a unilateral case; see Remark~\ref{rem:unilateral}.  The barriers $u^\top,u_\bot$ are the corrected discrete solution $u_h+w$ shifted by constants, and $u$ (black) lies between them (shaded band).  The upper shift $c^\top$ \eqref{eq:cupper} carries no localized term because $\omtop=\emptyset$ (Remark \ref{rem:unilateralstars}), while shift $c_\bot$ \eqref{eq:clower} includes detachment of $u_h$ from $\psilo$ over the set marked.  Compared to \cite{NSV03} we use the star dilation $\ombot$ (pale strip) instead of $\{\sigma_h>0\}$.}
+\caption{Notional barrier construction of Propositions \ref{prop:upperbarrier} and \ref{prop:lowerbarrier} in a unilateral case; see Remark~\ref{rem:unilateral}.  The barriers $u^\top,u_\bot$ are the corrected discrete solution $u_h+w$ shifted by constants, and $u$ (black) lies between them (shaded band).  The upper shift $c^\top$ \eqref{eq:cupper} carries no localized term because $\omtop=\emptyset$ (Remark \ref{rem:unilateralstars}), while the lower shift $c_\bot$ \eqref{eq:clower} includes detachment of $u_h$ from $\psilo$ over the set $\omega_\bot$ (pale vertical strip).}
 \label{fig:barrieruni}
 \end{figure}
 
 
 \subsection{Preliminary pointwise error estimate}
 
-Figure \ref{fig:barrieruni} illustrates the barriers constructed in Propositions \ref{prop:upperbarrier} and \ref{prop:lowerbarrier}, in a simplified unilateral case.  We can easily convert the results in these Propositions into a pointwise \emph{a posteriori} bound, but it remains to estimate $\|w\|_{0,\infty;\Om}$, so bound \eqref{eq:barrierbound} here is only preliminary.
-
-Subtracting $u_h$ from the two barriers gives
+We can easily convert the results in Propositions \ref{prop:upperbarrier} and \ref{prop:lowerbarrier} into a pointwise \emph{a posteriori} bound.  In fact, subtracting $u_h$ from the barrier relationship $u_\bot \le u \le u^\top$ gives
 \begin{equation}
 \label{eq:maxbarriers}
-|u-u_h| \le \max \{|u_\bot-u_h|, |u^\top-u_h|\}
+|u-u_h| \le \max \{|u_\bot-u_h|, |u^\top-u_h|\} = \max \{|w-c_\bot|, |w+c^\top|\}
 \end{equation}
-pointwise, thus the Propositions give
+pointwise, and $\bigl|w \pm \|w\|_{0,\infty;\Om}\bigr| \le 2 \|w\|_{0,\infty;\Om}$ pointwise, thus the Propositions give
 \begin{align}
 \label{eq:barrierbound}
   \|u-u_h\|_{0,\infty;\Om} \ \le\ & 2\|w\|_{0,\infty;\Om} + \|g-\Ih g\|_{0,\infty;\dOm} \\
   &+ \|(\psilo-u_h)^+\|_{0,\infty;\Om} + \|(u_h-\psiup)^+\|_{0,\infty;\Om} \notag \\
   &+ \|(\psiup-u_h)^+\|_{0,\infty;\omtop} + \|(u_h-\psilo)^+\|_{0,\infty;\ombot}, \notag
 \end{align}
-the box-constrained form of \cite[formula (4.8)]{NSV03}.  (A maximum of the two lines of obstacle terms would do, but we prefer the symmetric expression.)  Besides $\|w\|_{0,\infty;\Om}$, every term on the right is computable from the discrete solution and the given data.
+the box-constrained form of \cite[formula (4.8)]{NSV03}.  Besides $\|w\|_{0,\infty;\Om}$, every term on the right is computable from the discrete solution and the given data.
+
+\begin{remark}[Replacement of a maximum by a sum]
+\label{rem:maxreplace}
+In preliminary bound \eqref{eq:barrierbound}, a maximum would do in place of the sum, but only with the terms paired as they occur in the shift constants \eqref{eq:cupper} and \eqref{eq:clower}, namely as $\max\{\|(\psilo-u_h)^+\|_{0,\infty;\Om} + \|(\psiup-u_h)^+\|_{0,\infty;\omtop},\,\|(u_h-\psiup)^+\|_{0,\infty;\Om} + \|(u_h-\psilo)^+\|_{0,\infty;\ombot}\}$.  Such a maximum saves at most a factor of two, and the two suprema within a branch are attained on different elements in general, so the saving does not descend to an element-wise indicator.  We prefer the symmetric expression.
+\end{remark}
 
 The four obstacle terms in \eqref{eq:barrierbound} come in two different kinds.  The two which are suprema over $\Om$ measure the failure of $u_h$ to be admissible for the continuum problem, and they are controlled by the obstacle interpolation errors: since $u_h \ge \psiloh$ and $u_h \le \psiuph$ in $\Om$,
 \begin{equation}
@@ -779,26 +783,24 @@ The four obstacle terms in \eqref{eq:barrierbound} come in two different kinds. 
 \end{equation}
 each therefore $O(h^2)$ for obstacles $\psilo,\psiup \in W^{2,\infty}(\Om)$.
 
-The other two obstacle terms in \eqref{eq:barrierbound}, suprema over $\omtop,\ombot$ respectively, are not interpolation errors.  They measure how far $u_h$ has detached from an obstacle on the region where the discrete residual asserts that it is attached, and they are the box-constrained analogue of the localized term in \cite[formula (4.6)]{NSV03}.
-
-Following Remark 4.3 in \cite{NSV03}, the proofs of Propositions~\ref{prop:upperbarrier} and~\ref{prop:lowerbarrier} would go through with $\|(u-u_h)^+\|_{0,\infty;\omtop}$ and $\|(u_h-u)^+\|_{0,\infty;\ombot}$ in place of the last two terms in \eqref{eq:barrierbound}, since only $u \le u^\top$ on $\omtop$, and $u_\bot \le u$ on $\ombot$, were used.  These would be the optimal choices, and they are trivially efficient, but they are not computable.
+The other two obstacle terms in \eqref{eq:barrierbound}, suprema over $\omtop,\ombot$ respectively, are not interpolation errors.  They measure how far $u_h$ has \emph{detached} from a continuum obstacle on the region where the discrete residual asserts that it is attached.  That these are measured over the star-dilated sets \eqref{eq:omegas}, rather than over $\{\sigma_h \ne 0\}$ as in \cite{NSV03}, turns out to cost nothing in the efficiency theory; see Remark~\ref{rem:noextraring} in \S \ref{sec:efficiency}.
 
 \begin{remark}[The unilateral case]
 \label{rem:unilateral}
 If the upper obstacle is absent then $\omtop = \emptyset$ by Remark~\ref{rem:unilateralstars}, and $u^\top = u_h + w + c^\top$ is exactly \cite[formula (4.2)]{NSV03}.  The lower barrier reduces to \cite[formula (4.6)]{NSV03} except that our localized term is measured over $\ombot$ rather than over $\{\sigma_h>0\}$, a subset by \eqref{eq:omegacontains}.  As Remark~\ref{rem:whystar} explains, this one-ring enlargement is what replaces the global sign; we keep it for simplicity of presentation in the unilateral case.
 \end{remark}
 
-\begin{remark}[Consequence for efficiency]
-\label{rem:effring}
-The local lower bounds of \cite[Prop.~6.3]{NSV03} for the localized term are stated for elements $T$ meeting $\{\sigma_h<0\}$, and already involve $\Uh(T)$ on the right-hand side.  Because our terms are measured over the star-dilated sets \eqref{eq:omegas}, the corresponding efficiency statement here will concern elements meeting $\ombot$ or $\omtop$, and might be expected to involve one further ring of elements.  In fact it does not; see Proposition~\ref{prop:effdetach} and Remark~\ref{rem:noextraring}.
+\begin{remark}[Computable detachment]
+\label{rem:computabledetach}
+Following Remark 4.3 in \cite{NSV03}, the proofs of Propositions~\ref{prop:upperbarrier} and~\ref{prop:lowerbarrier} would go through with $\|(u-u_h)^+\|_{0,\infty;\omtop}$ and $\|(u_h-u)^+\|_{0,\infty;\ombot}$ in place of the last two terms in \eqref{eq:barrierbound}, since only $u \le u^\top$ on $\omtop$, and $u_\bot \le u$ on $\ombot$, were used.  These would be the optimal choices, and trivially efficient.  However, if we regard the continuum obstacles as data, while the solution $u$ is permanently unknown, then these optimal choices are not computable but the ones used in \eqref{eq:barrierbound} are.
 \end{remark}
 
 \begin{remark}[Full localization and barrier sets]
 \label{rem:localization}
-Our estimator localizes to the star-dilated sets \eqref{eq:omegas} and not to the contact sets themselves; see Remark~\ref{rem:unilateral}.  For the unilateral problem, \cite{NSV05} closes the corresponding gap, producing estimators which, apart from obstacle resolution, vanish identically within the full-contact set, and then uses the pointwise bounds to construct barrier sets, that is, computable regions containing the free boundary, under a stability condition there.  We regard the bilateral analogues of both refinements as open, and intend to pursue them; \S\S \ref{sec:localized} and \ref{sec:barriersets} say what each requires.  Note that the bilateral problem has two free boundaries, so bilateral barrier sets would have to be shown disjoint before they localize either one; Proposition~\ref{prop:separation} is the natural tool, since $r_0$ bounds $\operatorname{dist}(\Cbot,\Ctop)$ from below in terms of the data.
+Our estimator localizes to the star-dilated sets \eqref{eq:omegas} and not to the contact sets themselves; see Remark~\ref{rem:unilateral}.  For the unilateral problem, in \cite{NSV05} Nochetto, Siebert, and Veeser close the corresponding gap, producing estimators which, apart from obstacle resolution, vanish identically within the full-contact set, and then use the pointwise bounds to construct barrier sets, that is, computable regions containing the free boundary, under a stability condition there.  We regard the bilateral analogues of both refinements as open.  Note that the bilateral problem has two free boundaries, so bilateral barrier sets would have to be shown disjoint before they localize either one; Proposition~\ref{prop:separation} is a natural tool, since $r_0$ bounds $\operatorname{dist}(\Cbot,\Ctop)$ from below in terms of the data.
 \end{remark}
 
-Bounding $\|w\|_{0,\infty;\Om}$ is a question about the linear problem \eqref{eq:w} only, and it is taken up next.
+Bounding $\|w\|_{0,\infty;\Om}$, a question about the linear problem \eqref{eq:w} only, is taken up next.
 
 
 \section{Pointwise estimates} \label{sec:pointwise}
@@ -1197,7 +1199,7 @@ Nothing prevents $T \subset \ombot \cap \omtop$, which happens exactly when $T$ 
 
 \begin{remark}[The star dilation is free here]
 \label{rem:noextraring}
-Remark~\ref{rem:effring} anticipated that measuring the detachment terms over the dilated sets \eqref{eq:omegas}, rather than over $\{\sigma_h>0\}$ and $\{\sigma_h<0\}$ as \cite{NSV03} does, would cost an extra ring of elements in the efficiency statement.  It does not.  Regarding $\sigma_h$ as piecewise linear, $\ombot = \Uh(\{\sigma_h>0\})$, because an element on which $\sigma_h$ is somewhere positive has a vertex where $\sigma_h$ is positive, and conversely.  So the elements $T \subset \ombot$ treated by Proposition~\ref{prop:effdetach} are exactly the elements $T$ with $T \cap \{\sigma_h > 0\} \ne \emptyset$ treated by \cite[Proposition 6.3]{NSV03}, and the patch on the right-hand side of \eqref{eq:effdetach} is the same $\Uh(T)$ as theirs.  The reason is that their local bound is already stated over all of $T$, and not over $T \cap \{\sigma_h>0\}$; the dilation adds nothing beyond what the element-wise maximum was taking anyway.
+Measuring the detachment terms over the dilated sets \eqref{eq:omegas}, rather than over $\{\sigma_h>0\}$ and $\{\sigma_h<0\}$ as \cite{NSV03} does, might be expected to cost an extra ring of elements in the efficiency statement.  It does not.  Regarding $\sigma_h$ as piecewise linear, $\ombot = \Uh(\{\sigma_h>0\})$, because an element on which $\sigma_h$ is somewhere positive has a vertex where $\sigma_h$ is positive, and conversely.  So the elements $T \subset \ombot$ treated by Proposition~\ref{prop:effdetach} are exactly the elements $T$ with $T \cap \{\sigma_h > 0\} \ne \emptyset$ treated by \cite[Proposition 6.3]{NSV03}, and the patch on the right-hand side of \eqref{eq:effdetach} is the same $\Uh(T)$ as theirs.  The reason is that their local bound is already stated over all of $T$, and not over $T \cap \{\sigma_h>0\}$; the dilation adds nothing beyond what the element-wise maximum was taking anyway.
 \end{remark}
 
 
