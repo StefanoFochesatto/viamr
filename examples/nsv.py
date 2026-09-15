@@ -99,7 +99,7 @@ if args.prob == "easy":
     #     so much of the error is ordinary P1 interpolation error away from the
     #     contact set.  That is what makes this problem, rather than the pyramid,
     #     the one which pins down the constant in front of the NSV05 residual
-    #     term; see the nsv05mark() doc string.
+    #     term; see the _nsv05mark() doc string.
     d = args.dim
 
     # initial mesh
@@ -162,7 +162,7 @@ else:
     # Figure 3.4 of NSV05 reports DOFs = 5, 381, 3073 at adaptive steps 0, 5, 10,
     # while we get 5, 425, 15642.  Do not read much into the gap: they refine by
     # bisection via ALBERT and mark with the maximum strategy, while we use SBR
-    # and Doerfler marking at marktheta, and nsv05mark() keeps the |log h_min|^2
+    # and Doerfler marking at marktheta, and _nsv05mark() keeps the |log h_min|^2
     # factor which section 3 of NSV05 folds into its constant, which marks more.
     d = 2
 
@@ -211,7 +211,7 @@ def errornorm_Linf(amr, u, uh):
     """Approximate sup-norm (L^infty) error, via interpolation of the
     (generally non-polynomial) exact-minus-computed difference into a
     higher-degree CG space, then VIAMR.scalarrange() for a parallel-safe
-    max; same technique nsv03mark() itself uses internally for non-polynomial
+    max; same technique _nsv03mark() itself uses internally for non-polynomial
     data (e.g. its bdryerr term).  This is the norm NSV03's "pointwise a
     posteriori error control" theory targets, in contrast to BR78/BV00's
     energy (H^1 seminorm) norm."""
@@ -290,18 +290,20 @@ for method in methods:
             errtarget = errsH1ia[-1] if exact_known else 0.0
             estname = "eta_BR (inactive-set, energy norm)"
         elif method == "NSV03":
-            (mark, etainf, etad, sigmah, Eh) = amr.nsv03mark(
-                uh, (lb, None), g, f_ufl, g_ufl, theta=marktheta, dualtol=dualtol,
+            (mark, nsvfields, Eh) = amr.nsvmark(
+                uh, (lb, None), g, f_ufl, g_ufl, estimator="nsv03", theta=marktheta, dualtol=dualtol,
                 method=markmethod
             )
+            etainf, etad, sigmah = nsvfields["etainf"], nsvfields["etad"], nsvfields["sigmah"]
             # NSV03 targets ||u-u_h||_infty
             errtarget = errsinf[-1] if exact_known else 0.0
             estname = "Etilde_h (NSV03, sup norm)"
         elif method == "NSV05":
-            (mark, eta, sz, fullcontact, Eh) = amr.nsv05mark(
-                uh, (lb, None), g, f_ufl, g_ufl, theta=marktheta, dualtol=dualtol,
+            (mark, nsvfields, Eh) = amr.nsvmark(
+                uh, (lb, None), g, f_ufl, g_ufl, estimator="nsv05", theta=marktheta, dualtol=dualtol,
                 method=markmethod
             )
+            eta, sz, fullcontact = nsvfields["eta"], nsvfields["sz"], nsvfields["fullcontact"]
             # NSV05 targets ||u-u_h||_infty
             errtarget = errsinf[-1] if exact_known else 0.0
             estname = "E_h (NSV05, sup norm)"
@@ -427,8 +429,8 @@ if not exact_known and mesh.comm.rank == 0:
     # Without an exact solution only the estimators themselves can be plotted,
     # and they are three *different* quantities: an l^2 accumulation of the BR78
     # indicator for UDOBR, Etilde_h of (7.1) in NSV03, and E_h of Theorem 2.7 in
-    # NSV05.  Their absolute values are not comparable; in particular nsv05mark()
-    # keeps the |log h_min|^2 factor, which nsv03mark() has no analogue of, and
+    # NSV05.  Their absolute values are not comparable; in particular _nsv05mark()
+    # keeps the |log h_min|^2 factor, which _nsv03mark() has no analogue of, and
     # that inflates E_h by an order of magnitude.  Each curve is therefore
     # normalized by its own level-0 value, so what the figure compares is decay
     # rates.  Even so the curves target different norms, and so different optimal

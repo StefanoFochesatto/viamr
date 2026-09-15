@@ -121,7 +121,7 @@ sp = {
 
 def errornorm_Linf(amr, u, uh):
     """Approximate sup-norm error, the norm NSV03's theory targets; same
-    technique nsv03mark() uses internally for non-polynomial data."""
+    technique _nsv03mark() uses internally for non-polynomial data."""
     W = FunctionSpace(uh.function_space().mesh(), "CG", 4)
     return amr.scalarrange(Function(W).interpolate(abs(u - uh)))[1]
 
@@ -188,10 +188,11 @@ for method in methods:
             errtarget = errsH1ia[-1]
             estname = "eta_BR (inactive-set, energy norm)"
         elif method == "NSV03":
-            (mark, etainf, etad, sigmah, Eh) = amr.nsv03mark(
-                uh, (lb, ub), g, f_ufl, g_ufl, theta=args.theta,
+            (mark, nsvfields, Eh) = amr.nsvmark(
+                uh, (lb, ub), g, f_ufl, g_ufl, estimator="nsv03", theta=args.theta,
                 dualtol=dualtol, method=markmethod,
             )
+            etainf, etad, sigmah = nsvfields["etainf"], nsvfields["etad"], nsvfields["sigmah"]
             smin, smax = amr.scalarrange(sigmah)
             print(f"    sigma_h range = [{smin:.2f}, {smax:.2f}] (exact: [-48, 48])")
             errtarget = errsinf[-1]

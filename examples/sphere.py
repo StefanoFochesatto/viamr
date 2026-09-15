@@ -43,7 +43,7 @@
 # The degenerating coefficient is regularized by eps-continuation.  There is
 # no closed-form exact solution for this operator, so norm/effectivity figures
 # are skipped.  Also, both NSV methods assume the Laplacian internally (see
-# nsv03mark() and nsv05mark()) and so are not meaningful here; only UDOBV, UNI,
+# _nsv03mark() and _nsv05mark()) and so are not meaningful here; only UDOBV, UNI,
 # and AVM are compared.
 #
 # Suggested runs to get familiar with major cases:
@@ -369,7 +369,7 @@ def errornorm_Linf(amr, u, uh, pdegree=4):
     """Approximate sup-norm (L^infty) error, via interpolation of the
     (generally non-polynomial) exact-minus-computed difference into a
     higher-degree CG^p space, then VIAMR.scalarrange() for a parallel-safe
-    max; same technique nsv03mark() itself uses internally for non-polynomial
+    max; same technique _nsv03mark() itself uses internally for non-polynomial
     data (e.g. its bdryerr term).  This is the norm NSV03's "pointwise a
     posteriori error control" theory targets, in contrast to BR78/BV00's
     energy (H^1 seminorm) norm."""
@@ -678,16 +678,16 @@ for amrtype in refinetypes:
                 # Eh is the estimator Etilde_h of NSV03 (7.1), the whole-domain
                 # (not inactive-set-restricted) bound which the pointwise theory
                 # gives for ||u-u_h||_infty
-                (mark, _, _, _, Eh) = amr.nsv03mark(
-                    uh, (lb, None), g, Constant(args.fconst), g_ufl, bounds_ufl=(psi_expr, None)
+                (mark, _, Eh) = amr.nsvmark(
+                    uh, (lb, None), g, Constant(args.fconst), g_ufl, estimator="nsv03", bounds_ufl=(psi_expr, None)
                 )
             else:
                 # Eh is the estimator E_h of NSV05 Theorem 2.7, which bounds the
                 # same norm.  Unlike NSV03 its residual switches off on the
                 # discrete full-contact set, so it should leave the interior of
                 # the active set coarse; compare the meshes in the .pvd files.
-                (mark, _, _, _, Eh) = amr.nsv05mark(
-                    uh, (lb, None), g, Constant(args.fconst), g_ufl, bounds_ufl=(psi_expr, None)
+                (mark, _, Eh) = amr.nsvmark(
+                    uh, (lb, None), g, Constant(args.fconst), g_ufl, estimator="nsv05", bounds_ufl=(psi_expr, None)
                 )
             t_mark1 = time.time()
             if exact_known:
@@ -767,16 +767,18 @@ for amrtype in refinetypes:
         fields += [mark, imark]
     elif amrtype == "nsv03":
         g = Function(V).interpolate(g_ufl)
-        (mark, etainf, etad, sigmah, _) = amr.nsv03mark(
-            uh, (lb, None), g, Constant(args.fconst), g_ufl, bounds_ufl=(psi_expr, None)
+        (mark, nsvfields, _) = amr.nsvmark(
+            uh, (lb, None), g, Constant(args.fconst), g_ufl, estimator="nsv03", bounds_ufl=(psi_expr, None)
         )
+        etainf, etad, sigmah = nsvfields["etainf"], nsvfields["etad"], nsvfields["sigmah"]
         mark.rename("mark")
         fields += [mark, sigmah, etainf, etad]
     elif amrtype == "nsv05":
         g = Function(V).interpolate(g_ufl)
-        (mark, eta, sz, fullcontact, _) = amr.nsv05mark(
-            uh, (lb, None), g, Constant(args.fconst), g_ufl, bounds_ufl=(psi_expr, None)
+        (mark, nsvfields, _) = amr.nsvmark(
+            uh, (lb, None), g, Constant(args.fconst), g_ufl, estimator="nsv05", bounds_ufl=(psi_expr, None)
         )
+        eta, sz, fullcontact = nsvfields["eta"], nsvfields["sz"], nsvfields["fullcontact"]
         mark.rename("mark")
         # fullcontact is Omega_h^0, the set on which the residual is switched
         # off; it is the field to look at to see the full localization

@@ -135,7 +135,7 @@ def test_nsv03mark_kink_decay_par():
     # Confirms tests/test_refine.py::_nsv03mark_kink_decay() gives the same result
     # regardless of process count.  This exercises VIAMR._facetjump(), and the
     # gather of a facet ("HDiv Trace") field to cells by _elemextreme(), which
-    # nsv03mark() uses for the jump in R_infty.
+    # _nsv03mark() uses for the jump in R_infty.
     _nsv03mark_kink_decay(VIAMR(debug=True))
 
 
@@ -155,7 +155,7 @@ def test_nsv03mark_bilateral_par():
 def test_nsv05mark_pyramid_par():
     # Confirms tests/test_refine.py::_nsv05mark_pyramid() gives the identical
     # full-contact, deep-full-contact, and marked element counts regardless of
-    # process count.  nsv05mark() reduces over stars in two different ways which
+    # process count.  _nsv05mark() reduces over stars in two different ways which
     # both cross process boundaries -- VIAMR._elemtonodeextreme() gathers cells
     # to nodes and VIAMR._tracetonodeextreme() gathers facets to nodes -- and
     # the discrete full-contact set Omega_h^0 is built by composing them, so a
@@ -170,7 +170,7 @@ def test_nsv05mark_effectivity_par():
     # result regardless of process count.  Unlike the counts above, Eh is
     # assembled from three global sup norms over DG0 fields, so this also
     # exercises the reductions in VIAMR._globalextreme() and the raw
-    # dat.data[:] copies nsv05mark() makes off assembled cofunctions.
+    # dat.data[:] copies _nsv05mark() makes off assembled cofunctions.
     _nsv05mark_effectivity(VIAMR(debug=True))
 
 
@@ -179,8 +179,8 @@ def test_nsvmark_curvedobstacle_par():
     # Confirms tests/test_refine.py::_nsvmark_curvedobstacle() gives the same
     # result regardless of process count.  This is the lb_ufl path, so it
     # exercises VIAMR._obstacleterms() -- a CG_fdegree interpolation of a UFL
-    # obstacle followed by the _elemmaxabs() par_loop -- in both nsv03mark() and
-    # nsv05mark().
+    # obstacle followed by the _elemmaxabs() par_loop -- in both _nsv03mark() and
+    # _nsv05mark().
     _nsvmark_curvedobstacle(VIAMR(debug=True))
 
 

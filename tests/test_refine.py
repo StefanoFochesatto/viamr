@@ -225,7 +225,8 @@ def test_nsv03mark_allinactive():
     solver.solve(bounds=(lb, ub))
     assert amr.checkadmissible(u, (lb, None))
 
-    mark, etainf, etad, sigmah, total_err = amr.nsv03mark(u, (lb, None), g, f, g)
+    mark, fields, total_err = amr.nsvmark(u, (lb, None), g, f, g, estimator="nsv03")
+    etad = fields["etad"]
     assert mark.function_space().ufl_element() == DG0.ufl_element()
     assert etad.function_space().ufl_element() == DG0.ufl_element()
     assert 0 <= amr.countmark(mark) <= DG0.dim()
@@ -243,7 +244,7 @@ def _nsv03mark_nontrivial_soln(amr, m=16):
     """Solve NSV03's own "Example 7.2" (their sec. 7.2): a constant obstacle
     chi=0 on (-1,1)^2 with radius r=0.7, whose exact solution is
     u(x) = (max(|x|^2-r^2,0))^2.  Unlike test_nsv03mark_allinactive() above, this
-    gives nsv03mark() a genuine interior contact set, free boundary, and inactive
+    gives _nsv03mark() a genuine interior contact set, free boundary, and inactive
     boundary to work with.  Shared by _nsv03mark_nontrivial() here,
     tests/test_parallel.py::test_nsv03mark_nontrivial_parallel(), and (at two
     values of m) _nsv05mark_effectivity_case() below, which needs the exact
@@ -295,9 +296,10 @@ def _nsv03mark_nontrivial(amr):
     CG1, DG0 = amr.spaces(mesh)
     assert amr.checkadmissible(uh, (lb, None))
 
-    mark, etainf, etad, sigmah, total_err = amr.nsv03mark(
-        uh, (lb, None), g, f_ufl, g_ufl, dualtol=1.0e-8
+    mark, fields, total_err = amr.nsvmark(
+        uh, (lb, None), g, f_ufl, g_ufl, estimator="nsv03", dualtol=1.0e-8
     )
+    etad, sigmah = fields["etad"], fields["sigmah"]
     assert mark.function_space().ufl_element() == DG0.ufl_element()
     assert sigmah.function_space().ufl_element() == CG1.ufl_element()
     assert etad.function_space().ufl_element() == DG0.ufl_element()
@@ -318,8 +320,8 @@ def _nsv03mark_nontrivial(amr):
 
     # forcing the second (eta_d) pass to always run (etadratio=0.0) must mark
     # at least as many elements as the gated default does
-    mark2, _, _, _, _ = amr.nsv03mark(
-        uh, (lb, None), g, f_ufl, g_ufl, dualtol=1.0e-8, etadratio=0.0
+    mark2, _, _ = amr.nsvmark(
+        uh, (lb, None), g, f_ufl, g_ufl, estimator="nsv03", dualtol=1.0e-8, etadratio=0.0
     )
     assert amr.countmark(mark2) >= amr.countmark(mark)
 
@@ -341,7 +343,7 @@ def _pyramid_soln(amr, m):
     Shared by _nsv03mark_kink_soln() below, which uses the non-decaying ridge jump
     as a scaling regression, and by _nsv05mark_pyramid() below, for which this is
     NSV05's own full-localization example: the ridges lie *inside* the full-contact
-    set Omega_h^0, so nsv05mark() must switch its residual off along them."""
+    set Omega_h^0, so _nsv05mark() must switch its residual off along them."""
     mesh = RectangleMesh(
         m,
         m,
@@ -386,15 +388,16 @@ def _pyramid_solve(amr, mesh):
 
 
 def _nsv03mark_kink_soln(amr, m):
-    """Run nsv03mark() on the pyramid of _pyramid_soln().  Returns
+    """Run _nsv03mark() on the pyramid of _pyramid_soln().  Returns
     (max_T etainf, Eh)."""
     _, uh, lb, f_ufl, g, g_ufl = _pyramid_soln(amr, m)
-    _, etainf, _, _, Eh = amr.nsv03mark(uh, (lb, None), g, f_ufl, g_ufl)
+    _, fields, Eh = amr.nsvmark(uh, (lb, None), g, f_ufl, g_ufl, estimator="nsv03")
+    etainf = fields["etainf"]
     return amr.scalarrange(etainf)[1], Eh
 
 
 def _nsv03mark_kink_decay(amr):
-    """Regression for the scaling of the jump term in nsv03mark()'s R_infty.
+    """Regression for the scaling of the jump term in _nsv03mark()'s R_infty.
 
     NSV03 (3.7) with p=infty gives R_infty|_T = h_T^{-1} ||[[d_n u_h]]||_{0,inf;dT}
     plus the interior residual, so the estimator term C_0 h_T^2 R_infty is O(h_T)
@@ -426,7 +429,7 @@ def _nsv03mark_active_boundary_soln(amr):
     u(x,y) = max(0.25 r - 0.5 - 0.5 ln(0.5 r), 0), r = (x+1)^2+y^2.  Unlike
     _nsv03mark_nontrivial_soln() above, whose Dirichlet data keeps the whole
     boundary inactive, part of this rectangle's boundary genuinely touches
-    the obstacle (r >= 2 there), exercising nsv03mark()'s NSV03-page-169
+    the obstacle (r >= 2 there), exercising _nsv03mark()'s NSV03-page-169
     boundary formula for sigma_h rather than the all-zero fallback."""
     mesh = RectangleMesh(
         6, 12, 0.5, 1.0, distribution_parameters=VIAMR.PARALLEL_OVERLAP
@@ -462,12 +465,12 @@ def test_nsv03mark_active_boundary():
     CG1, DG0 = amr.spaces(mesh)
     assert amr.checkadmissible(uh, (lb, None))
 
-    # boundary indicator, parallel-safe (same DirichletBC-apply idiom nsv03mark() uses)
+    # boundary indicator, parallel-safe (same DirichletBC-apply idiom _nsv03mark() uses)
     isbdry = Function(CG1).assign(0.0)
     DirichletBC(CG1, Constant(1.0), "on_boundary").apply(isbdry)
 
     # confirm this problem genuinely has both active and inactive boundary
-    # nodes, i.e. it actually exercises the case nsv03mark() previously ignored
+    # nodes, i.e. it actually exercises the case _nsv03mark() previously ignored
     gap = Function(CG1).interpolate(uh - lb)
     gap_boundary_only = Function(CG1).interpolate(
         conditional(isbdry > 0.5, gap, 1.0e10)
@@ -476,13 +479,14 @@ def test_nsv03mark_active_boundary():
     assert amr.scalarrange(Function(CG1).interpolate(gap * isbdry))[1] > amr.activetol
     # ... and some node inactive
 
-    mark, etainf, etad, sigmah, total_err = amr.nsv03mark(uh, (lb, None), g, f_ufl, g_ufl)
+    mark, fields, total_err = amr.nsvmark(uh, (lb, None), g, f_ufl, g_ufl, estimator="nsv03")
+    sigmah = fields["sigmah"]
     assert sigmah.function_space().ufl_element() == CG1.ufl_element()
 
     # the point of the fix: sigma_h must respect the sign convention (also
-    # asserted internally by nsv03mark()) and now be genuinely nonzero at some
+    # asserted internally by _nsv03mark()) and now be genuinely nonzero at some
     # boundary dof; before the fix, boundary values of sigma_h were
-    # unconditionally zeroed by nsv03mark(), regardless of activity there
+    # unconditionally zeroed by _nsv03mark(), regardless of activity there
     sigmah_boundary = Function(CG1).interpolate(sigmah * isbdry)
     assert amr.scalarrange(sigmah_boundary)[0] >= -1.0e-10
     assert amr.scalarrange(sigmah_boundary)[1] > amr.activetol
@@ -493,7 +497,7 @@ def _deepfullcontact(amr, fullcontact):
     full-contact set Omega_h^0, i.e. those all of whose vertices carry a star
     contained in Omega_h^0.
 
-    This, and not fullcontact itself, is where nsv05mark()'s eta must vanish
+    This, and not fullcontact itself, is where _nsv05mark()'s eta must vanish
     identically.  Its element value eta_T takes a max of the star indicator
     eta_z over the vertices of T, so a full-contact element which happens to
     have a vertex whose star pokes outside Omega_h^0 can legitimately inherit a
@@ -508,8 +512,8 @@ def _nsv05mark_pyramid(amr):
     NSV05's own section 3.2 example; see _pyramid_soln().  Also checks the
     invariants which hold for any input.
 
-    The obstacle's ridges lie inside the contact set, so nsv05mark() must switch
-    its residual off along them, while nsv03mark() -- whose residual has sigma_h
+    The obstacle's ridges lie inside the contact set, so _nsv05mark() must switch
+    its residual off along them, while _nsv03mark() -- whose residual has sigma_h
     subtracted from f but is not restricted to Omega_h^+ -- does not.  This is
     the mechanism behind the coarse contact-set meshes of NSV05 Figure 3.4.
 
@@ -519,7 +523,8 @@ def _nsv05mark_pyramid(amr):
     mesh, uh, lb, f_ufl, g, g_ufl = _pyramid_soln(amr, 16)
     CG1, DG0 = amr.spaces(mesh)
 
-    mark, eta, sz, fullcontact, Eh = amr.nsv05mark(uh, (lb, None), g, f_ufl, g_ufl)
+    mark, fields, Eh = amr.nsvmark(uh, (lb, None), g, f_ufl, g_ufl, estimator="nsv05")
+    eta, sz, fullcontact = fields["eta"], fields["sz"], fields["fullcontact"]
 
     # return contract
     assert mark.function_space().ufl_element() == DG0.ufl_element()
@@ -531,7 +536,7 @@ def _nsv05mark_pyramid(amr):
     assert 0 < amr.countmark(mark) < DG0.dim()  # marks something, not everything
     assert Eh > 0.0
     assert amr.scalarrange(eta)[0] >= 0.0  # eta is a sum of norms
-    assert Eh >= amr.scalarrange(eta)[1]  # separate global sups; see nsv05mark()
+    assert Eh >= amr.scalarrange(eta)[1]  # separate global sups; see _nsv05mark()
 
     # Omega_h^0 must be nonempty, or the localization assertions below are
     # vacuous.  Every full-contact element is in contact, but not conversely:
@@ -551,12 +556,13 @@ def _nsv05mark_pyramid(amr):
     assert amr.scalarrange(Function(DG0).interpolate(eta * deep))[1] == 0.0
     assert amr.countmark(Function(DG0).interpolate(mark * deep)) == 0
 
-    # ... in contrast to nsv03mark() on the same solution, whose residual stays
+    # ... in contrast to _nsv03mark() on the same solution, whose residual stays
     # alive on the ridges.  Only the localization is compared, not the sizes of
-    # the two estimators: nsv05mark() carries the prefactor C0 |log(h_min/diam
-    # Omega)|^2 on its residual and nsv03mark() has no such factor, so E_h and
+    # the two estimators: _nsv05mark() carries the prefactor C0 |log(h_min/diam
+    # Omega)|^2 on its residual and _nsv03mark() has no such factor, so E_h and
     # Etilde_h are not on a common scale.
-    _, etainf, _, _, _ = amr.nsv03mark(uh, (lb, None), g, f_ufl, g_ufl)
+    _, fields, _ = amr.nsvmark(uh, (lb, None), g, f_ufl, g_ufl, estimator="nsv03")
+    etainf = fields["etainf"]
     assert amr.scalarrange(Function(DG0).interpolate(etainf * deep))[1] > 0.0
 
     return nfull, ndeep, amr.countmark(mark)
@@ -573,11 +579,11 @@ def test_nsv05mark_pyramid():
 
 
 def _nsv05mark_effectivity_case(amr, m):
-    """Run nsv05mark() on NSV03 Example 7.2 at mesh parameter m; see
+    """Run _nsv05mark() on NSV03 Example 7.2 at mesh parameter m; see
     _nsv03mark_nontrivial_soln().  Returns (Eh, ||u - u_h||_{0,inf;Omega}),
     using the known exact solution u = (max(|x|^2-r^2,0))^2."""
     mesh, uh, lb, f_ufl, g, g_ufl = _nsv03mark_nontrivial_soln(amr, m=m)
-    _, _, _, _, Eh = amr.nsv05mark(uh, (lb, None), g, f_ufl, g_ufl, dualtol=1.0e-8)
+    _, _, Eh = amr.nsvmark(uh, (lb, None), g, f_ufl, g_ufl, estimator="nsv05", dualtol=1.0e-8)
     x, y = SpatialCoordinate(mesh)
     u_ufl = max_value(x ** 2 + y ** 2 - 0.7 ** 2, 0.0) ** 2
     # CG4, not DG4: Firedrake's DG node set on simplices omits the vertices, so
@@ -589,10 +595,10 @@ def _nsv05mark_effectivity_case(amr, m):
 
 
 def _nsv05mark_effectivity(amr):
-    """Regression for the h-scaling of nsv05mark()'s estimator Eh.
+    """Regression for the h-scaling of _nsv05mark()'s estimator Eh.
 
     Theorem 2.7 of NSV05 bounds ||u - u_h||_{0,inf;Omega} by E_h, but only with
-    the constant C_*|log h_min|^2, which nsv05mark() replaces by C0 = 0.02
+    the constant C_*|log h_min|^2, which _nsv05mark() replaces by C0 = 0.02
     following NSV05 section 3.  So reliability is not available as an assertion
     here.  What is available, and what catches a wrong power of h_z in any one
     term of eta_z, is that Eh and the true error must decay together: their
@@ -620,7 +626,7 @@ def test_nsv05mark_effectivity():
 
 
 def test_nsv05mark_asserts():
-    """nsv05mark()'s two admissibility guards must actually fire.  They are the
+    """_nsv05mark()'s two admissibility guards must actually fire.  They are the
     method's only defense against being handed something which is not a solution
     of the VI, and the primal one in particular is what licenses dropping
     ||(chi - u_h)^+||_{inf;Omega} from E_h."""
@@ -631,14 +637,14 @@ def test_nsv05mark_asserts():
     # primal: uh must lie above the discrete obstacle
     below = Function(CG1).interpolate(uh - Constant(1.0))
     with pytest.raises(AssertionError):
-        amr.nsv05mark(below, (lb, None), g, f_ufl, g_ufl)
+        amr.nsvmark(below, (lb, None), g, f_ufl, g_ufl, estimator="nsv05")
 
     # dual: NSV05 gives s_z <= 0 at interior nodes.  Handing the method the load
     # with the wrong sign leaves uh primal admissible but flips that: s_z = 0 at
     # the strictly inactive nodes of the true solution, so with -f in place of f
     # it becomes -2 int f phi_z > 0 there, f being negative on this problem.
     with pytest.raises(AssertionError):
-        amr.nsv05mark(uh, (lb, None), g, -f_ufl, g_ufl)
+        amr.nsvmark(uh, (lb, None), g, -f_ufl, g_ufl, estimator="nsv05")
 
 
 def _pyramid_lb_ufl(mesh):
@@ -678,23 +684,25 @@ def _nsvmark_lbufl_null(amr):
         )[1]
         assert chierr < 1.0e-14  # chi is still exactly representable in CG1
 
-        mark5a, _, _, fc5a, Eh5a = amr.nsv05mark(uh, (lb, None), g, f_ufl, g_ufl)
-        mark5b, _, _, fc5b, Eh5b = amr.nsv05mark(
-            uh, (lb, None), g, f_ufl, g_ufl, bounds_ufl=(lb_ufl, None)
+        mark5a, fields, Eh5a = amr.nsvmark(uh, (lb, None), g, f_ufl, g_ufl, estimator="nsv05")
+        fc5a = fields["fullcontact"]
+        mark5b, fields, Eh5b = amr.nsvmark(
+            uh, (lb, None), g, f_ufl, g_ufl, estimator="nsv05", bounds_ufl=(lb_ufl, None)
         )
+        fc5b = fields["fullcontact"]
         assert amr.countmark(mark5a) == amr.countmark(mark5b)
         assert amr.countmark(fc5a) == amr.countmark(fc5b)
         assert abs(Eh5b - Eh5a) <= 1.0e-12 * Eh5a
 
-        mark3a, _, _, _, Eh3a = amr.nsv03mark(uh, (lb, None), g, f_ufl, g_ufl)
-        mark3b, _, _, _, Eh3b = amr.nsv03mark(
-            uh, (lb, None), g, f_ufl, g_ufl, bounds_ufl=(lb_ufl, None)
+        mark3a, _, Eh3a = amr.nsvmark(uh, (lb, None), g, f_ufl, g_ufl, estimator="nsv03")
+        mark3b, _, Eh3b = amr.nsvmark(
+            uh, (lb, None), g, f_ufl, g_ufl, estimator="nsv03", bounds_ufl=(lb_ufl, None)
         )
         assert amr.countmark(mark3a) == amr.countmark(mark3b)
         assert abs(Eh3b - Eh3a) <= 1.0e-12 * Eh3a
 
         if level < 2:
-            # refine the way examples/pyramid.py does, on nsv05mark()'s own
+            # refine the way examples/pyramid.py does, on _nsv05mark()'s own
             # marking, and re-solve on the result
             mesh = amr.refinesbr2D(mesh, mark5a)
             uh, lb, f_ufl, g, g_ufl = _pyramid_solve(amr, mesh)
@@ -781,11 +789,33 @@ def _nsvmark_curvedobstacle(amr):
     assert err > 0.0
     assert abs(drop - err) <= 1.0e-6 * err
 
-    for marker in (amr.nsv03mark, amr.nsv05mark):
-        _, _, _, _, Eh_without = marker(uh, (lb, None), g, f_ufl, g_ufl)
-        _, _, _, _, Eh_with = marker(uh, (lb, None), g, f_ufl, g_ufl, bounds_ufl=(lb_ufl, None))
+    for estimator in ("nsv03", "nsv05"):
+        _, _, Eh_without = amr.nsvmark(uh, (lb, None), g, f_ufl, g_ufl, estimator=estimator)
+        _, _, Eh_with = amr.nsvmark(
+            uh, (lb, None), g, f_ufl, g_ufl, estimator=estimator, bounds_ufl=(lb_ufl, None)
+        )
         assert Eh_with > Eh_without  # the dropped term is genuinely nonzero
         assert Eh_with >= err  # ... and it alone already bounds the error
+
+
+def test_nsvmark_badargs():
+    # nsvmark() checks its estimator-specific inputs before computing anything
+    mesh = UnitSquareMesh(4, 4)
+    amr = VIAMR(debug=True)
+    CG1, _ = amr.spaces(mesh)
+    lb = Function(CG1).interpolate(Constant(0.0))
+    uh = Function(CG1).interpolate(Constant(1.0))
+    z = Constant(0.0)
+    with pytest.raises(ValueError):
+        amr.nsvmark(uh, (lb, None), z, z, z, estimator="bogus")
+    with pytest.raises(ValueError):
+        amr.nsvmark(uh, (lb, None), z, z, z, estimator="nsv03", rhotol=1.0e-8)
+    with pytest.raises(ValueError):
+        amr.nsvmark(uh, (lb, None), z, z, z, estimator="nsv03", signtol=1.0e-10)
+    with pytest.raises(ValueError):
+        amr.nsvmark(uh, (lb, None), z, z, z, estimator="nsv05", C1=0.01)
+    with pytest.raises(ValueError):
+        amr.nsvmark(uh, (lb, None), z, z, z, estimator="nsv05", etadratio=1.0)
 
 
 def test_nsvmark_curvedobstacle():
@@ -1031,7 +1061,8 @@ def _nsv03mark_bilateral(amr):
     assert nact + ninact == DG0.dim()
     assert nact == nlo + nup
 
-    mark, etainf, etad, sigmah, Eh = amr.nsv03mark(uh, (lb, ub), g, f_ufl, g)
+    mark, fields, Eh = amr.nsvmark(uh, (lb, ub), g, f_ufl, g, estimator="nsv03")
+    etad, sigmah = fields["etad"], fields["sigmah"]
     assert mark.function_space().ufl_element() == DG0.ufl_element()
     assert sigmah.function_space().ufl_element() == CG1.ufl_element()
     assert 0 < amr.countmark(mark) < DG0.dim()  # marks something, not everything
@@ -1055,7 +1086,7 @@ def _nsv03mark_bilateral(amr):
     # returning a wrong estimator: sigma_h is genuinely negative on the
     # upper-contact disc, which trips the global-sign assertion
     with pytest.raises(AssertionError):
-        amr.nsv03mark(uh, (lb, None), g, f_ufl, g)
+        amr.nsvmark(uh, (lb, None), g, f_ufl, g, estimator="nsv03")
 
 
 def test_nsv03mark_bilateral():
@@ -1063,21 +1094,22 @@ def test_nsv03mark_bilateral():
 
 
 def test_nsv03mark_upper_only():
-    """Exercise the bounds=(None, ub) path of nsv03mark(), i.e. an obstacle
+    """Exercise the bounds=(None, ub) path of _nsv03mark(), i.e. an obstacle
     problem with an upper obstacle and no lower one.  The construction is the
-    reflection noted in nsv03mark()'s docstring: if u solves the problem with
+    reflection noted in _nsv03mark()'s docstring: if u solves the problem with
     data (f, lb, ub) then -u solves it with (-f, -ub, -lb).  Applied to the
     lower-only NSV03 Example 7.2 of _nsv03mark_nontrivial_soln(), this gives an
     upper-only problem whose estimator must agree term by term, with sigma_h
-    negated.  The paths covered are the four places nsv03mark() splits by side:
+    negated.  The paths covered are the four places _nsv03mark() splits by side:
     the primal admissibility check, the boundary rule for sigma_h, the one-sided
     sign assertion on sigma_h, and the assembly of Lambda_h."""
     amr = VIAMR(debug=True)
     mesh, uh, lb, f_ufl, g, g_ufl = _nsv03mark_nontrivial_soln(amr)
     CG1, DG0 = amr.spaces(mesh)
-    mark, etainf, etad, sigmah, Eh = amr.nsv03mark(
-        uh, (lb, None), g, f_ufl, g_ufl, dualtol=1.0e-8
+    mark, fields, Eh = amr.nsvmark(
+        uh, (lb, None), g, f_ufl, g_ufl, estimator="nsv03", dualtol=1.0e-8
     )
+    etainf, etad, sigmah = fields["etainf"], fields["etad"], fields["sigmah"]
 
     # the reflected problem: upper obstacle ub = -lb = 0, load -f, data -g
     uhn = Function(CG1, name="uhn")
@@ -1099,9 +1131,10 @@ def test_nsv03mark_upper_only():
     assert amr.checkadmissible(uhn, (None, ub))
     assert 0 < amr.countmark(amr.elemactive(uhn, (None, ub))) < DG0.dim()
 
-    markn, etainfn, etadn, sigmahn, Ehn = amr.nsv03mark(
-        uhn, (None, ub), gn, -f_ufl, -g_ufl, dualtol=1.0e-8
+    markn, fields, Ehn = amr.nsvmark(
+        uhn, (None, ub), gn, -f_ufl, -g_ufl, estimator="nsv03", dualtol=1.0e-8
     )
+    etainfn, etadn, sigmahn = fields["etainf"], fields["etad"], fields["sigmah"]
 
     # the two discrete solutions, and the two multipliers, are exact negatives
     assert amr.scalarrange(Function(CG1).interpolate(abs(uhn + uh)))[1] < 1.0e-10
@@ -1117,7 +1150,7 @@ def test_nsv03mark_upper_only():
     # the unilateral *lower* call must refuse the reflected solution, since
     # sigma_h is negative on its contact set
     with pytest.raises(AssertionError):
-        amr.nsv03mark(uhn, (ub, None), gn, -f_ufl, -g_ufl, dualtol=1.0e-8)
+        amr.nsvmark(uhn, (ub, None), gn, -f_ufl, -g_ufl, estimator="nsv03", dualtol=1.0e-8)
 
 
 def test_upper_obstacle_elasto():
@@ -1189,6 +1222,7 @@ if __name__ == "__main__":
     test_nsv05mark_asserts()
     test_nsvmark_lbufl_null()
     test_nsvmark_curvedobstacle()
+    test_nsvmark_badargs()
     test_fixedrate_total()
     test_udomark_nontrivial()
     test_udomark_restrict()
