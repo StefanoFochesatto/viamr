@@ -892,18 +892,18 @@ if mesh.comm.rank == 0:
                 continue
             keepmasks[amrtype] = np.array(results[amrtype][7]) >= 1.0
 
-        def _amrtime_plot(index, ylabel, title, outfile):
+        def _amrtime_plot(index, ylabel, title, outfile, dofs=False):
             plt.figure()
             for amrtype in refinetypes:
                 if amrtype == "uni":
                     continue
-                rvals = np.array(results[amrtype][2])
+                rvals = np.array(results[amrtype][0 if dofs else 2])
                 rtimes = np.array(results[amrtype][index])
                 keep = keepmasks[amrtype]
                 plt.loglog(rvals[keep], rtimes[keep], stylemap[amrtype], label=amrtype.upper())
             plt.legend()
             plt.grid(True)
-            plt.xlabel("||u_exact - tilde u_h||_2")
+            plt.xlabel("DOFs" if dofs else "||u_exact - tilde u_h||_2")
             plt.ylabel(ylabel)
             plt.title(title)
             plt.savefig(outfile)
@@ -917,14 +917,16 @@ if mesh.comm.rank == 0:
         _amrtime_plot(
             8,
             "cumulative mark time (s)",
-            "cumulative marking/metric-building time vs reconstructed-uh norm",
+            "cumulative marking/metric-building time vs DOFs",
             "sphere_marktime.png",
+            dofs=True
         )
         _amrtime_plot(
             9,
             "cumulative meshbuild time (s)",
-            "cumulative mesh-build time vs reconstructed-uh norm",
+            "cumulative mesh-build time vs DOFs",
             "sphere_meshbuildtime.png",
+            dofs=True
         )
 
         # effectivity index = estimator / (true error), in whichever norm the
