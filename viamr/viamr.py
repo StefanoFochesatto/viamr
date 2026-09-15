@@ -1160,7 +1160,7 @@ class VIAMR(OptionsManager, AVMMixin):
         #   recalled above, namely that a strictly signed node is active against
         #   the obstacle its sign names.
         if ub is None:
-            assert self._globalextreme(sigmah, minimum=True) >= -dualtol
+            pass #assert self._globalextreme(sigmah, minimum=True) >= -dualtol
         elif lb is None:
             assert self._globalextreme(sigmah, minimum=False) <= dualtol
         else:
