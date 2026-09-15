@@ -53,17 +53,17 @@ class VIAMR(OptionsManager, AVMMixin):
 
       refinesbr2D():  a method which calls PETSc for skeleton-based-refinement (SBR)
 
-      eleminactive():  element markings for the computed inactive set
+      eleminactive():  element marking of the computed inactive set
 
-      elemactive(), thinelemactive():  two versions of element markings for computed active sets
+      elemactive(), thinelemactive():  two versions of element marking of computed active sets
 
-      lowerboundcelldiameter():  unmark elements with cell diameters below a minimum cell diameter
+      lowerboundcelldiameter():  unmark elements with cell diameters below a minimum
 
     There are also diagnostic methods:
 
-      jaccard(), jaccardUFL():  computation of the Jaccard similarity index for two active sets
+      jaccard(), jaccardUFL():  compute Jaccard similarity index for two active sets
 
-      hausdorff2D():  compute the Hausdorff distance between two edge sets E1, E2 in a planar mesh
+      hausdorff2D():  compute Hausdorff distance between edge sets E1, E2 in planar (2D) mesh
 
       freeboundarygraph2D():  for 2D obstacle problems, return the computed free boundary
 
@@ -72,11 +72,11 @@ class VIAMR(OptionsManager, AVMMixin):
     .. code-block:: python3
 
       amr = VIAMR()
-      fbmark = amr.udomark(uh, lb)                             # free-boundary-targeted marking method
+      fbmark = amr.udomark(uh, lb)                             # free-boundary-targeted marking
       fbmark = amr.vcdmark(uh, lb)                             # same, but based on diffusion
-      imark, _, _ = amr.gradrecinactivemark(uh, (lb, ub))      # classical gradient recovery in inactive set
-      imark, _, _ = amr.brinactivemark(uh, (lb, ub), res_ufl)  # classical BR78 estimator in inactive set
-      imark, _, _ = amr.brinactivemark(uh, (lb, ub), res_ufl, Z=Z)  # weighted estimator (BV00) in inactive set
+      imark, _, _ = amr.gradrecinactivemark(uh, (lb, ub))      # gradient recovery in inactive set
+      imark, _, _ = amr.brinactivemark(uh, (lb, ub), res_ufl)  # BR78 estimator in inactive set
+      imark, _, _ = amr.brinactivemark(uh, (lb, ub), res_ufl, alpha=alpha)  # weighted estimator (BV00) in inactive set
       mark, _, _, _, _ = amr.nsv03mark(uh, (lb, ub), g, f_ufl, g_ufl)  # method from NSV03, with new box-constraint extension
       mark, _, _, _, _ = amr.nsv05mark(uh, (lb, None), g, f_ufl, g_ufl)  # method from NSV05 [lower obstacle only]
       mark, ethresh = amr.fixedratemark(eta, theta=0.5, method="total")  # threshold a DG0 estimator eta
