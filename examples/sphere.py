@@ -564,7 +564,7 @@ for amrtype in refinetypes:
         # report, and break if target complexity met
         Nv, Ne, hmin, hmax = amr.meshsizes(mesh)
         dofs.append(Nv)
-        activeh = amr.elemactive(uh, lb)
+        activeh = amr.elemactive(uh, (lb, None))
         Na = amr.countmark(activeh)
         print(f"  active elements: {Na} ({100.0 * Na / Ne:.2f} %)")
 
@@ -599,7 +599,7 @@ for amrtype in refinetypes:
         else:
             activefracs.append(Na / Ne)
             if args.dimples:
-                iamark = amr.eleminactive(uh, lb, strong=True)
+                iamark = amr.eleminactive(uh, (lb, None), strong=True)
                 W0 = iamark.function_space()
                 # angular radius for the "inside a dimple" diagnostic region:
                 # 3 sigma captures each dimple's meaningful footprint
@@ -704,7 +704,7 @@ for amrtype in refinetypes:
                 # effectivity index vs the SAME inactive set brinactivemark()
                 # restricts its estimator to; matches the H^1 seminorm BR78's
                 # unweighted estimator targets (see errornorm_H1semi_deg)
-                iamark = amr.eleminactive(uh, lb, strong=True)
+                iamark = amr.eleminactive(uh, (lb, None), strong=True)
                 dus = inner(grad(uexactUFL(r) - uh), grad(uexactUFL(r) - uh))
                 errH1_inactive = np.sqrt(assemble(dus * iamark * dx(degree=20)))
                 eff_br = tot_eta / errH1_inactive if errH1_inactive > 0 else np.nan
@@ -742,7 +742,7 @@ for amrtype in refinetypes:
     outfile = "result_sphere_" + amrtype + ".pvd"
     print(f"done ... writing to {outfile} ...")
     gap = Function(V, name="gap = uh-lb").interpolate(uh - lb)
-    active = amr.elemactive(uh, lb)
+    active = amr.elemactive(uh, (lb, None))
     active.rename("active")
     fields = [uh, lb, gap, active]
     if exact_known:

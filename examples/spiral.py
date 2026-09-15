@@ -89,7 +89,7 @@ for amrtype in typelist:
         ub = Function(V).interpolate(Constant(PETSc.INFINITY))
         solver.solve(bounds=(lb, ub))
 
-        neweactive = amr.elemactive(uh, lb)
+        neweactive = amr.elemactive(uh, (lb, None))
         if i > 0:
             jac = amr.jaccard(neweactive, eactive, submesh=True)
             print(f"  Jaccard agreement {100*jac:.2f}% [levels {i-1}, {i}]")

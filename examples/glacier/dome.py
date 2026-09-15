@@ -129,7 +129,7 @@ for primal in primals:
 
         # report on AMR
         ne, hmin = glaciermeshreport(amr, mesh)
-        ei = amr.eleminactive(w, Constant(0.0))
+        ei = amr.eleminactive(w, (Constant(0.0), None))
         pfb = 100.0 * amr.countmark(fbmark) / ne
         pin = 100.0 * amr.countmark(imark) / amr.countmark(ei)
         print(
@@ -143,7 +143,7 @@ for primal in primals:
         # solved (residual_u_ufl vs residual_s_ufl).  While eff_u
         # and eff_s are each computed correctly for their own formulation,
         # they are NOT directly comparable to each other in absolute terms.
-        alli = amr.eleminactive(w, lb, strong=True)
+        alli = amr.eleminactive(w, (lb, None), strong=True)
         wexact = H2u(dome_s_ufl(x)) if primal == "u" else dome_s_ufl(x)
         dws = inner(grad(w - wexact), grad(w - wexact))
         errqn = assemble(Z * dws * alli * dx(degree=6)) ** 0.5

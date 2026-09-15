@@ -108,12 +108,12 @@ for i in range(levels + 1):
     solver.solve(bounds=(lb, ub))
 
     if i > 0:
-        newei = amr.eleminactive(u, lb)
+        newei = amr.eleminactive(u, (lb, None))
         jac = amr.jaccard(newei, ei, submesh=True)
         print(f"  Jaccard agreement {100*jac:.2f}% [levels {i-1}, {i}]")
         ei = newei
     else:
-        ei = amr.eleminactive(u, lb)
+        ei = amr.eleminactive(u, (lb, None))
     ifrac = assemble(ei * dx)
     print(f"  inactive fraction {ifrac:.6f}")
 

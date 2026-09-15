@@ -157,8 +157,8 @@ for method in methods:
 
         _, nelements, _, _ = amr.meshsizes(mesh)
         dofs.append(V.dim())
-        nlo = amr.countmark(amr.elemactive(uh, lb, boxside="lower"))
-        nup = amr.countmark(amr.elemactive(uh, ub, boxside="upper"))
+        nlo = amr.countmark(amr.elemactive(uh, (lb, None)))
+        nup = amr.countmark(amr.elemactive(uh, (None, ub)))
         print(f"  level {j}: nodes = {dofs[-1]}, elements = {nelements}, "
               f"lower-active = {nlo}, upper-active = {nup}")
 
@@ -166,10 +166,7 @@ for method in methods:
         errsinf.append(errornorm_Linf(amr, u_ufl, uh))
         # H^1 seminorm on the set inactive for *both* obstacles, which is what
         # brinactivemark() restricts its estimator to
-        iamark = Function(amr.spaces(mesh)[1]).interpolate(
-            amr.eleminactive(uh, lb, boxside="lower", strong=True)
-            * amr.eleminactive(uh, ub, boxside="upper", strong=True)
-        )
+        iamark = amr.eleminactive(uh, (lb, ub), strong=True)
         dus = inner(grad(u_ufl - uh), grad(u_ufl - uh))
         errsH1ia.append(assemble(dus * iamark * dx(degree=6)) ** 0.5)
         print(f"    |u-u_h|_2 = {errsl2[-1]:.3e}, |u-u_h|_inf = {errsinf[-1]:.3e}")
@@ -217,9 +214,9 @@ for method in methods:
     uerr = Function(V, name="u_err = u_h - u_exact").interpolate(uh - u_ufl)
     gap_lo = Function(V, name="u_h - lb (lower gap)").interpolate(uh - lb)
     gap_up = Function(V, name="ub - u_h (upper gap)").interpolate(ub - uh)
-    active_lo = amr.elemactive(uh, lb, boxside="lower")
+    active_lo = amr.elemactive(uh, (lb, None))
     active_lo.rename("lower active")
-    active_up = amr.elemactive(uh, ub, boxside="upper")
+    active_up = amr.elemactive(uh, (None, ub))
     active_up.rename("upper active")
     outfile = f"result_bilateral_{method}.pvd"
     print(f"generating output file {outfile} ...")

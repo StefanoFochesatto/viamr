@@ -270,7 +270,7 @@ for method in methods:
         if exact_known:
             errsl2.append(float(errornorm(u_ufl, uh)))  # default norm is L^2
             errsinf.append(float(errornorm_Linf(amr, u_ufl, uh)))
-            iamark = amr.eleminactive(uh, lb, strong=True)
+            iamark = amr.eleminactive(uh, (lb, None), strong=True)
             dus = inner(grad(u_ufl - uh), grad(u_ufl - uh))
             errsH1ia.append(assemble(dus * iamark * dx(degree=6)) ** 0.5)
             print(f"    |u-u_h|_2 = {errsl2[-1]:.3e}, |u-u_h|_inf = {errsinf[-1]:.3e}")
@@ -389,9 +389,9 @@ for method in methods:
 
     # compute fields on final mesh (independent of method)
     gap = Function(V, name="gap = u_h - chi_h").interpolate(uh - lb)
-    active = amr.elemactive(uh, lb)
+    active = amr.elemactive(uh, (lb, None))
     active.rename("active")
-    tactive = amr.thinelemactive(uh, lb)
+    tactive = amr.thinelemactive(uh, (lb, None))
     tactive.rename("thin active")
     if mesh.comm.size > 1:
         rank = Function(FunctionSpace(mesh, "DG", 0))

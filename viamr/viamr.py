@@ -55,6 +55,8 @@ class VIAMR(OptionsManager, AVMMixin):
 
       eleminactive():  element marking of the computed inactive set
 
+      nodalactive():  nodal marking of the computed active set
+
       elemactive(), thinelemactive():  two versions of element marking of computed active sets
 
       lowerboundcelldiameter():  unmark elements with cell diameters below a minimum
@@ -87,7 +89,7 @@ class VIAMR(OptionsManager, AVMMixin):
 
     Note that unionmarks() can be used to refine along free boundaries computed by udomark() and/or vcdmark(), from both lower and upper bounds.
 
-    TODO: every method should be considered for the bounds=(lb,ub) signature feature, i.e. foo(..., bounds=(lb,ub), ...), replacing the bound plus boxside="lower"/"upper" pair everywhere.  So far gradrecinactivemark(), brinactivemark(), nsv03mark(), and nsv05mark() have it, while udomark(), vcdmark(), and the set-indicator methods do not.  A caller then never builds an artificial infinite obstacle, which is what a PETSc VI solve requires and which VIAMR has no reason to require.
+    TODO: every method should be considered for the bounds=(lb,ub) signature feature, i.e. foo(..., bounds=(lb,ub), ...), replacing the bound plus boxside="lower"/"upper" pair everywhere.  At this point udomark(), vcdmark(), freeboundarygraph2D(), checkadmissible(), and buildaveragedmetric() do *not* use a bounds argument.  A caller then never builds an artificial infinite obstacle, which is what a PETSc VI solve requires and which VIAMR has no reason to require.
 
     TODO: safeactiveunmark() is not yet generalized this way.
 
@@ -222,16 +224,33 @@ class VIAMR(OptionsManager, AVMMixin):
             delta = Function(V).interpolate(bound - uh if upper else uh - bound)
             return self._globalextreme(delta, minimum=True) >= 0.0
 
-    def _checkuhbound(self, uh, bound, boxside="lower"):
-        """Debug-mode validation shared by the unilateral obstacle problem
-        indicator methods: checks that uh is a Function, bound is a Function
-        or Constant, and uh is admissible with respect to bound on the given
-        boxside ("lower" or "upper").  No-op unless self.debug is True."""
+    def _checkuhbounds(self, uh, bounds):
+        """Debug-mode validation shared by the set indicator methods: checks
+        that uh is a Function, each non-None entry of bounds = (lb, ub) is a
+        Function or Constant, and uh is admissible with respect to it.
+        No-op if self.debug=False."""
         if self.debug:
             assert isinstance(uh, Function), "input uh must be of class Function"
-            isbound = isinstance(bound, Function) or isinstance(bound, Constant)
-            assert isbound, "input bound must be of class Function or Constant"
-            assert self.checkadmissible(uh, bound, boxside=boxside)
+            for bound, boxside in zip(bounds, ("lower", "upper")):
+                if bound is None:
+                    continue
+                isbound = isinstance(bound, Function) or isinstance(bound, Constant)
+                assert isbound, "input bound must be of class Function or Constant"
+                assert self.checkadmissible(uh, bound, boxside=boxside)
+
+    def _boundsgap(self, uh, bounds, absolute=False):
+        """Return UFL for the gap from uh to the nearer of the given bounds =
+        (lb, ub), namely min(uh - lb, ub - uh), where a None entry drops its
+        term.  With absolute=True the terms are |uh - lb| and |uh - ub|, which
+        agree with the signed ones for admissible uh."""
+        lb, ub = bounds
+        assert not (lb is None and ub is None), "bounds must constrain a side"
+        terms = []
+        if lb is not None:
+            terms.append(abs(uh - lb) if absolute else uh - lb)
+        if ub is not None:
+            terms.append(abs(uh - ub) if absolute else ub - uh)
+        return terms[0] if len(terms) == 1 else min_value(*terms)
 
     def _checkparalleloverlap(self, mesh):
         """Raise ValueError if mesh is distributed across multiple processes
@@ -249,46 +268,59 @@ class VIAMR(OptionsManager, AVMMixin):
                     "on mesh initialization (or overlap_type=(VERTEX, n>=1))"
                 )
 
-    def _nodalactive(self, uh, bound, boxside="lower"):
-        """Compute nodal active set indicator in same function space as uh, for a
-        unilateral obstacle problem with the given bound.  boxside="lower" treats
-        bound as a floor (uh >= bound); boxside="upper" treats it as a ceiling
-        (uh <= bound).  The nodal active set is
-          {x in N(V): |u(x) - bound(x)| < activetol}
+    def nodalactive(self, uh, bounds):
+        """Compute nodal active set indicator in same function space as uh, for an
+        obstacle problem with the given bounds = (lb, ub), meaning lb <= uh <= ub.
+        Either entry may be None, for a problem constrained on one side only, so
+        (lb, None) is a lower obstacle alone and (None, ub) an upper one alone.
+        A caller therefore never has to build an artificial infinite obstacle,
+        which is what a PETSc VI solve does require.
+
+        The nodal active set is the union of the two one-sided active sets,
+          {x in N(V): |u(x) - lb(x)| < activetol or |u(x) - ub(x)| < activetol}
         where N(V) is the nodal set for V = uh.function_space().  Active nodes get value 1.0."""
-        self._checkuhbound(uh, bound, boxside=boxside)
+        self._checkuhbounds(uh, bounds)
         z = Function(uh.function_space(), name="Nodal Active")
-        z.interpolate(conditional(abs(uh - bound) < self.activetol, 1.0, 0.0))
+        gap = self._boundsgap(uh, bounds, absolute=True)
+        z.interpolate(conditional(gap < self.activetol, 1.0, 0.0))
         return z
 
-    def elemactive(self, uh, bound, boxside="lower"):
-        """Compute an element active set indicator in DG0, for a unilateral
-        obstacle problem with the given bound (boxside="lower" or "upper";
-        see _nodalactive()).  Active elements get value 1.0.  Elements are
-        marked active if the DG0 degree of freedom for that element is
-        active, within activetol, so use with caution if z is not in CG1."""
-        self._checkuhbound(uh, bound, boxside=boxside)
+    def elemactive(self, uh, bounds):
+        """Compute an element active set indicator in DG0, for an obstacle
+        problem with the given bounds = (lb, ub); see nodalactive().  Active
+        elements get value 1.0.  Elements are marked active if the DG0 degree
+        of freedom for that element is active against either bound, within
+        activetol, so use with caution if z is not in CG1."""
+        self._checkuhbounds(uh, bounds)
         _, DG0 = self.spaces(uh.function_space().mesh())
         z = Function(DG0, name="Element Active")
-        z.interpolate(conditional(abs(uh - bound) < self.activetol, 1.0, 0.0))
+        gap = self._boundsgap(uh, bounds, absolute=True)
+        z.interpolate(conditional(gap < self.activetol, 1.0, 0.0))
         return z
 
-    def eleminactive(self, uh, bound, boxside="lower", strong=False):
-        """Compute an element inactive set indicator in DG0, for a unilateral
-        obstacle problem with the given bound (boxside="lower" or "upper";
-        see _nodalactive()).  Inactive elements get value 1.0.  By default,
-        elements are marked inactive if their DG0 degree of freedom is
-        inactive (by activetol).
+    def eleminactive(self, uh, bounds, strong=False):
+        """Compute an element inactive set indicator in DG0, for an obstacle
+        problem with the given bounds = (lb, ub); see nodalactive().  Inactive
+        elements get value 1.0.  By default, elements are marked inactive if
+        their DG0 degree of freedom is inactive (by activetol).
 
         If strong=True then an element is only marked as inactive if all
-        degrees of freedom of the gap function (uh-bound for boxside="lower",
-        bound-uh for boxside="upper") exceed activetol.  That is, a cell is
-        "strongly" inactive if all of its original dofs are inactive."""
-        self._checkuhbound(uh, bound, boxside=boxside)
+        degrees of freedom of the gap function min(uh - lb, ub - uh) exceed
+        activetol.  That is, a cell is "strongly" inactive if all of its
+        original dofs are inactive.
+
+        When both entries of bounds are given the inactive set is the
+        *intersection* of the two one-sided inactive sets, i.e. the elements
+        touching neither obstacle.  This is the set to which marking methods
+        such as brinactivemark() restrict an estimator.  One side alone will
+        not do: the set inactive with respect to lb still contains the whole of
+        ub's contact set, where uh is pinned to the other obstacle and the
+        residual is large by construction, so an estimator restricted there
+        would mark inside a contact set rather than outside both."""
+        self._checkuhbounds(uh, bounds)
         if strong:
             # note gap > 0 is equivalent to strictly inactive ... but we use activetol
-            gap_ufl = (bound - uh) if boxside == "upper" else (uh - bound)
-            v = Function(uh.function_space()).interpolate(gap_ufl)
+            v = Function(uh.function_space()).interpolate(self._boundsgap(uh, bounds))
             # z is in DG0 and contains min of v over each cell's dofs
             z = self._elemextreme(v, minimum=True, defaultval=PETSc.INFINITY)
             z.interpolate(conditional(z > self.activetol, 1.0, 0.0))
@@ -296,13 +328,13 @@ class VIAMR(OptionsManager, AVMMixin):
         else:
             _, DG0 = self.spaces(uh.function_space().mesh())
             z = Function(DG0, name="Element Inactive")
-            z.interpolate(conditional(abs(uh - bound) < self.activetol, 0.0, 1.0))
+            gap = self._boundsgap(uh, bounds, absolute=True)
+            z.interpolate(conditional(gap < self.activetol, 0.0, 1.0))
         return z
 
-    def thinelemactive(self, uh, bound, boxside="lower"):
-        """Compute element active set indicator into DG0, but "thinned", for a
-        unilateral obstacle problem with the given bound (boxside="lower" or
-        "upper"; see _nodalactive()).
+    def thinelemactive(self, uh, bounds):
+        """Compute element active set indicator into DG0, but "thinned", for an
+        obstacle problem with the given bounds = (lb, ub); see nodalactive().
 
         In contrast to elemactive(), here a cell is marked as active only if it *and its neighboring cells* are active.  The test for active is based on testing at the DG0 degree of freedom, and according to activetol.  Returns a DG0 element-wise indicator, with thinned-active elements having value 1.
 
@@ -314,7 +346,7 @@ class VIAMR(OptionsManager, AVMMixin):
         """
         mesh = uh.function_space().mesh()
         CG1, DG0 = self.spaces(mesh)
-        inactive = self.eleminactive(uh, bound, boxside=boxside)
+        inactive = self.eleminactive(uh, bounds)
         grown = self._elemextreme(
             self._elemtonodeextreme(inactive, CG1, minimum=False, defaultval=0.0),
             minimum=False,
@@ -322,12 +354,12 @@ class VIAMR(OptionsManager, AVMMixin):
         )
         return Function(DG0, name="Thin Element Active").interpolate(1.0 - grown)
 
-    def _starwhollyactive(self, uh, bound, boxside="lower"):
+    def _starwhollyactive(self, uh, bounds):
         """Compute a CG1 indicator of those nodes z whose entire star U_h(z) is
-        active against the given bound (boxside="lower" or "upper"; see
-        _nodalactive()).  Such nodes get value 1.0.  That is, this is the
+        active against the given bounds = (lb, ub); see nodalactive().  Such
+        nodes get value 1.0.  That is, for bounds = (lb, None) this is the
         indicator of
-            {z in N_h : U_h(z) subset {u_h = bound}},
+            {z in N_h : U_h(z) subset {u_h = lb}},
         which is the condition attached to boundary nodes by the definition of
         the discrete residual sigma_h in section 2.1 of NSV03.
 
@@ -338,7 +370,7 @@ class VIAMR(OptionsManager, AVMMixin):
         of the same "whole star is active" test."""
         CG1, _ = self.spaces(uh.function_space().mesh())
         nodalinactive = Function(CG1).interpolate(
-            1.0 - self._nodalactive(uh, bound, boxside=boxside)
+            1.0 - self.nodalactive(uh, bounds)
         )
         elemtouchesinactive = self._elemextreme(
             nodalinactive, minimum=False, defaultval=0.0
@@ -347,36 +379,6 @@ class VIAMR(OptionsManager, AVMMixin):
             elemtouchesinactive, CG1, minimum=False, defaultval=0.0
         )
         return Function(CG1).interpolate(1.0 - nodetouchesinactive)
-
-    def _inactivemask(self, uh, bounds, strong=False):
-        """Compute the DG0 indicator of the computed inactive set, as used by the
-        marking methods which restrict an estimator to it.  Inactive elements get
-        value 1.0.
-
-        Here bounds is the pair (lb, ub) defining the constraint lb <= uh <= ub.
-        Either entry may be None, for a problem constrained on one side only, so
-        (lb, None) is a lower obstacle alone and (None, ub) an upper one alone.
-        A caller therefore never has to build an artificial infinite obstacle,
-        which is what a PETSc VI solve does require.
-
-        When both entries are given the inactive set is the *intersection* of the
-        two one-sided inactive sets, i.e. the elements touching neither obstacle.
-        One side alone will not do: the set inactive with respect to lb still
-        contains the whole of ub's contact set, where uh is pinned to the other
-        obstacle and the residual is large by construction, so an estimator
-        restricted there would mark inside a contact set rather than outside
-        both."""
-        lb, ub = bounds
-        assert not (lb is None and ub is None), "bounds must constrain a side"
-        if ub is None:
-            return self.eleminactive(uh, lb, boxside="lower", strong=strong)
-        if lb is None:
-            return self.eleminactive(uh, ub, boxside="upper", strong=strong)
-        _, DG0 = self.spaces(uh.function_space().mesh())
-        return Function(DG0, name="Element Inactive").interpolate(
-            self.eleminactive(uh, lb, boxside="lower", strong=strong)
-            * self.eleminactive(uh, ub, boxside="upper", strong=strong)
-        )
 
     def _elemborder(self, nodalactive):
         """From *nodal* active set indicator, computes bordering element indicator.  Uses the fact that the DG0 degree of freedom is strictly inside the element, so use with caution if z is not in CG1.  Returns 1.0 for elements with
@@ -684,7 +686,7 @@ class VIAMR(OptionsManager, AVMMixin):
         return Function(DG0).interpolate(mark * large)
 
     def udomark(self, uh, bound, boxside="lower", n=1, restrict=None):
-        """Mark the vicinity of the free-boundary using the Unstructured Dilation Operator (UDO) algorithm, for a unilateral obstacle problem with the given bound (boxside="lower"|"upper"; see _nodalactive()).
+        """Mark the vicinity of the free-boundary using the Unstructured Dilation Operator (UDO) algorithm, for a unilateral obstacle problem with the given bound (boxside="lower"|"upper"; see checkadmissible()).
 
         The algorithm first computes an element-wise indicator for the free boundary.  Then the elements which neighbor free-boundary elements are added, and so on iteratively through n levels.  Note that n=0 already marks the free boundary.  The output is an element-wise marking for those elements near the free boundary which should be refined.
 
@@ -697,18 +699,21 @@ class VIAMR(OptionsManager, AVMMixin):
             mark = unionmarks(markL, markU)
         """
 
+        # one-sided bounds pair for the set indicator methods
+        bounds = (None, bound) if boxside == "upper" else (bound, None)
+
         # get mesh and border mark; added flag for restriction
         if restrict is not None:
             meshInit = uh.function_space().mesh()
             if restrict == "active":
                 # restrict to active set plus border
                 indicator = Function(FunctionSpace(meshInit, "DG", 0)).interpolate(
-                    self.elemactive(uh, bound, boxside=boxside)
-                    + self._elemborder(self._nodalactive(uh, bound, boxside=boxside))
+                    self.elemactive(uh, bounds)
+                    + self._elemborder(self.nodalactive(uh, bounds))
                 )
             elif restrict == "inactive":
                 # restrict to inactive set, which contains border already
-                indicator = self.eleminactive(uh, bound, boxside=boxside)
+                indicator = self.eleminactive(uh, bounds)
             else:
                 raise ValueError(
                     f"unknown restrict='{restrict}'; must be 'active', 'inactive', or None"
@@ -718,7 +723,7 @@ class VIAMR(OptionsManager, AVMMixin):
             # Use nodal active set indicator to make an initial DG0 element border
             # indicator. This is now on a restricted domain so allow_missing_dofs=True
             border = Function(DG0).interpolate(
-                self._elemborder(self._nodalactive(uh, bound, boxside=boxside)),
+                self._elemborder(self.nodalactive(uh, bounds)),
                 allow_missing_dofs=True,
             )
         else:
@@ -726,7 +731,7 @@ class VIAMR(OptionsManager, AVMMixin):
             CG1, DG0 = self.spaces(mesh)
             # Use nodal active set indicator to make an initial DG0 element border
             # indicator.
-            border = self._elemborder(self._nodalactive(uh, bound, boxside=boxside))
+            border = self._elemborder(self.nodalactive(uh, bounds))
 
         # main loop: expand element border out to n levels, via two constant-arity
         # PyOP2 kernels per level (cell->node max-scatter, then node->cell max-gather).
@@ -754,7 +759,7 @@ class VIAMR(OptionsManager, AVMMixin):
     ):
         """Mark mesh using Variable Coefficient Diffusion (VCD) algorithm, for a
         unilateral obstacle problem with the given bound (boxside="lower" or
-        "upper"; see _nodalactive()).  The algorithm computes a nodal active set indicator and then diffuses it, using a variable coefficient based on mesh geometry.  Diffusion is by solving a single backward Euler time step for the corresponding time-dependent diffusion equation.  The linear equations are solved by a fixed number of iterations of ICC-preconditioned CG.  Thresholding to capture the middle values of this field then marks only those elements which are close to the free boundary.  The output is an element-wise marking for elements to refine near the free boundary.
+        "upper"; see checkadmissible()).  The algorithm computes a nodal active set indicator and then diffuses it, using a variable coefficient based on mesh geometry.  Diffusion is by solving a single backward Euler time step for the corresponding time-dependent diffusion equation.  The linear equations are solved by a fixed number of iterations of ICC-preconditioned CG.  Thresholding to capture the middle values of this field then marks only those elements which are close to the free boundary.  The output is an element-wise marking for elements to refine near the free boundary.
         Tuning advice:  The bracket [a,b] should be adjusted as follows:
           * lower a from default 0.2 to mark more elements in/near *inactive* set
           * raise b from default 0.8 to mark more elements in/near *active* set"""
@@ -762,7 +767,8 @@ class VIAMR(OptionsManager, AVMMixin):
         # Compute nodal active set indicator
         mesh = uh.function_space().mesh()
         CG1, DG0 = self.spaces(mesh)
-        nu = self._nodalactive(uh, bound, boxside=boxside)
+        bounds = (None, bound) if boxside == "upper" else (bound, None)
+        nu = self.nodalactive(uh, bounds)
 
         # Diffuse according to square of cell diameter, with diffusivity D = (1/2) h^2.
         # The nodal active indicator gives the initial field u0.  Solve one backward
@@ -873,7 +879,7 @@ class VIAMR(OptionsManager, AVMMixin):
         a posteriori gradient-recovery error indicator, for an obstacle problem
         with the given bounds = (lb, ub), meaning lb <= uh <= ub.  Either entry
         may be None for a problem constrained on one side only, so (lb, None) is
-        a lower obstacle alone; see _inactivemask(), which also explains why a
+        a lower obstacle alone; see eleminactive(), which also explains why a
         box constraint restricts to the intersection of the two inactive sets.
         See Chapter 4 of
           M. Ainsworth & J. T. Oden (2000).  A Posteriori Error Estimation in
@@ -900,7 +906,7 @@ class VIAMR(OptionsManager, AVMMixin):
         eta = Function(DG0, name="eta on inactive set").interpolate(sqrt(eta_sq))  # eta from eta^2
         # restrict grad recovery eta to inactive set, further excluding any
         # certified-safe elements, before computing the threshold
-        imark = self._inactivemask(uh, bounds)
+        imark = self.eleminactive(uh, bounds)
         mask = imark if safe is None else Function(DG0).interpolate(imark * (1.0 - safe))
         ieta = self._maskexclude(eta, mask)
         # compute mark in inactive set
@@ -916,7 +922,7 @@ class VIAMR(OptionsManager, AVMMixin):
         or a weighted version of it, for an obstacle problem with the given
         bounds = (lb, ub), meaning lb <= uh <= ub.  Either entry may be None for
         a problem constrained on one side only, so (lb, None) is a lower obstacle
-        alone; see _inactivemask(), which also explains why a box constraint
+        alone; see eleminactive(), which also explains why a box constraint
         restricts to the intersection of the two inactive sets.
 
         The primary inputs are the current solution uh, the obstacle bounds (to
@@ -1009,7 +1015,7 @@ class VIAMR(OptionsManager, AVMMixin):
         # restrict BR eta to inactive set; strong=True means all dofs must be inactive to
         # get imark=1; further exclude any certified-safe elements, before computing the
         # threshold
-        imark = self._inactivemask(uh, bounds, strong=True)
+        imark = self.eleminactive(uh, bounds, strong=True)
         mask = imark if safe is None else Function(DG0).interpolate(imark * (1.0 - safe))
         ieta = self._maskexclude(eta, mask)
         mark, _ = self.fixedratemark(ieta, theta, method)
@@ -1147,10 +1153,10 @@ class VIAMR(OptionsManager, AVMMixin):
         #   because lb < ub, so the two contributions never overlap.
         bdry_ufl = Constant(0.0)
         if lb is not None:
-            starlo = self._starwhollyactive(uh, lb, boxside="lower")
+            starlo = self._starwhollyactive(uh, (lb, None))
             bdry_ufl = bdry_ufl + starlo * conditional(sigmah > 0.0, sigmah, 0.0)
         if ub is not None:
-            starup = self._starwhollyactive(uh, ub, boxside="upper")
+            starup = self._starwhollyactive(uh, (None, ub))
             bdry_ufl = bdry_ufl + starup * conditional(sigmah < 0.0, sigmah, 0.0)
         bdryval = Function(CG1).interpolate(bdry_ufl)
         DirichletBC(CG1, bdryval, "on_boundary").apply(sigmah)
@@ -1160,12 +1166,12 @@ class VIAMR(OptionsManager, AVMMixin):
         #   recalled above, namely that a strictly signed node is active against
         #   the obstacle its sign names.
         if ub is None:
-            pass #assert self._globalextreme(sigmah, minimum=True) >= -dualtol
+            assert self._globalextreme(sigmah, minimum=True) >= -dualtol
         elif lb is None:
             assert self._globalextreme(sigmah, minimum=False) <= dualtol
         else:
-            nodallo = self._nodalactive(uh, lb, boxside="lower")
-            nodalup = self._nodalactive(uh, ub, boxside="upper")
+            nodallo = self.nodalactive(uh, (lb, None))
+            nodalup = self.nodalactive(uh, (None, ub))
             signmisfit = Function(CG1).interpolate(
                 conditional(sigmah > dualtol, 1.0 - nodallo, 0.0)
                 + conditional(sigmah < -dualtol, 1.0 - nodalup, 0.0)
@@ -1196,12 +1202,12 @@ class VIAMR(OptionsManager, AVMMixin):
         tlo = (
             Function(DG0)
             if lb is None
-            else self.thinelemactive(uh, lb, boxside="lower")
+            else self.thinelemactive(uh, (lb, None))
         )
         tup = (
             Function(DG0)
             if ub is None
-            else self.thinelemactive(uh, ub, boxside="upper")
+            else self.thinelemactive(uh, (None, ub))
         )
         tactive = Function(DG0).interpolate(max_value(tlo, tup))
         X_ufl = abs(f_ufl + tactive * sigmah)
@@ -1505,7 +1511,7 @@ class VIAMR(OptionsManager, AVMMixin):
             Jh, CG1, minimum=False, defaultval=PETSc.NINFINITY
         )
         Ch = Function(CG1, name="C_h (full-contact nodes)").interpolate(
-            self._nodalactive(uh, lb)
+            self.nodalactive(uh, bounds)
             * conditional(fmaxstar <= ftol, 1.0, 0.0)
             * conditional(Jmaxgamma <= jtol, 1.0, 0.0)
         )
@@ -1841,7 +1847,7 @@ class VIAMR(OptionsManager, AVMMixin):
     def freeboundarygraph2D(self, uh, bound, boxside="lower"):
         """Compute the graph (vertices and edges) of the computed free boundary
         of a 2D unilateral obstacle problem with the given bound (boxside="lower"
-        or "upper"; see _nodalactive()), as (x,y) coordinates.  Works for
+        or "upper"; see checkadmissible()), as (x,y) coordinates.  Works for
         meshes with triangular or quadrilateral cells.  The free boundary
         vertices are those incident to both a bordering (partially-active)
         element and a fully-active element; see _elemborder() and
@@ -1878,8 +1884,9 @@ class VIAMR(OptionsManager, AVMMixin):
         # Get lists of indices for active and border elements.  Include halo
         # (ghost) cells so free-boundary vertices/edges lying on a process boundaries
         # are visible to every rank.
-        elemactive = self.elemactive(uh, bound, boxside=boxside)
-        elemborder = self._elemborder(self._nodalactive(uh, bound, boxside=boxside))
+        bounds = (None, bound) if boxside == "upper" else (bound, None)
+        elemactive = self.elemactive(uh, bounds)
+        elemborder = self._elemborder(self.nodalactive(uh, bounds))
         ActiveSetElementsIndices = np.where(elemactive.dat.data_ro_with_halos)[0]
         BorderElementsIndices = np.where(elemborder.dat.data_ro_with_halos)[0]
 
@@ -2011,7 +2018,7 @@ class VIAMR(OptionsManager, AVMMixin):
 
         Inputs uh0, lb0 are the current discrete solution and obstacle.
         They are only used to determine the current thinned active set
-        (self.thinelemactive(uh0, lb0)).
+        (self.thinelemactive(uh0, (lb0, None))).
 
         F_strong_fcn is a function returning a UFL expression for the
         strong-form residual:
@@ -2051,7 +2058,7 @@ class VIAMR(OptionsManager, AVMMixin):
         # neighbors are all active too, i.e. elements not adjacent to the
         # current discrete free boundary; same NSV03 "neighborhood of the
         # active set" concept nsv03mark() itself uses (there called tactive).
-        thinactive0 = self.thinelemactive(uh0, lb0)
+        thinactive0 = self.thinelemactive(uh0, (lb0, None))
 
         # p-refined estimate of sigma_psi = L(psi) - f, sampled at higher resolution
         # than the current mesh; represented in the Bernstein basis so that its

@@ -218,7 +218,7 @@ for i in range(args.refine + 1):
 
     # report glaciated area and Jaccard inactive set agreement
     vol = assemble(H * dx)
-    ei = amr.eleminactive(H, Constant(0.0))
+    ei = amr.eleminactive(H, (Constant(0.0), None))
     area = assemble(ei * dx)
     pprint(
         f"  ice area {area / 1000.0**4:.3f} million km^2;  ice vol = {vol / 1000.0**5:.3f} million km^3",

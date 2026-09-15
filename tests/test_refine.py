@@ -358,7 +358,7 @@ def _pyramid_solve(amr, mesh):
     ).solve(bounds=(lb, ub))
     assert amr.checkadmissible(uh, lb)
     # the contact set must be nonempty, or the kink is not exercised at all
-    assert amr.countmark(amr.elemactive(uh, lb)) > 0
+    assert amr.countmark(amr.elemactive(uh, (lb, None))) > 0
     return uh, lb, f_ufl, g, g_ufl
 
 
@@ -514,7 +514,7 @@ def _nsv05mark_pyramid(amr):
     # vacuous.  Every full-contact element is in contact, but not conversely:
     # the sign conditions on f and J_h, and the requirement that *all* vertices
     # lie in C_h, drop the fringe of the contact set near the free boundary.
-    active = amr.elemactive(uh, lb)
+    active = amr.elemactive(uh, (lb, None))
     nfull = amr.countmark(fullcontact)
     assert nfull > 0
     assert amr.countmark(Function(DG0).interpolate(fullcontact * (1.0 - active))) == 0
@@ -727,7 +727,7 @@ def _sphericalcap_soln(amr, m):
         solver_parameters=sp, options_prefix="s",
     ).solve(bounds=(lb, ub))
     assert amr.checkadmissible(uh, lb)
-    assert amr.countmark(amr.elemactive(uh, lb)) > 0
+    assert amr.countmark(amr.elemactive(uh, (lb, None))) > 0
     return mesh, uh, lb, f_ufl, g, g_ufl, lb_ufl, u_ufl
 
 
@@ -891,7 +891,7 @@ def _safeactiveunmark_case(amr, f_ufl):
 def test_safeactiveunmark_allsafe():
     # sigma_psi = 4 - (-0.5) = 4.5 > 0 everywhere: every active element is safe
     amr, uh0, lb0, safe = _safeactiveunmark_case(VIAMR(debug=True), Constant(-0.5))
-    active0 = amr.elemactive(uh0, lb0)
+    active0 = amr.elemactive(uh0, (lb0, None))
     assert amr.countmark(safe) == amr.countmark(active0)
 
 
@@ -921,9 +921,9 @@ def test_safeactiveunmark_restricted_to_active():
         return -div(grad(u)) - f
 
     safe = amr.safeactiveunmark(uh0, lb0, F_strong, psi_ufl, Constant(-0.5))
-    active0 = amr.elemactive(uh0, lb0)
-    thinactive0 = amr.thinelemactive(uh0, lb0)
-    assert amr.countmark(active0) < amr.countmark(amr.eleminactive(uh0, lb0))
+    active0 = amr.elemactive(uh0, (lb0, None))
+    thinactive0 = amr.thinelemactive(uh0, (lb0, None))
+    assert amr.countmark(active0) < amr.countmark(amr.eleminactive(uh0, (lb0, None)))
     assert 0 < amr.countmark(thinactive0) < amr.countmark(active0)
     assert amr.countmark(safe) == amr.countmark(thinactive0)
 
@@ -1072,10 +1072,17 @@ def _nsv03mark_bilateral(amr):
     assert amr.checkadmissible(uh, ub, boxside="upper")
 
     # both obstacles must actually be touched, or this is not a bilateral test
-    nlo = amr.countmark(amr.elemactive(uh, lb, boxside="lower"))
-    nup = amr.countmark(amr.elemactive(uh, ub, boxside="upper"))
+    nlo = amr.countmark(amr.elemactive(uh, (lb, None)))
+    nup = amr.countmark(amr.elemactive(uh, (None, ub)))
     assert 0 < nlo < DG0.dim()
     assert 0 < nup < DG0.dim()
+
+    # the two-sided active and inactive sets partition the mesh, and since
+    # lb < ub the active set is the disjoint union of the one-sided ones
+    nact = amr.countmark(amr.elemactive(uh, (lb, ub)))
+    ninact = amr.countmark(amr.eleminactive(uh, (lb, ub)))
+    assert nact + ninact == DG0.dim()
+    assert nact == nlo + nup
 
     mark, etainf, etad, sigmah, Eh = amr.nsv03mark(uh, (lb, ub), g, f_ufl, g)
     assert mark.function_space().ufl_element() == DG0.ufl_element()
@@ -1143,7 +1150,7 @@ def test_nsv03mark_upper_only():
     solver = NonlinearVariationalSolver(problem, solver_parameters=sp, options_prefix="s")
     solver.solve(bounds=(lbn, ub))
     assert amr.checkadmissible(uhn, ub, boxside="upper")
-    assert 0 < amr.countmark(amr.elemactive(uhn, ub, boxside="upper")) < DG0.dim()
+    assert 0 < amr.countmark(amr.elemactive(uhn, (None, ub))) < DG0.dim()
 
     markn, etainfn, etadn, sigmahn, Ehn = amr.nsv03mark(
         uhn, (None, ub), gn, -f_ufl, -g_ufl, dualtol=1.0e-8
@@ -1203,8 +1210,8 @@ def test_upper_obstacle_elasto():
 
     assert amr.checkadmissible(u, ub, boxside="upper")
 
-    active = amr.elemactive(u, ub, boxside="upper")
-    inactive = amr.eleminactive(u, ub, boxside="upper")
+    active = amr.elemactive(u, (None, ub))
+    inactive = amr.eleminactive(u, (None, ub))
     assert 0 < amr.countmark(active) < DG0.dim()  # genuine contact set, not all/none
     assert amr.countmark(active) + amr.countmark(inactive) == DG0.dim()
 

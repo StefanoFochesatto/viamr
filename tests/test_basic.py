@@ -95,7 +95,7 @@ def test_elemactive():
     x, y = SpatialCoordinate(mesh)
     uh = Function(CG1).interpolate(conditional(x > 0.5, x - 0.5, 0.0))
     psih = Function(CG1).interpolate(Constant(0.0))
-    act = amr.elemactive(uh, psih)
+    act = amr.elemactive(uh, (psih, None))
     assert act.function_space().ufl_element() == DG0.ufl_element()
     correct = np.zeros(12)
     correct[[0, 1, 2, 4]] = 1.0
@@ -114,8 +114,8 @@ def test_thinelemactive():
         conditional(r2 > R0 ** 2, r2 - R0 ** 2, 0.0)
     )
     psih = Function(CG1, name="psih").interpolate(Constant(0.0))
-    act = amr.elemactive(uh, psih)
-    tact = amr.thinelemactive(uh, psih)
+    act = amr.elemactive(uh, (psih, None))
+    tact = amr.thinelemactive(uh, (psih, None))
     assert act.function_space().ufl_element() == DG0.ufl_element()
     assert tact.function_space().ufl_element() == DG0.ufl_element()
     assert abs(assemble(act * dx) - 1.12) < 1.0e-10
