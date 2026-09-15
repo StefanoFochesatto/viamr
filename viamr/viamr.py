@@ -49,8 +49,6 @@ class VIAMR(OptionsManager, AVMMixin):
 
       unionmark():  a method for combining existing marks
 
-      safeactiveunmark():  a method which detects active-set elements where higher-order inspection gives evidence that refinement is wasted effort; this needs exact data for the obstacle and source term
-
       refinesbr2D():  a method which calls PETSc for skeleton-based-refinement (SBR)
 
       eleminactive():  element marking of the computed inactive set
@@ -90,8 +88,6 @@ class VIAMR(OptionsManager, AVMMixin):
     Note that unionmarks() can be used to refine along free boundaries computed by udomark() and/or vcdmark(), from both lower and upper bounds.
 
     TODO: every method should be considered for the bounds=(lb,ub) signature feature, i.e. foo(..., bounds=(lb,ub), ...), replacing the bound plus boxside="lower"/"upper" pair everywhere.  At this point udomark(), vcdmark(), freeboundarygraph2D(), checkadmissible(), and buildaveragedmetric() do *not* use a bounds argument.  A caller then never builds an artificial infinite obstacle, which is what a PETSc VI solve requires and which VIAMR has no reason to require.
-
-    TODO: safeactiveunmark() is not yet generalized this way.
 
     Regarding returned values: fbmark, imark, and mark are element markings in DG0, i.e. indicator functions which are nonzero exactly on the marked elements, rmesh is a refined mesh, and amesh is an adapted mesh.
 
@@ -868,13 +864,13 @@ class VIAMR(OptionsManager, AVMMixin):
         """Return eta zeroed outside of mask (a DG0 {0,1} indicator), or eta
         unchanged if mask is None.  Always apply this to eta *before*
         VIAMR.fixedratemark(), if elements must be kept out of
-        consideration for marking (e.g. VIAMR.safeactiveunmark())."""
+        consideration for marking."""
         if mask is None:
             return eta
         DG0 = eta.function_space()
         return Function(DG0, name=eta.name()).interpolate(eta * mask)
 
-    def gradrecinactivemark(self, uh, bounds, theta=0.5, method="max", safe=None):
+    def gradrecinactivemark(self, uh, bounds, theta=0.5, method="max"):
         """Return marking within the computed inactive set by using an
         a posteriori gradient-recovery error indicator, for an obstacle problem
         with the given bounds = (lb, ub), meaning lb <= uh <= ub.  Either entry
@@ -883,10 +879,7 @@ class VIAMR(OptionsManager, AVMMixin):
         box constraint restricts to the intersection of the two inactive sets.
         See Chapter 4 of
           M. Ainsworth & J. T. Oden (2000).  A Posteriori Error Estimation in
-          Finite Element Analysis, John Wiley & Sons, Inc., New York.
-        The optional input safe is a DG0 {0,1} indicator, e.g. the output of
-        safeactiveunmark(), of elements to additionally exclude from
-        consideration; see VIAMR._maskexclude()."""
+          Finite Element Analysis, John Wiley & Sons, Inc., New York."""
         mesh = uh.function_space().mesh()
         v = CellVolume(mesh)
         # recover a CG1 gradient of uh by projection
@@ -904,18 +897,16 @@ class VIAMR(OptionsManager, AVMMixin):
         sp = {"mat_type": "matfree", "ksp_type": "richardson", "pc_type": "jacobi"}
         solve(G == 0, eta_sq, solver_parameters=sp)
         eta = Function(DG0, name="eta on inactive set").interpolate(sqrt(eta_sq))  # eta from eta^2
-        # restrict grad recovery eta to inactive set, further excluding any
-        # certified-safe elements, before computing the threshold
+        # restrict grad recovery eta to inactive set, before computing the threshold
         imark = self.eleminactive(uh, bounds)
-        mask = imark if safe is None else Function(DG0).interpolate(imark * (1.0 - safe))
-        ieta = self._maskexclude(eta, mask)
+        ieta = self._maskexclude(eta, imark)
         # compute mark in inactive set
         mark, _ = self.fixedratemark(ieta, theta, method)
         total_error_est = self._globalpnorm(ieta, 2.0)
         return (mark, ieta, total_error_est)
 
     def brinactivemark(
-        self, uh, bounds, res, theta=0.5, method="max", alpha=None, safe=None
+        self, uh, bounds, res, theta=0.5, method="max", alpha=None
     ):
         """Return marking within the computed inactive set by using the
         a posteriori Babuška-Rheinboldt (1978) residual error indicator,
@@ -927,10 +918,6 @@ class VIAMR(OptionsManager, AVMMixin):
 
         The primary inputs are the current solution uh, the obstacle bounds (to
         restrict to the inactive set), and the residual res as a UFL expression.
-
-        The optional input safe is a DG0 {0,1} indicator, e.g. the output of
-        safeactiveunmark(), of elements to additionally exclude from
-        consideration; see VIAMR._maskexclude().
 
         The output BR indicator eta is computed as a function in DG0.  We call
         VIAMR.fixedratemark() to mark using eta and a threshold theta.
@@ -1012,12 +999,10 @@ class VIAMR(OptionsManager, AVMMixin):
         sp = {"mat_type": "matfree", "ksp_type": "richardson", "pc_type": "jacobi"}
         solve(G == 0, eta_sq, solver_parameters=sp)
         eta = Function(DG0, name="eta on inactive set").interpolate(sqrt(eta_sq))  # eta from eta^2
-        # restrict BR eta to inactive set; strong=True means all dofs must be inactive to
-        # get imark=1; further exclude any certified-safe elements, before computing the
-        # threshold
+        # restrict BR eta to inactive set, before computing the threshold; strong=True
+        # means all dofs must be inactive to get imark=1
         imark = self.eleminactive(uh, bounds, strong=True)
-        mask = imark if safe is None else Function(DG0).interpolate(imark * (1.0 - safe))
-        ieta = self._maskexclude(eta, mask)
+        ieta = self._maskexclude(eta, imark)
         mark, _ = self.fixedratemark(ieta, theta, method)
         total_error_est = self._globalpnorm(ieta, 2.0)
         return (mark, ieta, total_error_est)
@@ -1960,119 +1945,3 @@ class VIAMR(OptionsManager, AVMMixin):
         """Return the submesh containing only the cells where the DG0 indicator
         is nonzero, via PETSc's DMPlex "transform_filter" transform."""
         return self._dmplextransform(mesh, "transform_filter", indicator=indicator)
-
-    def safeactiveunmark(
-        self,
-        uh0,
-        lb0,
-        F_strong_fcn,
-        psi_ufl,
-        f_ufl,
-        psi_mode="analytic",
-        f_mode="analytic",
-        pdegree=2,
-        stricttol=1.0e-10,
-    ):
-        """Return a marking (DG0 field with {0,1} values) where 1 indicates a part
-        of the current active set, defined by uh0 and lb0, in which it is safe
-        *not* to mark.  This allows solver efficiency in problems where the
-        operator is such that the interiors of active sets can avoid
-        wasted-effort refinement.
-
-        The strong (NCP) form of the unilateral obstacle problem is
-          u >= psi,   L(u) - f >= 0,   (u - psi)(L(u) - f) = 0.
-        In general we could write F(u,f)=L(u)-f; see below.  We assume here
-        that L(u) has some kind of positive-definiteness or coercivity; this
-        is not checked but see examples.
-
-        On the (true) active set, u = psi, so on this set it reduces to
-        requiring
-          sigma_psi := L(psi) - f >= 0.
-        This is a condition on the given data (psi,f) alone, independent of
-        the discrete iterate uh0.
-
-        The safety check in this method evaluates sigma_psi at higher degree
-        than the current functions, but on the same mesh.  The idea is that
-        if sigma_psi stays at or above a strictly-positive tolerance on a
-        mesh cell then it is safe to leave unmarked.  Refining it cannot
-        reveal a hidden inactive region, because the check already used
-        higher-resolution data than the current mesh provides.  We require a
-        strict positive margin
-          sigma_psi > stricttol,
-        because this is a *safety* certificate.  As approximation error is
-        already inherent in psi_mode,f_mode="analytic" (see below),
-        declaring an element safe only when it clears zero by a margin is
-        the conservative choice.
-
-        The sigma_psi check is only applied on VIAMR.thinelemactive()'s
-        thinned active set, i.e. elements that are active *and* every
-        neighbor is active too, which excludes the one-element-thick border
-        adjacent to the discrete free boundary from ever being marked safe.
-        This is the same "neighborhood of the active set" idea NSV03 uses
-        (see nsv03mark()'s tactive), applied here in the complementary
-        direction.
-
-        This method is O(N) work if N represents current mesh complexity,
-        e.g. element count, but with a decent constant because of the use of
-        higher-order elements.
-
-        Inputs uh0, lb0 are the current discrete solution and obstacle.
-        They are only used to determine the current thinned active set
-        (self.thinelemactive(uh0, (lb0, None))).
-
-        F_strong_fcn is a function returning a UFL expression for the
-        strong-form residual:
-          res = F_strong_fcn(u, f)     # UFL for L(u) - f
-        so that sigma_psi = F_strong_fcn(psi_ufl, f_ufl).  psi_ufl, f_ufl
-        are the user's *exact* obstacle and source data (not the
-        generally-coarser lb0), as UFL expressions.
-
-        psi_mode="analytic" assumes psi_ufl is an exact analytic UFL
-        expression, evaluable (including derivatives) to arbitrary
-        precision.  The higher resolution used for the safety check is then
-        obtained by p-refinement on the *current* mesh, using Bernstein
-        polynomials.  Similarly f_mode="analytic" assumes f_ufl is exact
-        analytic UFL.
-
-        psi_mode and f_mode are independent, because in practice psi and f
-        often come from unrelated sources.  (E.g. for glacier problems, psi
-        is bed topography from a DEM while f is surface mass balance from a
-        climate model, on a different grid.)
-
-        FIXME A future psi_mode="data" or f_mode="data" would instead
-        support psi and/or f given as (e.g. gridded/observational) data
-        rather than analytic UFL.  This would need edge-jump-estimator
-        machinery such as in brinactivemark(), rather than mere pointwise
-        UFL differentiation, since second derivatives of piecewise-linear
-        discrete data are weakly zero.  Not yet implemented.
-        """
-        if psi_mode != "analytic" or f_mode != "analytic":
-            raise NotImplementedError(
-                f"safeactiveunmark() with psi_mode='{psi_mode}', f_mode='{f_mode}' "
-                "is not implemented; only psi_mode='analytic', f_mode='analytic' "
-                "(exact UFL psi_ufl, f_ufl) is currently supported"
-            )
-        mesh = uh0.function_space().mesh()
-        _, DG0 = self.spaces(mesh)
-        # thinned active set: only elements that are active *and* whose
-        # neighbors are all active too, i.e. elements not adjacent to the
-        # current discrete free boundary; same NSV03 "neighborhood of the
-        # active set" concept nsv03mark() itself uses (there called tactive).
-        thinactive0 = self.thinelemactive(uh0, (lb0, None))
-
-        # p-refined estimate of sigma_psi = L(psi) - f, sampled at higher resolution
-        # than the current mesh; represented in the Bernstein basis so that its
-        # elementwise coefficient extremes rigorously bound the interpolant's
-        # range over each cell (convex hull property), not just its value at the
-        # Lagrange nodes
-        CGp = FunctionSpace(mesh, "CG", pdegree)
-        psip = Function(CGp).interpolate(psi_ufl)
-        sigma_ufl = F_strong_fcn(psip, f_ufl)
-        Bp = FunctionSpace(mesh, "Bernstein", pdegree)
-        sigma = Function(Bp).interpolate(sigma_ufl)
-
-        # a thinned-active element is safe to unmark if sigma_psi stays
-        # strictly above stricttol everywhere within it
-        sigmamin = self._elemextreme(sigma, minimum=True, defaultval=PETSc.INFINITY)
-        safe_ufl = thinactive0 * conditional(sigmamin > stricttol, 1.0, 0.0)
-        return Function(DG0, name="mark (safeactiveunmark)").interpolate(safe_ufl)
