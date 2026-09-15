@@ -629,7 +629,9 @@ for amrtype in refinetypes:
                 f"{i},{Nv},{Ne},{hmin:.5f},{hmax:.5f},{errnorm:.3e},{errnorm_recon:.3e},{errnorm_h1:.3e},{jaccard:.5f},{hausstr},"
                 f"{refinetime:.3e},{marktime:.3e},{meshbuildtime:.3e}\n"
             )
-        if Ne > args.targetelements:
+
+        # break if -targetelements or -uniformlevels reached
+        if Ne > args.targetelements or (amrtype == "uni" and i >= args.uniformlevels):
             break
 
         # Do an AMR level.  Each non-uni branch times two phases separately:
