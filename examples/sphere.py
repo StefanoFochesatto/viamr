@@ -1,11 +1,9 @@
 # This example attempts to do apples-to-apples comparisons of 5 algorithms
 # on a classical obstacle problem with a hemispherical obstacle:
 #
-#   1. UDOBR = unstructured dilation operator plus Babuska & Rheinboldt (1989)
-#              in the inactive set
+#   1. UDOBR = unstructured dilation operator + Babuska & Rheinboldt (1989) in inactive set
 #   2. NSV03 = Nochetto, Siebert, and Veeser (2003)
-#   3. NSV05 = Nochetto, Siebert, and Veeser (2005), the fully-localized
-#              successor of NSV03
+#   3. NSV05 = Nochetto, Siebert, and Veeser (2005); fully-localized NSV03 successor
 #   4. UNI = uniform refinement
 #   5. AVM = averaged-metric mesh adaptation
 #
@@ -23,17 +21,19 @@
 #   sphere_supnorm_reconstructed.png  ||u_exact - tilde u_h||_infty vs DOFs, for all methods
 #   sphere_hausdorff.png              hausdorff2D(Gamma_u, Gamma_uh) vs DOFs
 #   sphere_amrtime.png                cumulative AMR wall time vs norm
-#   sphere_marktime.png               same, but only marking / metric-building cost
-#   sphere_meshbuildtime.png          same, but mesh-construction cost (PETSc or Mmg/ParMmg)
+#   sphere_marktime.png               time vs DOFs: only marking / metric-building cost
+#   sphere_meshbuildtime.png          time vs DOFS: mesh-construction cost (PETSc or Mmg/ParMmg)
 #   sphere_effectivity.png            estimator/true-error effectivity index vs DOFs
 #
 # Optionally we generate .csv files for norm and Jaccard convergence rates.
 #
-# Optional -dimples mode (with -fconst) replaces the plain spherical cap
-# by that cap with scattered downward gaussian dimples subtracted at
-# buckyball-vertex centers, and/or turns on a nonzero constant source f.  In this
-# mode there is no closed-form exact solution inside r<=r0, so norm/effectivity figures
-# are skipped; only produces:
+# Optional -dimples mode replaces the plain spherical cap by the same cap
+# but with scattered downward gaussian dimples at buckyball-vertex centers.
+#
+# Option -fconst turns on a nonzero constant source f.
+#
+# In either -dimples mode, for any -fconst, value, there is no closed-form exact solution,
+# so norm and effectivity figures are skipped; only produces:
 #   sphere_dimple_activefraction.png  active-element fraction vs DOFs
 #   sphere_dimple_inactivecount.png   inactive elements found inside dimples vs DOFs
 # See obstacleUFL() and dimple_centers().
@@ -46,10 +46,12 @@
 # nsv03mark() and nsv05mark()) and so are not meaningful here; only UDOBV, UNI,
 # and AVM are compared.
 #
-# Three suggested runs to get familiar with the major cases:
-#   python3 sphere.py                        exact soln known; Laplacian
-#   python3 sphere.py -dimples -fconst -1.0  no exact soln; Laplacian, dimples on obstacle
-#   python3 sphere.py -porous                no exact soln; porous-type operator
+# Suggested runs to get familiar with major cases:
+#   python3 sphere.py                        [exact soln known; Laplacian]
+#   python3 sphere.py -dimples -fconst -1.0  [no exact soln; Laplacian, dimples on obstacle]
+#   python3 sphere.py -porous                [no exact soln; porous-type operator]
+# Expensive and high resolution:
+#   python3 sphere.py -targetelements 1.0e6 -uniformlevels 6 -maxlevels 25
 
 
 from argparse import ArgumentParser
