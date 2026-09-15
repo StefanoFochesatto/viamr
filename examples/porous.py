@@ -78,7 +78,7 @@ uniformlevels = 5  # levels of uniform refinement for UNI; kept smaller than
 # level, so `levels` uniform steps from m0 would be far more expensive than
 # the adaptive methods reach in the same number of steps
 gamma = 2.0  # note that exact solution has infinite H^1 norm if gamma >= 4
-useweightedBR = True  # apply brinactivemark() using BV00 weighting
+useweightedBR = True  # apply inactivemark() with estimator="bv00" instead of "br78"
 targetelements = 1.0e5  # UDOBV/AVM: stop refining once this many elements is met
 
 # AVM parameters; attempts to do apples-to-apples vs UDOBV
@@ -249,8 +249,14 @@ for amrtype in refinetypes:
             # negative and uh==0 throughout the active set, giving 0**(negative) = inf/nan
             Zunreg = abs(uh + eps_final) ** (gamma - 1.0)
             res = - div(Zunreg * grad(uh)) - fsource
-            imark, eta, tot_eta = amr.brinactivemark(
-                uh, (Constant(0.0), None), res, alpha=(Zqn if useweightedBR else None), theta=0.5, method="total"
+            imark, eta, tot_eta = amr.inactivemark(
+                uh,
+                (Constant(0.0), None),
+                estimator=("bv00" if useweightedBR else "br78"),
+                res=res,
+                alpha=(Zqn if useweightedBR else None),
+                theta=0.5,
+                method="total",
             )
             fbmark = amr.udomark(uh, lb, n=1)
             mark = amr.unionmarks(fbmark, imark)

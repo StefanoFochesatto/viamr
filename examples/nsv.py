@@ -282,8 +282,8 @@ for method in methods:
         if method == "UDOBR":
             fmark = amr.udomark(uh, lb, n=nUDO)
             residual = -div(grad(uh)) - f_ufl
-            (imark, _, Eh) = amr.brinactivemark(
-                uh, (lb, None), residual, theta=marktheta, method=markmethod
+            (imark, _, Eh) = amr.inactivemark(
+                uh, (lb, None), estimator="br78", res=residual, theta=marktheta, method=markmethod
             )
             mark = amr.unionmarks(fmark, imark)
             # BR78 targets the H^1 seminorm on the inactive set

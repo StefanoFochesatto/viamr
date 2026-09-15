@@ -125,7 +125,7 @@ for i in range(levels + 1):
     else:
         mark = amr.udomark(u, lb, n=1)
     residual = -div(grad(u)) - fsource
-    imark, _, _ = amr.brinactivemark(u, (lb, None), residual)
+    imark, _, _ = amr.inactivemark(u, (lb, None), estimator="br78", res=residual)
     mark = amr.unionmarks(mark, imark)
     mesh = amr.refinesbr2D(mesh, mark)
     meshhierarchy.append(mesh)

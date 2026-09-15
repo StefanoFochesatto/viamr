@@ -325,7 +325,7 @@ def porous_residual_Z(uh, lb):
     producing gamma-2 as a power; for gamma<2 that is negative and uh==lb
     throughout the active set, giving 0**(negative) = inf/nan.  The weight
     Z, passed as the alpha kwarg for the weighted quasi-norm in
-    brinactivemark(), is regularized by the mesh-native cell diameter."""
+    inactivemark(estimator="bv00"), is regularized by the mesh-native cell diameter."""
     gap = uh - lb
     Zeps = abs(gap + Constant(args.epsfinal)) ** (args.gamma - 1.0)
     residual = -div(Zeps * grad(uh)) - Constant(args.fconst)
@@ -358,7 +358,7 @@ def errornorm_reconstructed_deg(r, uh, activeh, fixeddegree=6):
 def errornorm_H1semi_deg(u, uh, fixeddegree=6):
     """H^1 seminorm (i.e. Dirichlet-energy / grad-L^2) error norm of the plain
     (not reconstructed-uh) numerical solution, avoiding the TSFC warning.  This is
-    the norm brinactivemark()'s unweighted BR78 estimator directly targets
+    the norm inactivemark()'s unweighted BR78 estimator directly targets
     (see its docstring), so it's the natural check on whether that estimator
     is doing what it's designed to do, independent of L^2 behavior."""
     normsq = assemble(inner(grad(u - uh), grad(u - uh)) * dx(degree=fixeddegree))
@@ -399,11 +399,19 @@ def applybr(uh, lb):
     to residual estimator marking in inactive set"""
     if args.porous:
         residual, Z = porous_residual_Z(uh, lb)
+        estimator = "bv00"
     else:
         residual = -div(grad(uh)) - Constant(args.fconst)
         Z = None
-    (imark, _, tot_eta) = amr.brinactivemark(
-        uh, (lb, None), residual, theta=args.thetaBR, method=args.methodBR, alpha=Z
+        estimator = "br78"
+    (imark, _, tot_eta) = amr.inactivemark(
+        uh,
+        (lb, None),
+        estimator=estimator,
+        res=residual,
+        alpha=Z,
+        theta=args.thetaBR,
+        method=args.methodBR,
     )
     return imark, tot_eta
 
@@ -701,7 +709,7 @@ for amrtype in refinetypes:
             mark = amr.unionmarks(mark, imark)
             t_mark1 = time.time()
             if exact_known:
-                # effectivity index vs the SAME inactive set brinactivemark()
+                # effectivity index vs the SAME inactive set inactivemark()
                 # restricts its estimator to; matches the H^1 seminorm BR78's
                 # unweighted estimator targets (see errornorm_H1semi_deg)
                 iamark = amr.eleminactive(uh, (lb, None), strong=True)

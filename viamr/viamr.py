@@ -309,7 +309,7 @@ class VIAMR(OptionsManager, AVMMixin):
         When both entries of bounds are given the inactive set is the
         *intersection* of the two one-sided inactive sets, i.e. the elements
         touching neither obstacle.  This is the set to which marking methods
-        such as brinactivemark() restrict an estimator.  One side alone will
+        such as inactivemark() restrict an estimator.  One side alone will
         not do: the set inactive with respect to lb still contains the whole of
         ub's contact set, where uh is pinned to the other obstacle and the
         residual is large by construction, so an estimator restricted there
@@ -872,16 +872,95 @@ class VIAMR(OptionsManager, AVMMixin):
         DG0 = eta.function_space()
         return Function(DG0, name=eta.name()).interpolate(eta * mask)
 
-    def gradrecinactivemark(self, uh, bounds, theta=0.5, method="max"):
-        """Return marking within the computed inactive set by using an
-        a posteriori gradient-recovery error indicator, for an obstacle problem
-        with the given bounds = (lb, ub), meaning lb <= uh <= ub.  Either entry
-        may be None for a problem constrained on one side only, so (lb, None) is
-        a lower obstacle alone; see eleminactive(), which also explains why a
-        box constraint restricts to the intersection of the two inactive sets.
-        See Chapter 4 of
-          M. Ainsworth & J. T. Oden (2000).  A Posteriori Error Estimation in
-          Finite Element Analysis, John Wiley & Sons, Inc., New York."""
+    def inactivemark(
+        self, uh, bounds, estimator="br78", res=None, alpha=None, theta=0.5, method="max"
+    ):
+        """Return marking within the computed inactive set by using a classical (PDE)
+        a posteriori error estimator, for an obstacle problem with the given
+        bounds = (lb, ub), meaning lb <= uh <= ub.  Either entry may be None for
+        a problem constrained on one side only, so (lb, None) is a lower obstacle
+        alone; see e.g. eleminactive().
+
+        The estimator eta is computed as a function in DG0, and then restricted
+        to the inactive set.  We call VIAMR.fixedratemark() to mark using eta
+        and a threshold theta.  Then we return the mark in DG0, eta in DG0,
+        and a scalar estimate for the total error in energy norm.
+
+        The estimator is one of:
+
+          estimator="br78":  The Babuška-Rheinboldt (1978) residual estimator,
+          which requires the residual res as a UFL expression.  See
+            I. Babuvska & W. C. Rheinboldt (1978). Error estimates for adaptive
+            finite element computations, SIAM Journal on Numerical Analysis 15 (4),
+            736--754}, https://doi.org/10.1137/0715049
+          and section 2.2 of
+            M. Ainsworth & J. T. Oden (2000).  A Posteriori Error Estimation in
+            Finite Element Analysis, John Wiley & Sons, Inc., New York.
+
+          estimator="bv00":  The weighted version of "br78" by
+            C. Bernardi & R. Verfürth (2000). Adaptive finite element methods
+            for elliptic equations with non-smooth coefficients. Numerische
+            Mathematik, 85(4), 579-608.
+          Requires res.  Normally takes alpha but if alpha is None then it is
+          replaced by 1.0 and the estimator is actually BR78; see below.
+
+          estimator="gradientrecovery":  A gradient-recovery estimator, using
+          CG1 recovery of the DG0 gradient; see Chapter 4 of Ainsworth & Oden
+          (2000).  Takes neither res nor alpha.
+
+        For "bv00", alpha is a scalar UFL expression for the local diffusion
+        coefficient in a variable-coefficient operator
+          - div(alpha grad(uh)) = f.
+        In practice, alpha may depend on the solution, e.g.
+          alpha = uh^{gamma-1}
+        for the porous media equation.  We use equations (2.8), (2.12), and
+        (2.13) from BV00.
+
+        The residual estimators, "br78" and "bv00", are intended to approximate
+        the error in the appropriate energy norm.  This is the H1 seminorm for
+        "br78".  Note that "bv00" with alpha=1 recovers this case, but otherwise
+        it is weighted.  BV00 justifies the weighting for linear operators and positive
+        bounds on alpha.  Otherwise, in general nonlinear cases, use of "bv00"
+        is heuristic, based on a frozen-coefficient extension, not a proven reliable or
+        efficient estimator even in the PDE case.
+
+        WARNING for "bv00": We divide by alpha everywhere, so it should be
+        positive everywhere.
+
+        Every estimator restricts eta to the strongly inactive set, i.e.
+        eleminactive(..., strong=True), the elements whose dofs are all inactive.
+
+        The diagonal solve implementation of the estimators came from slide 109 of
+          https://github.com/pefarrell/icerm2024/blob/main/slides.pdf
+        See also
+          https://github.com/pefarrell/icerm2024/blob/main/02_netgen/01_l_shaped_adaptivity.py
+        """
+        if estimator == "gradientrecovery":
+            if res is not None or alpha is not None:
+                raise ValueError("estimator='gradientrecovery' takes neither res nor alpha")
+            eta = self._gradientrecoveryeta(uh)
+        elif estimator in ("br78", "bv00"):
+            if res is None:
+                raise ValueError(f"estimator='{estimator}' requires res")
+            if estimator != "bv00" and alpha is not None:
+                raise ValueError("alpha is not allowed unless estimator='bv00'")
+            if estimator == "bv00" and alpha is None:
+                alpha = Constant(1.0)
+            eta = self._residualeta(uh, res, alpha=alpha)
+        else:
+            raise ValueError(
+                f"unknown estimator='{estimator}'; must be 'br78', 'bv00', or 'gradientrecovery'"
+            )
+        # restrict eta to inactive set, before computing the threshold; strong=True
+        # means all dofs must be inactive to get imark=1
+        imark = self.eleminactive(uh, bounds, strong=True)
+        ieta = self._maskexclude(eta, imark)
+        mark, _ = self.fixedratemark(ieta, theta, method)
+        total_error_est = self._globalpnorm(ieta, 2.0)
+        return (mark, ieta, total_error_est)
+
+    def _gradientrecoveryeta(self, uh):
+        """Compute the DG0 gradient-recovery estimator for inactivemark()."""
         mesh = uh.function_space().mesh()
         v = CellVolume(mesh)
         # recover a CG1 gradient of uh by projection
@@ -898,70 +977,11 @@ class VIAMR(OptionsManager, AVMMixin):
         # each cell needs an independent 1x1 solve, so Jacobi is an exact preconditioner
         sp = {"mat_type": "matfree", "ksp_type": "richardson", "pc_type": "jacobi"}
         solve(G == 0, eta_sq, solver_parameters=sp)
-        eta = Function(DG0, name="eta on inactive set").interpolate(sqrt(eta_sq))  # eta from eta^2
-        # restrict grad recovery eta to inactive set, before computing the threshold
-        imark = self.eleminactive(uh, bounds)
-        ieta = self._maskexclude(eta, imark)
-        # compute mark in inactive set
-        mark, _ = self.fixedratemark(ieta, theta, method)
-        total_error_est = self._globalpnorm(ieta, 2.0)
-        return (mark, ieta, total_error_est)
+        return Function(DG0, name="eta on inactive set").interpolate(sqrt(eta_sq))  # eta from eta^2
 
-    def brinactivemark(
-        self, uh, bounds, res, theta=0.5, method="max", alpha=None
-    ):
-        """Return marking within the computed inactive set by using the
-        a posteriori Babuška-Rheinboldt (1978) residual error indicator,
-        or a weighted version of it, for an obstacle problem with the given
-        bounds = (lb, ub), meaning lb <= uh <= ub.  Either entry may be None for
-        a problem constrained on one side only, so (lb, None) is a lower obstacle
-        alone; see eleminactive(), which also explains why a box constraint
-        restricts to the intersection of the two inactive sets.
-
-        The primary inputs are the current solution uh, the obstacle bounds (to
-        restrict to the inactive set), and the residual res as a UFL expression.
-
-        The output BR indicator eta is computed as a function in DG0.  We call
-        VIAMR.fixedratemark() to mark using eta and a threshold theta.
-        Then we return the marking mark, estimator eta, and a scalar estimate for
-        the total error in energy norm.
-
-        For the basic unweighted method see
-          I. Babuvska & W. C. Rheinboldt (1978). Error estimates for adaptive
-          finite element computations, SIAM Journal on Numerical Analysis 15 (4),
-          736--754}, https://doi.org/10.1137/0715049
-        and section 2.2 of
-          M. Ainsworth & J. T. Oden (2000).  A Posteriori Error Estimation in
-          Finite Element Analysis, John Wiley & Sons, Inc., New York.
-
-        The optional input alpha is a scalar UFL expression for the local
-        diffusion coefficient in a variable-coefficient operator
-          - div(alpha grad(uh)) = f.
-        In practice, alpha may depend on the solution, e.g.
-          alpha = uh^{gamma-1}
-        for the porous media equation.  When alpha is not None, eta is reweighted
-        following the classical variable-coefficient residual estimator by
-          C. Bernardi & R. Verfürth (2000). Adaptive finite element methods
-          for elliptic equations with non-smooth coefficients. Numerische
-          Mathematik, 85(4), 579-608.
-        We use equations (2.8), (2.12), and (2.13) from this reference.
-
-        The returned residual estimator eta is intended to approximate the error
-        in the appropriate energy norm.  This is the H1 seminorm in the unweighted
-        BR78 case, and setting alpha=1 recovers this case.  In the linear,
-        uniformly-elliptic setting, with positive bounds on alpha, BV00 justifies
-        the weighted formulation.  Otherwise, in general nonlinear cases, this
-        method is a heuristic, frozen-coefficient extension, not a proven
-        reliable or efficient estimator.
-
-        WARNING when passing alpha: We divide by this coefficient everywhere,
-        so it should be positive everywhere.
-
-        The diagonal solve implementation of this function came from slide 109 of
-          https://github.com/pefarrell/icerm2024/blob/main/slides.pdf
-        See also
-          https://github.com/pefarrell/icerm2024/blob/main/02_netgen/01_l_shaped_adaptivity.py
-        """
+    def _residualeta(self, uh, res, alpha=None):
+        """Compute the DG0 residual estimator for inactivemark(): BR78 if
+        alpha is None, otherwise BV00 weighted by alpha."""
         # mesh quantities
         mesh = uh.function_space().mesh()
         h = CellDiameter(mesh)
@@ -1000,14 +1020,7 @@ class VIAMR(OptionsManager, AVMMixin):
         # each cell needs an independent 1x1 solve, so Jacobi is an exact preconditioner
         sp = {"mat_type": "matfree", "ksp_type": "richardson", "pc_type": "jacobi"}
         solve(G == 0, eta_sq, solver_parameters=sp)
-        eta = Function(DG0, name="eta on inactive set").interpolate(sqrt(eta_sq))  # eta from eta^2
-        # restrict BR eta to inactive set, before computing the threshold; strong=True
-        # means all dofs must be inactive to get imark=1
-        imark = self.eleminactive(uh, bounds, strong=True)
-        ieta = self._maskexclude(eta, imark)
-        mark, _ = self.fixedratemark(ieta, theta, method)
-        total_error_est = self._globalpnorm(ieta, 2.0)
-        return (mark, ieta, total_error_est)
+        return Function(DG0, name="eta on inactive set").interpolate(sqrt(eta_sq))  # eta from eta^2
 
     def nsv03mark(
         self,

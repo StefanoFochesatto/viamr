@@ -165,7 +165,7 @@ for method in methods:
         errsl2.append(float(errornorm(u_ufl, uh)))
         errsinf.append(errornorm_Linf(amr, u_ufl, uh))
         # H^1 seminorm on the set inactive for *both* obstacles, which is what
-        # brinactivemark() restricts its estimator to
+        # inactivemark() restricts its estimator to
         iamark = amr.eleminactive(uh, (lb, ub), strong=True)
         dus = inner(grad(u_ufl - uh), grad(u_ufl - uh))
         errsH1ia.append(assemble(dus * iamark * dx(degree=6)) ** 0.5)
@@ -181,8 +181,8 @@ for method in methods:
                 amr.udomark(uh, ub, boxside="upper", n=nUDO),
             )
             residual = -div(grad(uh)) - f_ufl
-            (imark, _, Eh) = amr.brinactivemark(
-                uh, (lb, ub), residual, theta=args.theta, method=markmethod
+            (imark, _, Eh) = amr.inactivemark(
+                uh, (lb, ub), estimator="br78", res=residual, theta=args.theta, method=markmethod
             )
             mark = amr.unionmarks(fmark, imark)
             errtarget = errsH1ia[-1]

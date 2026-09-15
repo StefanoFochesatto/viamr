@@ -99,7 +99,7 @@ for amrtype in typelist:
 
         if amrtype in ["udobr", "vcdbr"]:
             residual = -div(grad(uh))
-            imark, _, _ = amr.brinactivemark(uh, (lb, None), residual, method="total")
+            imark, _, _ = amr.inactivemark(uh, (lb, None), estimator="br78", res=residual, method="total")
             if amrtype == "udobr":
                 mark = amr.udomark(uh, lb, n=0)
             elif amrtype == "vcdbr":
@@ -119,7 +119,7 @@ for amrtype in typelist:
     if amrtype in ["udobr", "vcdbr"]:
         # for output file, compute imark, mark on final mesh
         residual = -div(grad(uh))
-        imark, _, _ = amr.brinactivemark(uh, (lb, None), residual, method="total")
+        imark, _, _ = amr.inactivemark(uh, (lb, None), estimator="br78", res=residual, method="total")
         if amrtype == "udobr":
             fbmark = amr.udomark(uh, lb, n=1)
         elif amrtype == "vcdbr":

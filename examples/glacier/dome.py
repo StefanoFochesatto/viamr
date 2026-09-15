@@ -122,8 +122,8 @@ for primal in primals:
         else:
             res, Z = residual_s_ufl(w, a, lb)
         fbmark = amr.udomark(w, Constant(0.0), n=udo_n)  # because of flat bed, psi=0 regardless of -primal
-        imark, _, total_eta = amr.brinactivemark(
-            w, (Constant(0.0), None), res, theta=theta, method="total", alpha=Z
+        imark, _, total_eta = amr.inactivemark(
+            w, (Constant(0.0), None), estimator="bv00", res=res, alpha=Z, theta=theta, method="total"
         )
         mark = amr.unionmarks(fbmark, imark)
 
@@ -137,7 +137,7 @@ for primal in primals:
         )
 
         # effectivity index = estimator / (true error)
-        # Note brinactivemark(alpha=Z) restricts to the inactive set and,
+        # Note inactivemark(estimator="bv00", alpha=Z) restricts to the inactive set and,
         # per Bernardi & Verfurth (2000), targets the weighted energy norm.
         # Here Z is the (regularized) diffusivity of the equation we actually
         # solved (residual_u_ufl vs residual_s_ufl).  While eff_u
