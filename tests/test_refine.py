@@ -202,7 +202,7 @@ def test_nsv03mark_allinactive():
     solver = NonlinearVariationalSolver(problem, solver_parameters=sp, options_prefix="s")
     ub = Function(CG1).interpolate(Constant(1.0e10))
     solver.solve(bounds=(lb, ub))
-    assert amr.checkadmissible(u, lb)
+    assert amr.checkadmissible(u, (lb, None))
 
     mark, etainf, etad, sigmah, total_err = amr.nsv03mark(u, (lb, None), g, f, g)
     assert mark.function_space().ufl_element() == DG0.ufl_element()
@@ -270,7 +270,7 @@ def _nsv03mark_nontrivial(amr):
     # two assert identical counts from one definition.
     mesh, uh, lb, f_ufl, g, g_ufl = _nsv03mark_nontrivial_soln(amr)
     CG1, DG0 = amr.spaces(mesh)
-    assert amr.checkadmissible(uh, lb)
+    assert amr.checkadmissible(uh, (lb, None))
 
     mark, etainf, etad, sigmah, total_err = amr.nsv03mark(
         uh, (lb, None), g, f_ufl, g_ufl, dualtol=1.0e-8
@@ -356,7 +356,7 @@ def _pyramid_solve(amr, mesh):
     NonlinearVariationalSolver(
         problem, solver_parameters=sp, options_prefix="s"
     ).solve(bounds=(lb, ub))
-    assert amr.checkadmissible(uh, lb)
+    assert amr.checkadmissible(uh, (lb, None))
     # the contact set must be nonempty, or the kink is not exercised at all
     assert amr.countmark(amr.elemactive(uh, (lb, None))) > 0
     return uh, lb, f_ufl, g, g_ufl
@@ -437,7 +437,7 @@ def test_nsv03mark_active_boundary():
     amr = VIAMR(debug=True)
     mesh, uh, lb, f_ufl, g, g_ufl = _nsv03mark_active_boundary_soln(amr)
     CG1, DG0 = amr.spaces(mesh)
-    assert amr.checkadmissible(uh, lb)
+    assert amr.checkadmissible(uh, (lb, None))
 
     # boundary indicator, parallel-safe (same DirichletBC-apply idiom nsv03mark() uses)
     isbdry = Function(CG1).assign(0.0)
@@ -726,7 +726,7 @@ def _sphericalcap_soln(amr, m):
         NonlinearVariationalProblem(F, uh, DirichletBC(CG1, g, "on_boundary")),
         solver_parameters=sp, options_prefix="s",
     ).solve(bounds=(lb, ub))
-    assert amr.checkadmissible(uh, lb)
+    assert amr.checkadmissible(uh, (lb, None))
     assert amr.countmark(amr.elemactive(uh, (lb, None))) > 0
     return mesh, uh, lb, f_ufl, g, g_ufl, lb_ufl, u_ufl
 
@@ -992,8 +992,8 @@ def _nsv03mark_bilateral(amr):
     # the same things from one definition.
     mesh, uh, lb, ub, f_ufl, g, u_ufl = _nsv03mark_bilateral_soln(amr)
     CG1, DG0 = amr.spaces(mesh)
-    assert amr.checkadmissible(uh, lb, boxside="lower")
-    assert amr.checkadmissible(uh, ub, boxside="upper")
+    assert amr.checkadmissible(uh, (lb, None))
+    assert amr.checkadmissible(uh, (None, ub))
 
     # both obstacles must actually be touched, or this is not a bilateral test
     nlo = amr.countmark(amr.elemactive(uh, (lb, None)))
@@ -1073,7 +1073,7 @@ def test_nsv03mark_upper_only():
     }
     solver = NonlinearVariationalSolver(problem, solver_parameters=sp, options_prefix="s")
     solver.solve(bounds=(lbn, ub))
-    assert amr.checkadmissible(uhn, ub, boxside="upper")
+    assert amr.checkadmissible(uhn, (None, ub))
     assert 0 < amr.countmark(amr.elemactive(uhn, (None, ub))) < DG0.dim()
 
     markn, etainfn, etadn, sigmahn, Ehn = amr.nsv03mark(
@@ -1132,7 +1132,7 @@ def test_upper_obstacle_elasto():
     solver = NonlinearVariationalSolver(problem, solver_parameters=sp, options_prefix="s")
     solver.solve(bounds=(lb, ub))
 
-    assert amr.checkadmissible(u, ub, boxside="upper")
+    assert amr.checkadmissible(u, (None, ub))
 
     active = amr.elemactive(u, (None, ub))
     inactive = amr.eleminactive(u, (None, ub))

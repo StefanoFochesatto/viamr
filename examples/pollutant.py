@@ -81,7 +81,7 @@ for i in range(refinements + 1):
 
     # ub is an upper obstacle, so its call needs boxside="upper"; the default
     # boxside="lower" would treat ub as a floor, which is harmless with
-    # debug=False but trips VIAMR._checkuhbounds()'s admissibility assertion
+    # debug=False but trips the debug-mode checkadmissible() assertion
     # (uh >= ub) with debug=True
     marklower = amr.udomark(u, lb, boxside="lower", n=1)
     markupper = amr.udomark(u, ub, boxside="upper", n=1)

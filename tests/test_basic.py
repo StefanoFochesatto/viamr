@@ -284,12 +284,12 @@ def test_globalextreme_uses():
     x, y = SpatialCoordinate(mesh)
     lb = Function(CG1).interpolate(Constant(0.0))
     uh = Function(CG1).interpolate(x)  # uh >= lb everywhere on [0,1]x[0,1]
-    assert amr.checkadmissible(uh, lb)
-    assert amr.checkadmissible(uh, lb, strict=True)
+    assert amr.checkadmissible(uh, (lb, None))
+    assert amr.checkadmissible(uh, (lb, None), strict=True)
 
     bad = Function(CG1).interpolate(x - 0.5)  # negative near x=0
-    assert not amr.checkadmissible(bad, lb)
-    assert not amr.checkadmissible(bad, lb, strict=True)
+    assert not amr.checkadmissible(bad, (lb, None))
+    assert not amr.checkadmissible(bad, (lb, None), strict=True)
 
 
 def test_elemmin():

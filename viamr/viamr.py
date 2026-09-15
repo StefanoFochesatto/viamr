@@ -87,7 +87,7 @@ class VIAMR(OptionsManager, AVMMixin):
 
     Note that unionmarks() can be used to refine along free boundaries computed by udomark() and/or vcdmark(), from both lower and upper bounds.
 
-    TODO: every method should be considered for the bounds=(lb,ub) signature feature, i.e. foo(..., bounds=(lb,ub), ...), replacing the bound plus boxside="lower"/"upper" pair everywhere.  At this point udomark(), vcdmark(), freeboundarygraph2D(), checkadmissible(), and buildaveragedmetric() do *not* use a bounds argument.  A caller then never builds an artificial infinite obstacle, which is what a PETSc VI solve requires and which VIAMR has no reason to require.
+    TODO: every method should be considered for the bounds=(lb,ub) signature feature, i.e. foo(..., bounds=(lb,ub), ...), replacing the bound plus boxside="lower"/"upper" pair everywhere.  At this point udomark(), vcdmark(), freeboundarygraph2D(), and buildaveragedmetric() do *not* use a bounds argument.  A caller then never builds an artificial infinite obstacle, which is what a PETSc VI solve requires and which VIAMR has no reason to require.
 
     Regarding returned values: fbmark, imark, and mark are element markings in DG0, i.e. indicator functions which are nonzero exactly on the marked elements, rmesh is a refined mesh, and amesh is an adapted mesh.
 
@@ -202,37 +202,28 @@ class VIAMR(OptionsManager, AVMMixin):
             w, minimum=False
         )
 
-    def checkadmissible(self, uh, bound, strict=False, boxside="lower"):
+    def checkadmissible(self, uh, bounds, strict=False):
         """Utility function to check admissibility or strict admissibility of uh
-        with respect to a single obstacle bound.  Returns True if uh >= bound
-        (boxside="lower") or uh <= bound (boxside="upper")."""
-        if self.debug:
-            assert boxside in ("lower", "upper"), "boxside must be 'lower' or 'upper'"
-        upper = boxside == "upper"
-        if strict:
-            if upper:
-                bad = assemble(conditional(uh > bound, 1.0, 0.0) * dx)
-            else:
-                bad = assemble(conditional(uh < bound, 1.0, 0.0) * dx)
-            return bad == 0.0
-        else:
-            V = uh.function_space()
-            delta = Function(V).interpolate(bound - uh if upper else uh - bound)
-            return self._globalextreme(delta, minimum=True) >= 0.0
+        with respect to the given bounds = (lb, ub).  Either entry may be None,
+        for a problem constrained on one side only; see nodalactive().  Returns
+        True if lb <= uh <= ub.  The default test is at the nodes of uh's
+        function space, while strict=True tests at the quadrature points.
 
-    def _checkuhbounds(self, uh, bounds):
-        """Debug-mode validation shared by the set indicator methods: checks
-        that uh is a Function, each non-None entry of bounds = (lb, ub) is a
-        Function or Constant, and uh is admissible with respect to it.
-        No-op if self.debug=False."""
+        In debug mode, first checks that uh is a Function and that each
+        non-None entry of bounds is a Function or Constant."""
         if self.debug:
             assert isinstance(uh, Function), "input uh must be of class Function"
-            for bound, boxside in zip(bounds, ("lower", "upper")):
-                if bound is None:
-                    continue
-                isbound = isinstance(bound, Function) or isinstance(bound, Constant)
-                assert isbound, "input bound must be of class Function or Constant"
-                assert self.checkadmissible(uh, bound, boxside=boxside)
+            for bound in bounds:
+                if bound is not None:
+                    isbound = isinstance(bound, Function) or isinstance(bound, Constant)
+                    assert isbound, "input bound must be of class Function or Constant"
+        gap = self._boundsgap(uh, bounds)
+        if strict:
+            bad = assemble(conditional(gap < 0.0, 1.0, 0.0) * dx)
+            return bad == 0.0
+        else:
+            delta = Function(uh.function_space()).interpolate(gap)
+            return self._globalextreme(delta, minimum=True) >= 0.0
 
     def _boundsgap(self, uh, bounds, absolute=False):
         """Return UFL for the gap from uh to the nearer of the given bounds =
@@ -275,7 +266,8 @@ class VIAMR(OptionsManager, AVMMixin):
         The nodal active set is the union of the two one-sided active sets,
           {x in N(V): |u(x) - lb(x)| < activetol or |u(x) - ub(x)| < activetol}
         where N(V) is the nodal set for V = uh.function_space().  Active nodes get value 1.0."""
-        self._checkuhbounds(uh, bounds)
+        if self.debug:
+            assert self.checkadmissible(uh, bounds)
         z = Function(uh.function_space(), name="Nodal Active")
         gap = self._boundsgap(uh, bounds, absolute=True)
         z.interpolate(conditional(gap < self.activetol, 1.0, 0.0))
@@ -287,7 +279,8 @@ class VIAMR(OptionsManager, AVMMixin):
         elements get value 1.0.  Elements are marked active if the DG0 degree
         of freedom for that element is active against either bound, within
         activetol, so use with caution if z is not in CG1."""
-        self._checkuhbounds(uh, bounds)
+        if self.debug:
+            assert self.checkadmissible(uh, bounds)
         _, DG0 = self.spaces(uh.function_space().mesh())
         z = Function(DG0, name="Element Active")
         gap = self._boundsgap(uh, bounds, absolute=True)
@@ -313,7 +306,8 @@ class VIAMR(OptionsManager, AVMMixin):
         ub's contact set, where uh is pinned to the other obstacle and the
         residual is large by construction, so an estimator restricted there
         would mark inside a contact set rather than outside both."""
-        self._checkuhbounds(uh, bounds)
+        if self.debug:
+            assert self.checkadmissible(uh, bounds)
         if strong:
             # note gap > 0 is equivalent to strictly inactive ... but we use activetol
             v = Function(uh.function_space()).interpolate(self._boundsgap(uh, bounds))
@@ -682,7 +676,7 @@ class VIAMR(OptionsManager, AVMMixin):
         return Function(DG0).interpolate(mark * large)
 
     def udomark(self, uh, bound, boxside="lower", n=1, restrict=None):
-        """Mark the vicinity of the free-boundary using the Unstructured Dilation Operator (UDO) algorithm, for a unilateral obstacle problem with the given bound (boxside="lower"|"upper"; see checkadmissible()).
+        """Mark the vicinity of the free-boundary using the Unstructured Dilation Operator (UDO) algorithm, for a unilateral obstacle problem with the given bound, which is a floor (uh >= bound) if boxside="lower" or a ceiling (uh <= bound) if boxside="upper".
 
         The algorithm first computes an element-wise indicator for the free boundary.  Then the elements which neighbor free-boundary elements are added, and so on iteratively through n levels.  Note that n=0 already marks the free boundary.  The output is an element-wise marking for those elements near the free boundary which should be refined.
 
@@ -755,7 +749,7 @@ class VIAMR(OptionsManager, AVMMixin):
     ):
         """Mark mesh using Variable Coefficient Diffusion (VCD) algorithm, for a
         unilateral obstacle problem with the given bound (boxside="lower" or
-        "upper"; see checkadmissible()).  The algorithm computes a nodal active set indicator and then diffuses it, using a variable coefficient based on mesh geometry.  Diffusion is by solving a single backward Euler time step for the corresponding time-dependent diffusion equation.  The linear equations are solved by a fixed number of iterations of ICC-preconditioned CG.  Thresholding to capture the middle values of this field then marks only those elements which are close to the free boundary.  The output is an element-wise marking for elements to refine near the free boundary.
+        "upper"; see udomark()).  The algorithm computes a nodal active set indicator and then diffuses it, using a variable coefficient based on mesh geometry.  Diffusion is by solving a single backward Euler time step for the corresponding time-dependent diffusion equation.  The linear equations are solved by a fixed number of iterations of ICC-preconditioned CG.  Thresholding to capture the middle values of this field then marks only those elements which are close to the free boundary.  The output is an element-wise marking for elements to refine near the free boundary.
         Tuning advice:  The bracket [a,b] should be adjusted as follows:
           * lower a from default 0.2 to mark more elements in/near *inactive* set
           * raise b from default 0.8 to mark more elements in/near *active* set"""
@@ -1832,7 +1826,7 @@ class VIAMR(OptionsManager, AVMMixin):
     def freeboundarygraph2D(self, uh, bound, boxside="lower"):
         """Compute the graph (vertices and edges) of the computed free boundary
         of a 2D unilateral obstacle problem with the given bound (boxside="lower"
-        or "upper"; see checkadmissible()), as (x,y) coordinates.  Works for
+        or "upper"; see udomark()), as (x,y) coordinates.  Works for
         meshes with triangular or quadrilateral cells.  The free boundary
         vertices are those incident to both a bordering (partially-active)
         element and a fully-active element; see _elemborder() and

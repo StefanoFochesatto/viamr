@@ -82,7 +82,7 @@ class AVMMixin:
 
     def buildaveragedmetric(self, mesh, uh, bound, boxside="lower", gamma=0.50, intersect=False):
         """From the solution uh, of a unilateral obstacle problem with the given
-        bound (boxside="lower" or "upper"; see VIAMR.checkadmissible()), constructs both
+        bound (boxside="lower" or "upper"; see VIAMR.udomark()), constructs both
         an anisotropic Hessian-based metric and an isotropic metric computed from the
         magnitude of the gradient of the smoothed VCD indicator.  These metrics are averaged
         (linearly-combined) using gamma:
