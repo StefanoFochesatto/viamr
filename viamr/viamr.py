@@ -37,31 +37,29 @@ class VIAMR(OptionsManager, AVMMixin):
 
       vcdmark():  marking method targeting refinement of the computed free boundary, based on diffusing the computed free boundary using mesh size in a variable coefficient
 
-      gradreinactivemark():  classical a posterior error estimator, applied in the computed inactive set, using CG1 recovery of the DG0 gradient
-
-      brinactivemark():  classical a posterior error estimator, applied in the computed inactive set, implementing either the method from Babushka & Rheinboldt (1978) or its weighted extension from Bernardi & Verfurth (2000)
+      inactivemark():  classical (PDE) a posteriori error estimator, applied in the computed inactive set, implementing either the method from Babushka & Rheinboldt (1978) (estimator="br78"), its weighted extension from Bernardi & Verfurth (2000) (estimator="bv00"), or CG1 recovery of the DG0 gradient (estimator="gradientrecovery")
 
       nsv03mark():  mark using the "practical estimator" from Nochetto, Siebert, & Veeser (2003) = NSV03
 
-      nsv05mark():  mark using the fully-localized, star-based estimator from Nochetto, Siebert, & Veeser (2005) = NSV05, the successor of NSV03
+      nsv05mark():  mark using the fully-localized, star-based estimator from Nochetto, Siebert, & Veeser (2005) = NSV05, the successor of NSV03; implemented for unilateral obstacles only
 
-      fixedratemark():  general-purpose thresholding of an elementwise DG0 estimator field by a fixed-rate ('max' or 'total'/bulk/Doerfler) criterion; used internally by gradrecinactivemark(), brinactivemark(), nsv03mark(), and nsv05mark(), but also usable directly
+      fixedratemark():  general-purpose thresholding of an elementwise DG0 estimator field by a fixed-rate ('max' or 'total'/bulk/Doerfler) criterion; used internally by inactivemark(), nsv03mark(), and nsv05mark(), but also usable directly
 
       unionmark():  a method for combining existing marks
 
       refinesbr2D():  a method which calls PETSc for skeleton-based-refinement (SBR)
 
-      eleminactive():  element marking of the computed inactive set
-
       nodalactive():  nodal marking of the computed active set
 
       elemactive(), thinelemactive():  two versions of element marking of computed active sets
+
+      eleminactive():  element marking of the computed inactive set
 
       lowerboundcelldiameter():  unmark elements with cell diameters below a minimum
 
     There are also diagnostic methods:
 
-      jaccard(), jaccardUFL():  compute Jaccard similarity index for two active sets
+      jaccard(), jaccardUFL():  compute Jaccard similarity index for two active sets  FIXME unify signature
 
       hausdorff2D():  compute Hausdorff distance between edge sets E1, E2 in planar (2D) mesh
 
@@ -72,24 +70,36 @@ class VIAMR(OptionsManager, AVMMixin):
     .. code-block:: python3
 
       amr = VIAMR()
+
       fbmark = amr.udomark(uh, lb)                             # free-boundary-targeted marking
       fbmark = amr.vcdmark(uh, lb)                             # same, but based on diffusion
-      imark, _, _ = amr.gradrecinactivemark(uh, (lb, ub))      # gradient recovery in inactive set
-      imark, _, _ = amr.brinactivemark(uh, (lb, ub), res_ufl)  # BR78 estimator in inactive set
-      imark, _, _ = amr.brinactivemark(uh, (lb, ub), res_ufl, alpha=alpha)  # weighted estimator (BV00) in inactive set
-      mark, _, _, _, _ = amr.nsv03mark(uh, (lb, ub), g, f_ufl, g_ufl)  # method from NSV03, with new box-constraint extension
-      mark, _, _, _, _ = amr.nsv05mark(uh, (lb, None), g, f_ufl, g_ufl)  # method from NSV05 [lower obstacle only]
+
+      imark, _, _ = amr.inactivemark(uh, (lb, ub), ..)         # mark using classical (PDE) estimator in inactive set
+          estimator="br78", res=res_ufl                        # BR78 estimator
+          estimator="bv00", res=res_ufl, alpha=alpha           # weighted BV00 estimator
+          estimator="gradientrecovery"                         # gradient recovery estimator
+
       mark, ethresh = amr.fixedratemark(eta, theta=0.5, method="total")  # threshold a DG0 estimator eta
-      mark = amr.unionmarks(fbmark, imark)                     # mark if either is marked
+
+      mark = amr.unionmarks(fbmark, imark)                     # mark elements near free-boundary and from inactive set
+
+      mark, _, _, _, _ = amr.nsv03mark(uh, (lb, ub), g, f_ufl, g_ufl, ..)  # classical obstacle problem methods
+          method="nsv03"                                       # Nochetto, Siebert, Veeser (2003) method,
+                                                               # extended to box constraints
+          method="nsv05"                                       # Nochetto, Siebert, Veeser (2003) method;
+                                                               # ub=None required (i.e. lower obstacle only)
+
       rmesh = amr.refinesbr2D(mesh, mark)                      # PETSc DMPlexTransform for skeleton-based refinement
 
-    Regarding the arguments: uh is a computed VI solution, lb is a lower-bound obstacle, ub is an upper-bound obstacle, res_ufl is a UFL expression for the residual (applicable in the inactive set), Z is a weighting field (see examples), f_ufl is the source term in Poisson equation, and g_ufl are the boundary values.
+    Regarding the arguments: uh is a computed VI solution, lb is a lower-bound obstacle, ub is an upper-bound obstacle, res_ufl is a UFL expression for the residual (applicable in the inactive set), alpha is a weighting field (see examples), f_ufl is the source term in Poisson equation, and g_ufl are the boundary values.
 
     Note that unionmarks() can be used to refine along free boundaries computed by udomark() and/or vcdmark(), from both lower and upper bounds.
 
-    TODO: every method should be considered for the bounds=(lb,ub) signature feature, i.e. foo(..., bounds=(lb,ub), ...), replacing the bound plus boxside="lower"/"upper" pair everywhere.  At this point udomark(), vcdmark(), freeboundarygraph2D(), and buildaveragedmetric() do *not* use a bounds argument.  A caller then never builds an artificial infinite obstacle, which is what a PETSc VI solve requires and which VIAMR has no reason to require.
+    TODO: every method should be considered for a bounds=(lb,ub) signature, i.e. foo(..., bounds=(lb,ub), ...), replacing the bound plus boxside="lower"/"upper" pair everywhere.  At this point udomark(), vcdmark(), freeboundarygraph2D(), and buildaveragedmetric() do *not* use a bounds argument.  A caller then never builds an artificial infinite obstacle, which is what a PETSc VI solve requires and which VIAMR has no reason to require.
 
-    Regarding returned values: fbmark, imark, and mark are element markings in DG0, i.e. indicator functions which are nonzero exactly on the marked elements, rmesh is a refined mesh, and amesh is an adapted mesh.
+    Regarding returned values: fbmark, imark, and mark are element markings in DG0, i.e. indicator functions which are nonzero exactly on the marked elements, and rmesh is a refined mesh.
+
+    There are also some utility methods, including: spaces(), meshsizes(), meshreport(), scalarrange(), checkadmissible(), and countmark().  Other methods starting with an underscore are (roughly) intended to be private to the VIAMR class.
 
     There is also a mesh adaptation API which needs the animate library:
 
@@ -99,15 +109,13 @@ class VIAMR(OptionsManager, AVMMixin):
       metric = amr.buildaveragedmetric(mesh, uh, lb)            # VIAMR builds the metric ...
       amesh = animate.adapt(mesh, metric)                       # ... caller adapts the mesh with it
 
-    There are also some utility methods, including: spaces(), meshsizes(), meshreport(), scalarrange(), checkadmissible(), and countmark().  Other methods starting with an underscore are (roughly) intended to be private to the VIAMR class.
-
     Known limitations:
       * Functions which do not work in parallel: 1. jaccard(..., submesh=False).
       * Functions whose results depend on number of processes: 1. vcdmark(), 2. buildaveragedmetric() (via vcdmark()).
       * Functions which only work for 2D meshs: 1. freeboundarygraph2D(), 2. hausdorff2D(), 3. refinesbr2D()
       * Functions which only work for 2D triangular meshes: 1. refinesbr2D()
 
-    Regarding the last limitation, see the doc string of refinesbr2D(), and compare to refine_marked_elements() from NetGen/ngspetsc.
+    Regarding the last limitation, see the doc string of refinesbr2D(), and compare to refine_marked_elements() from NetGen/ngspetsc.  That ngspetsc method can be applied to DG0 markings from the current library; see the examples.
     """
 
     PARALLEL_OVERLAP = {
