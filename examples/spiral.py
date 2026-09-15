@@ -1,12 +1,11 @@
 # Solve the classical obstacle problem from Graeser & Kornhuber (2009) which
 # generates a spiral-shaped coincidence (active) set.
-# This example generates 3 .pvd files, result_spiral_{udobr,vcdbr,nsv}.pvd.
+# This example generates 3 .pvd files, result_spiral_{udobr,vcdbr,nsv03}.pvd.
 # Notes:
 #   1 For simplicity we just use a Firedrake mesh.  AVM is not applied.
 #   2 n=0 UDO and [0.1,0.9]-bracket VCD are compared.
 #   3 Because of thin and highly-nontrivial active set, Jaccard similarity
 #     is zero until a few levels in.
-#   4 The less expensive NSV03 method is used.
 
 m0 = 10  # initial mesh is m0 x m0
 targetnodes = 1e4  # stop on first mesh to reach this many nodes
@@ -54,7 +53,7 @@ sp = {
     "snes_converged_reason": None,
 }
 
-typelist = ["udobr", "vcdbr", "nsv"]
+typelist = ["udobr", "vcdbr", "nsv03"]
 
 for amrtype in typelist:
     print(f"solving spiral problem using {amrtype.upper()} ...")
