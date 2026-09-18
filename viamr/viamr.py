@@ -21,15 +21,12 @@ class VIAMR(OptionsManager, AVMMixin):
     box bounds (lb <= u <= ub).
 
     Central notions behind this class:
-      * Like a PDE AMR method, refinement in the inactive set is guided by
-        an a posteriori estimator.
-      * For some problems, refinement in the active set is worthwhile, but for some
-        it is wasted effort.
-      * Additional refinement near the free boundary is compatible with the goals of free
-        boundary models.  For example, a purpose of solving glacier problems is to know which land
-        is glaciated.  Refining near the free boundary matches user goals even if it does not
-        reduce the norm error of the solution.  It does reduce the geometrical measures of set
-        errors; see hausdorff2D() and jaccard() in this class.
+      * The methods generate element markings, to be passed to tag-and-refine mesh refinement methods.  One method (see buildaveragedmetric() below) generates a metric to be passed to the animate mesh adaptation library.
+      * We implement certain rigorous a posteriori estimators for the classical obstacle problem---see nsvmark() below---but mathematical theory is unlikely to provide such rigorous estimates except for model problems.
+      * Other methods in the library are partly-heuristic, based on a PDE-type a posteriori estimator in the computed inactive set, with additional refinement in the vicinity of the free boundary.
+      * Refinement near the computed free boundary is compatible with the goals of certain free boundary models.  For example, one often solves a glacier problem in order to approximate which land is glaciated, and to outline that glaciated area.
+      * For some problems, refinement in the active set is worthwhile, but for some problems it is wasted effort.
+      * We including geometrical set measures (see hausdorff2D() and jaccard()), so that users can assess their solutions using more than Sobolev norms.
 
     The public mark-and-refine API of the VIAMR class consists of:
 
@@ -45,8 +42,6 @@ class VIAMR(OptionsManager, AVMMixin):
 
       unionmark():  a method for combining existing marks
 
-      refinesbr2D():  a method which calls PETSc for skeleton-based-refinement (SBR)
-
       nodalactive():  nodal marking of the computed active set
 
       elemactive(), thinelemactive():  two versions of element marking of computed active sets
@@ -55,15 +50,17 @@ class VIAMR(OptionsManager, AVMMixin):
 
       lowerboundcelldiameter():  unmark elements with cell diameters below a minimum
 
-    There are also diagnostic methods:
+      refinesbr2D():  a method which calls PETSc for skeleton-based-refinement (SBR)
 
-      jaccard(), jaccardUFL():  compute Jaccard similarity index for two active sets  FIXME unify signature
+    There are also diagnostic and measurement methods:
+
+      freeboundarygraph2D():  for 2D obstacle problems, return the computed free boundary, an edge set
 
       hausdorff2D():  compute Hausdorff distance between edge sets E1, E2 in planar (2D) mesh
 
-      freeboundarygraph2D():  for 2D obstacle problems, return the computed free boundary
+      jaccard(), jaccardUFL():  compute Jaccard similarity index between two element-marked sets, e.g. active sets  FIXME unify signature
 
-    Some default calls to the major marking-and-refine methods are:
+    Some default calls to the major mark-and-refine methods are:
 
     .. code-block:: python3
 
@@ -89,11 +86,9 @@ class VIAMR(OptionsManager, AVMMixin):
 
     Regarding the arguments: uh is a computed VI solution, lb is a lower-bound obstacle, ub is an upper-bound obstacle, res_ufl is a UFL expression for the residual (applicable in the inactive set), alpha is a weighting field (see examples), f_ufl is the source term in Poisson equation, and g_ufl are the boundary values.
 
-    Note that unionmarks() can be used to refine along free boundaries computed by udomark() and/or vcdmark(), from both lower and upper bounds.
-
-    TODO: every method should be considered for a bounds=(lb,ub) signature, i.e. foo(..., bounds=(lb,ub), ...), replacing the bound plus boxside="lower"/"upper" pair everywhere.  At this point udomark(), vcdmark(), freeboundarygraph2D(), and buildaveragedmetric() do *not* use a bounds argument.  A caller then never builds an artificial infinite obstacle, which is what a PETSc VI solve requires and which VIAMR has no reason to require.
-
     Regarding returned values: fbmark, imark, and mark are element markings in DG0, i.e. indicator functions which are nonzero exactly on the marked elements, and rmesh is a refined mesh.
+
+    Note that unionmarks() can be used to refine along free boundaries computed by udomark() and/or vcdmark(), from both lower and upper bounds.
 
     There are also some utility methods, including: spaces(), meshsizes(), meshreport(), scalarrange(), checkadmissible(), and countmark().  Other methods starting with an underscore are (roughly) intended to be private to the VIAMR class.
 
@@ -112,6 +107,8 @@ class VIAMR(OptionsManager, AVMMixin):
       * Functions which only work for 2D triangular meshes: 1. refinesbr2D()
 
     Regarding the last limitation, see the doc string of refinesbr2D(), and compare to refine_marked_elements() from NetGen/ngspetsc.  That ngspetsc method can be applied to DG0 markings from the current library; see the examples.
+
+    TODO: every method should be considered for a bounds=(lb,ub) signature, i.e. foo(..., bounds=(lb,ub), ...), replacing the bound plus boxside="lower"/"upper" pair everywhere.  At this point udomark(), vcdmark(), freeboundarygraph2D(), and buildaveragedmetric() do *not* use a bounds argument.
     """
 
     PARALLEL_OVERLAP = {
