@@ -1,6 +1,6 @@
 # VIAMR = adaptive mesh refinement for variational inequalities
 
-This repository contains Python algorithms for adaptive mesh refinement (AMR) and mesh adaptation for variational inequalities (VIs), which are partial differential equation (PDE) problems where the solution is subject to inequalities.  The constraint set for these problems must be defined by a lower- and upper-bound inequalities.  Our algorithms apply the [Firedrake](https://www.firedrakeproject.org) finite element library.
+This repository contains Python algorithms for adaptive mesh refinement (AMR) and mesh adaptation for certain variational inequalities (VIs).  VIs are, essentially, partial differential equation (PDE) problems where the solution is subject to inequalities.  The problems addressed by the library, in its current form, are scalar obstacle problems.  Many of the implemented methods work for any nonlinear operator, and the constraint set for these problems can be defined by lower- and upper-bound inequalities (box constraints).  Our algorithms apply the [Firedrake](https://www.firedrakeproject.org) finite element library.
 
 <p align="center">
 <img src="images/spiralbw.png" height="250" alt="spiral active set"> &nbsp &nbsp &nbsp &nbsp
@@ -9,23 +9,23 @@ This repository contains Python algorithms for adaptive mesh refinement (AMR) an
 
 ## Meshing for accurate set geometry
 
-In describing algorithms we use the language of _active_ and _inactive_ sets.  In an _active set_, also known as a _coincidence_ or _contact_ set, one of the bound inequalities holds as an equality.  In the _inactive set_ the constraints are strict inequalities, so the solution satisfies a PDE.  A _free boundary_ is where these sets meet.
+In describing algorithms we use the language of _active_ and _inactive_ sets.  In an _active set_, also known as a _contact_ set, one of the bound inequalities holds as an equality.  In the _inactive set_ the constraints are strict inequalities, so the solution satisfies a PDE, the interior condition of the VI.  A _free boundary_ is where these sets meet.
 
-Our primary AMR goals for free-boundary problems posed as VIs are to generate rapid convergence in solution norm, to generated accurate computed free boundaries and (in)active sets, and to be able to measure geometrical errors in free boundaries and active sets.
+Our primary AMR goals for these free-boundary problems is to generate rapid convergence in solution norm, and to generate accurate computed free boundaries, active/contact sets, and inactive sets.  To do this, the library also contains methods which measure geometrical errors in free boundaries (edge sets in 2D) and active sets (unions of closed cells).
 
 ## Library design
 
-Our library defines the `VIAMR` Python class.  (See `viamr/viamr.py`.)  This class bundles 3 kinds of strategies for deciding _where_ to refine: free-boundary-proximity heuristics, classical residual/jump estimators applied only in inactive sets, and a whole-domain estimator already designed for Laplacian-type VIs.  The first two strategies generalize to very nonlinear and/or degenerate operators.  These methods produce DG0 indicators (piece-wise constant markings) on meshes, with $\{0,1\}$ values, which can be combined by unioning if desired.
+Our library defines the `VIAMR` Python class in the source file `viamr/viamr.py`.  This class bundles 3 kinds of strategies for deciding _where_ to refine: free-boundary-proximity heuristics, classical residual/jump estimators applied only in inactive sets, and two whole-domain estimators already designed for Laplacian-type classical obstacle problems.  The first two strategies generalize to very nonlinear and/or degenerate operators.  These methods produce DG0 (piece-wise constant) indicators on meshes, with a $\{0,1\}$ value on each cell.  Such markings can generated diagnostically, combined by unioning, and measured geometrically by various methods of the class.
 
-The tag-and-refine element markings from the above strategies can be fed to two skeleton-based mesh refinement methods, [PETSc's](https://petsc.org/release/) (limited to 2D) or [Netgen's](https://ngsolve.org/).
+Element (cell) markings from the above strategies can be fed to either of two skeleton-based, tag-and-refine mesh refinement methods.  One method is in the [PETSc library](https://petsc.org/release/), limited to 2D, and the other is from the [Netgen](https://ngsolve.org/) via PETSc-Netgen integration [(ngspetsc)](https://github.com/NGSolve/ngsPETSc); the latter works in 2D and 3D.
 
 Metric-based mesh adaptation, i.e. re-meshing, is also supported.  The library defines a `AVMMixin` class which implements an averaged-metric generation step, and applies the [animate](https://github.com/mesh-adaptation/animate) mesh-adaptation library to generate the new mesh.
 
-All of the algorithms are parallel, and they have excellent weak scaling.
+All of the algorithms are parallel, and have excellent weak scaling.
 
 Solution-norm error is a standard, supported way to evaluate quality.  Effectivity indices against the implemented _a posteriori_ estimators can be computed when exact solutions are available.
 
-The library also supports a diagnostic layer which measures active-set geometrical error (Jaccard distances) and free-boundary location accuracy (Hausdorff metric).  Free-boundary accuracy is often a goal for computations using VIs.
+The library supports a diagnostic layer which measures active-set geometrical error (Jaccard distances) and free-boundary location accuracy (Hausdorff metric; for 2D meshes only).  Free-boundary accuracy is often a goal for computations using VIs.
 
 These codes extend Stefano's Master of Science project at the University of Alaska Fairbanks (S. Fochesatto (2024). _Adaptive mesh refinement for variational inequalities_).  A paper is in progress.
 
