@@ -19,7 +19,7 @@ Our library defines the `VIAMR` Python class in the source file `viamr/viamr.py`
 
 Element (cell) markings from the above strategies can be fed to either of two skeleton-based, tag-and-refine mesh refinement methods.  One method is in the [PETSc library](https://petsc.org/release/), limited to 2D, and the other is from the [Netgen](https://ngsolve.org/) via PETSc-Netgen integration [(ngspetsc)](https://github.com/NGSolve/ngsPETSc); the latter works in 2D and 3D.
 
-Metric-based mesh adaptation, i.e. re-meshing, is also supported.  The library defines a `AVMMixin` class which implements an averaged-metric generation step, and applies the [animate](https://github.com/mesh-adaptation/animate) mesh-adaptation library to generate the new mesh.
+Metric-based mesh adaptation, i.e. re-meshing, is also supported.  The library defines a `AMAMixin` class which implements an averaged-metric generation step, and applies the [animate](https://github.com/mesh-adaptation/animate) mesh-adaptation library to generate the new mesh.
 
 All of the algorithms are parallel, and have excellent weak scaling.
 
@@ -84,7 +84,7 @@ Once the Docker container is up and running, you can activate the Firedrake venv
 
 ## Usage
 
-These basic examples demonstrate refinement with the UDO, NSV and AVM methods.  First make sure that the firedrake virtual environment is active.  Then do:
+These basic examples demonstrate refinement with the UDO, NSV and AMA methods.  First make sure that the firedrake virtual environment is active.  Then do:
 ```
 cd examples/
 python3 aol.py

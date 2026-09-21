@@ -9,7 +9,7 @@ needsanimate = pytest.mark.skipif(
 
 
 @needsanimate
-def test_adapt_avm():
+def test_adapt_ama():
     import animate
 
     mesh = RectangleMesh(6, 6, 2.0, 2.0, originX=-2.0, originY=-2.0)
@@ -26,7 +26,7 @@ def test_adapt_avm():
 
 
 @needsanimate
-def test_adapt_avm_separated():
+def test_adapt_ama_separated():
     import animate
 
     mesh = RectangleMesh(5, 5, 2.0, 2.0, originX=-2.0, originY=-2.0)
@@ -78,7 +78,7 @@ def test_buildaveragedmetric_gammas():
 
 
 @needsanimate
-def test_adapt_avm_intersect():
+def test_adapt_ama_intersect():
     import animate
 
     mesh = RectangleMesh(4, 4, 2.0, 2.0, originX=-2.0, originY=-2.0, diagonal="crossed")
@@ -95,7 +95,7 @@ def test_adapt_avm_intersect():
 
 
 if __name__ == "__main__":
-    test_adapt_avm()
-    test_adapt_avm_separated()
+    test_adapt_ama()
+    test_adapt_ama_separated()
     test_buildaveragedmetric_gammas()
-    test_adapt_avm_intersect()
+    test_adapt_ama_intersect()

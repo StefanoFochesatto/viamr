@@ -14,8 +14,8 @@ Examples are organized below by 3 categories of problems they solve.
 
 For reading the codes, and this document, some acryonyms and citations, listed alphabetically, are as follows:
 
+  * AMA = _averaged-metric adaptation_
   * AMR = _adaptive mesh refinement_
-  * AVM = _averaged-metric_ mesh adaptation
   * BR = a posteriori estimator, for computed inactive sets, from Babuska & Rheinboldt (1989)
   * BV = similar to BR, but weighted following Bernardi & Verfurth (2000)
   * GR = a posteriori estimator based on _gradient recovery_
@@ -36,7 +36,7 @@ The short program `aol.py` might be the starting point:
 
 Next see the richer examples `sphere.py` and `spiral.py`, which show most methods implemented by the `VIAMR` class:
 
-  * `sphere.py` solves a radially-symmetric problem from Chapter 12 of Bueler (2021).  Five algorithms are applied by default: UDO+BR, NSV03,, NSV05, uniform refinement, and AVM.  In each case we refine an initially homogeneous mesh to a target complexity level.  Note that the AVM method depends on the [animate](https://github.com/mesh-adaptation/animate) library; see below.  The target complexity settings are intended to generate (more or less) apples-to-apples comparison of the methods.  View the `gap` variable in the output Paraview files to see the active, inactive, and free boundary sets.  See the `error` variable to see the distribution of numerical error.
+  * `sphere.py` solves a radially-symmetric problem from Chapter 12 of Bueler (2021).  Five algorithms are applied by default: UDO+BR, NSV03,, NSV05, uniform refinement, and AMA.  In each case we refine an initially homogeneous mesh to a target complexity level.  Note that the AMA method depends on the [animate](https://github.com/mesh-adaptation/animate) library; see below.  The target complexity settings are intended to generate (more or less) apples-to-apples comparison of the methods.  View the `gap` variable in the output Paraview files to see the active, inactive, and free boundary sets.  See the `error` variable to see the distribution of numerical error.
 
   * `spiral.py` does a similar comparison to `sphere.py`, but on a classical obstacle problem from Graeser & Kornhuber (2009).  No exact solution is known.
 

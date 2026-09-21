@@ -21,7 +21,7 @@ ms0 = 10.0
 fs0 = 14.0
 
 methods = ["uni", "udobr", "nsv"]
-#methods = ["uni", "udobr", "avm", "nsv"]
+#methods = ["uni", "udobr", "ama", "nsv"]
 markers = ["k+", "ko", "k*", "ko"]
 fcolors = ["k", "k", "k", "w"]
 

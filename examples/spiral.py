@@ -2,7 +2,7 @@
 # generates a spiral-shaped coincidence (active) set.
 # This example generates 3 .pvd files, result_spiral_{udobr,vcdbr,nsv03}.pvd.
 # Notes:
-#   1 For simplicity we just use a Firedrake mesh.  AVM is not applied.
+#   1 For simplicity we just use a Firedrake mesh.  AMA is not applied.
 #   2 n=0 UDO and [0.1,0.9]-bracket VCD are compared.
 #   3 Because of thin and highly-nontrivial active set, Jaccard similarity
 #     is zero until a few levels in.

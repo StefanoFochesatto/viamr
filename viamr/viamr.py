@@ -12,10 +12,10 @@ try:
 except ImportError:
     from firedrake.petsc import OptionsManager
 
-from .avm import AVMMixin, haveanimate
+from .ama import AMAMixin, haveanimate
 
 
-class VIAMR(OptionsManager, AVMMixin):
+class VIAMR(OptionsManager, AMAMixin):
     r"""A VIAMR object manages adaptive mesh refinement (AMR) for a Firedrake
     variational inequality (VI) solver, where the VI constraint set is defined by
     box bounds (lb <= u <= ub).

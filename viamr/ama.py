@@ -9,13 +9,13 @@ except ImportError:
     haveanimate = False
 
 
-class AVMMixin:
+class AMAMixin:
     r"""Mixed into VIAMR (see viamr.py): construct metrics for metric-based
-    mesh adaptation via the Animate library.  Note AVM = "averaged metric".
+    mesh adaptation via the Animate library.  Note AMA = "averaged-metric adaptation".
     This approach is an alternative to the marking + skeleton-based-refinement
     methods that are the rest of the class.
 
-    AVMMixin is not usable separately from VIAMR.  Specifically,
+    AMAMixin is not usable separately from VIAMR.  Specifically,
     _isotropicfbmetric() calls VIAMR.vcdmark().  Also, self.metricparameters
     and self.debug are set by VIAMR.__init__().
 
@@ -92,7 +92,7 @@ class AVMMixin:
         If intersect=True then does Animate intersect, instead of gamma average.
 
         Returns the animate.RiemannianMetric itself; this method does not call
-        animate.adapt().  That's the caller's job; see the AVMMixin doc string above."""
+        animate.adapt().  That's the caller's job; see the AMAMixin doc string above."""
 
         assert haveanimate, "animate import failed, method unavailable"
         assert (

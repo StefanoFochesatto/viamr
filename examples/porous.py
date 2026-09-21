@@ -26,12 +26,12 @@
 #   1. UDOBV = unstructured dilation operator plus the (heuristic)
 #              weighted-norm BV00 estimator in the inactive set
 #   2. UNI = uniform refinement
-#   3. AVM = averaged-metric mesh adaptation (only if "import animate" succeeds)
+#   3. AMA = averaged-metric adaptation (only if "import animate" succeeds)
 #
 # NSV is not included: that estimator assumes the Laplacian internally,
 # so it is not meaningful for this degenerate operator.
 #
-# We generate .pvd files: result_porous_{udobv,uni,avm}.pvd
+# We generate .pvd files: result_porous_{udobv,uni,ama}.pvd
 #
 # We generate five .png convergence figures comparing all methods:
 #   porous_L2.png           ||u-u_h||_2 vs DOFs
@@ -68,10 +68,10 @@ except ImportError:
         "WARNING: animate import failed, proceeding without it using Firedrake meshes only"
     )
 else:
-    refinetypes.append("avm")  # if import succeeded
+    refinetypes.append("ama")  # if import succeeded
 
 # major parameters
-m0 = 6  # initial mesh is m0 x m0, except AVM
+m0 = 6  # initial mesh is m0 x m0, except AMA
 levels = 7  # number of AMR levels
 uniformlevels = 5  # levels of uniform refinement for UNI; kept smaller than
 # `levels` because uniform refinement multiplies element count by ~4 per
@@ -79,11 +79,11 @@ uniformlevels = 5  # levels of uniform refinement for UNI; kept smaller than
 # the adaptive methods reach in the same number of steps
 gamma = 2.0  # note that exact solution has infinite H^1 norm if gamma >= 4
 useweightedBR = True  # apply inactivemark() with estimator="bv00" instead of "br78"
-targetelements = 1.0e5  # UDOBV/AVM: stop refining once this many elements is met
+targetelements = 1.0e5  # UDOBV/AMA: stop refining once this many elements is met
 
-# AVM parameters; attempts to do apples-to-apples vs UDOBV
-initialhAVM = 4.0 / m0
-targetsAVM = [100, 300, 900, 3000, 7000, 18000, 50000, 100000]
+# AMA parameters; attempts to do apples-to-apples vs UDOBV
+initialhAMA = 4.0 / m0
+targetsAMA = [100, 300, 900, 3000, 7000, 18000, 50000, 100000]
 
 # eps-continuation: on each mesh, step eps down geometrically, by _shrink, from
 # _start to _final, re-solving and warm-starting at each step
@@ -133,10 +133,10 @@ for amrtype in refinetypes:
     dof, errL2, errH1semi, errqn, hausdorff, eff = [], [], [], [], [], []  # for convergence figures
 
     # create initial mesh
-    if amrtype == "avm":
+    if amrtype == "ama":
         geo = SplineGeometry()
         geo.AddRectangle(p1=(-2, -2), p2=(2, 2), bc="rectangle")
-        ngmsh = geo.GenerateMesh(maxh=initialhAVM)
+        ngmsh = geo.GenerateMesh(maxh=initialhAMA)
         mesh = Mesh(ngmsh, distribution_parameters=dp)
     else:
         mesh = RectangleMesh(
@@ -265,18 +265,18 @@ for amrtype in refinetypes:
         else:
             print(f"  hausdorff2D(Gamma_u, Gamma_uh) = {hausstr}")
 
-        # UDOBV/AVM: stop once target complexity is met, rather than
+        # UDOBV/AMA: stop once target complexity is met, rather than
         # continuing to refine past it (UNI is already bounded by looplevels)
-        if amrtype in ("udobv", "avm") and Ne > targetelements:
+        if amrtype in ("udobv", "ama") and Ne > targetelements:
             break
 
         # actually refine if we will solve on next mesh
         if i < looplevels:
             if amrtype == "uni":
                 mesh = unimh[i + 1]
-            elif amrtype == "avm":
+            elif amrtype == "ama":
                 amr.setmetricparameters(
-                    target_complexity=targetsAVM[min(i + 1, len(targetsAVM) - 1)],
+                    target_complexity=targetsAMA[min(i + 1, len(targetsAMA) - 1)],
                     h_min=1.0e-4,
                     h_max=1.0,
                 )
@@ -317,7 +317,7 @@ if mesh.comm.rank == 0:
     import matplotlib.pyplot as plt
 
     d = 2  # spatial dimension
-    stylemap = {"udobv": "ko", "uni": "rs", "avm": "g^"}
+    stylemap = {"udobv": "ko", "uni": "rs", "ama": "g^"}
 
     def _convergence_plot(index, ylabel, title, outfile, rateexp, ratelabel):
         plt.figure()
@@ -368,7 +368,7 @@ if mesh.comm.rank == 0:
     plt.savefig(hausfile)
 
     # effectivity index = estimator / true error, in the quasi-norm the
-    # weighted BV00 estimator targets; UDOBV only, since UNI/AVM don't
+    # weighted BV00 estimator targets; UDOBV only, since UNI/AMA don't
     # compute an a posteriori estimator; linear y-axis, semilogx x-axis,
     # horizontal reference at eff=1
     efffile = "porous_effectivity.png"

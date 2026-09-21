@@ -5,11 +5,11 @@
 #   2. NSV03 = Nochetto, Siebert, and Veeser (2003)
 #   3. NSV05 = Nochetto, Siebert, and Veeser (2005); fully-localized NSV03 successor
 #   4. UNI = uniform refinement
-#   5. AVM = averaged-metric mesh adaptation
+#   5. AMA = averaged-metric adaptation
 #
-# The AVM method only runs if "import animate" succeeds.
+# The AMA method only runs if "import animate" succeeds.
 #
-# We generate .pvd files: result_sphere_{udobr,nsv03,nsv05,uni,avm}.pvd
+# We generate .pvd files: result_sphere_{udobr,nsv03,nsv05,uni,ama}.pvd
 #
 # For the default mode the exact solution is known and so we can compute
 # norm convergence rates.  We generate ten .png convergence figures comparing
@@ -44,7 +44,7 @@
 # no closed-form exact solution for this operator, so norm/effectivity figures
 # are skipped.  Also, both NSV methods assume the Laplacian internally (see
 # _nsv03mark() and _nsv05mark()) and so are not meaningful here; only UDOBV, UNI,
-# and AVM are compared.
+# and AMA are compared.
 #
 # Suggested runs to get familiar with major cases:
 #   python3 sphere.py                        [exact soln known; Laplacian]
@@ -119,7 +119,7 @@ parser.add_argument(
     type=int,
     default=10,
     metavar="N",
-    help="initial mesh is m0 x m0, except AVM [default=10]",
+    help="initial mesh is m0 x m0, except AMA [default=10]",
 )
 parser.add_argument(
     "-maxlevels",
@@ -142,7 +142,7 @@ parser.add_argument(
     default=False,
     help="use the degenerate porous-media operator -div((u-psi)^(gamma-1) grad(u)) - f, "
     "via eps-continuation, in place of the classical Laplacian; restricts the comparison "
-    "to udobr (weighted BV00)/uni/avm, since nsv03 and nsv05 require the Laplacian [default=False]",
+    "to udobr (weighted BV00)/uni/ama, since nsv03 and nsv05 require the Laplacian [default=False]",
 )
 parser.add_argument(
     "-targetelements",
@@ -205,11 +205,11 @@ except:
     )
     pass
 else:
-    refinetypes.append("avm")  # if import succeeded
+    refinetypes.append("ama")  # if import succeeded
 
-# AVM parameters; attempts to do apples-to-apples vs UDOBR
-initialhAVM = 4.0 / args.m0
-targetsAVM = [
+# AMA parameters; attempts to do apples-to-apples vs UDOBR
+initialhAMA = 4.0 / args.m0
+targetsAMA = [
     100,
     300,
     900,
@@ -472,10 +472,10 @@ for amrtype in refinetypes:
     dp = VIAMR.PARALLEL_OVERLAP
 
     # create initial mesh
-    if amrtype == "avm":
+    if amrtype == "ama":
         geo = SplineGeometry()
         geo.AddRectangle(p1=(-2, -2), p2=(2, 2), bc="rectangle")
-        ngmsh = geo.GenerateMesh(maxh=initialhAVM)
+        ngmsh = geo.GenerateMesh(maxh=initialhAMA)
         mesh0 = Mesh(ngmsh, distribution_parameters=dp)
     else:
         mesh0 = RectangleMesh(
@@ -623,7 +623,7 @@ for amrtype in refinetypes:
         # refinetime is the AMR cost (marking + refinement) that produced THIS
         # mesh from the previous one (0.0 at i=0); accumulating it here.
         # marktime/meshbuildtime split it into VIAMR-controlled cost (marking,
-        # or AVM's metric-building) vs the external backend's mesh-construction
+        # or AMA's metric-building) vs the external backend's mesh-construction
         # cost (PETSc SBR / Mmg/ParMmg).  marktime + meshbuildtime <= refinetime;
         # see the AMR-step comment below for why they need not sum exactly.
         cumamrtime += refinetime
@@ -643,7 +643,7 @@ for amrtype in refinetypes:
             break
 
         # Do an AMR level.  Each non-uni branch times two phases separately:
-        #   "mark" = whatever VIAMR itself computes (marking fields, or AVM's
+        #   "mark" = whatever VIAMR itself computes (marking fields, or AMA's
         #            metric construction including vcdmark())
         #   "meshbuild" = the external backend call that actually builds the
         #            new mesh (PETSc SBR via refinesbr2D(), or Mmg/ParMmg via
@@ -653,9 +653,9 @@ for amrtype in refinetypes:
         start_time = time.time()
         if amrtype == "uni":
             mesh = unimh[i + 1]
-        elif amrtype == "avm":
+        elif amrtype == "ama":
             amr.setmetricparameters(
-                target_complexity=targetsAVM[i + 1], h_min=1.0e-4, h_max=1.0
+                target_complexity=targetsAMA[i + 1], h_min=1.0e-4, h_max=1.0
             )
             t_mark0 = time.time()
             metric = amr.buildaveragedmetric(mesh, uh, lb)
@@ -795,7 +795,7 @@ if mesh.comm.rank == 0:
     import matplotlib.pyplot as plt
 
     d = 2  # spatial dimension
-    stylemap = {"udobr": "ko", "nsv03": "bs", "nsv05": "md", "uni": "rs", "avm": "g^"}
+    stylemap = {"udobr": "ko", "nsv03": "bs", "nsv05": "md", "uni": "rs", "ama": "g^"}
 
     if exact_known:
 
@@ -876,7 +876,7 @@ if mesh.comm.rank == 0:
         # errornorm_Linf_reconstructed()): the right comparison for UDOBR,
         # which deliberately leaves the active-set interior coarse.
         # Included for all methods, not just that one, for consistency.
-        # NSV03/UNI/AVM refine the active set, so their curves should match
+        # NSV03/UNI/AMA refine the active set, so their curves should match
         # ||u-u_h||_2 earlier.  NSV05 switches its residual off on the discrete
         # full-contact set, so it belongs with UDOBR rather than with NSV03 here.
         _convergence_plot(
@@ -892,7 +892,7 @@ if mesh.comm.rank == 0:
         #   reconstructed-uh error.  UNI is excluded: its time includes no
         #   marking/refinement step, thus uninformative here.  Levels with
         #   under 1s of cumulative AMR time are excluded as measurement noise.
-        # marktime = VIAMR's own cost (marking fields, or AVM's metric-building
+        # marktime = VIAMR's own cost (marking fields, or AMA's metric-building
         #   via buildaveragedmetric())
         # meshbuildtime = the external backend's mesh-construction cost
         #   (PETSc SBR via refinesbr2D(), or Mmg/ParMmg via animate.adapt()).
