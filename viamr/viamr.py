@@ -1939,21 +1939,47 @@ class VIAMR(OptionsManager, AMAMixin):
             assert min(active.dat.data_ro) >= 0.0
             assert max(active.dat.data_ro) <= 1.0
 
+    def _checksubmeshmeasure(self, active, activeinterp, rtol=1.0e-8):
+        """Check that interpolating a DG0 indicator onto a refinement of its own mesh
+        preserves measures.  The argument activeinterp is the interpolation of the DG0
+        indicator active onto a mesh mesh1.  Here mesh1 is assumed to refine mesh2, the
+        mesh of active, meaning that each cell of mesh1 lies within a single cell of
+        mesh2.  In that case activeinterp equals active almost everywhere, and therefore
+        the two meshes have the same measure, and the set indicated by active also has the
+        same measure as the set for activeinterp.  Both of these equalities are checked to
+        relative tolerance rtol, and a ValueError is raised if either fails.  The converse
+        does not hold; passing both checks does not prove that mesh1 refines mesh2.
+        Applies to polygonal meshes.  The jaccard() method calls this when submesh==True,
+        when it interpolates its second argument onto the mesh of its first."""
+        mesh1 = activeinterp.function_space().mesh()
+        mesh2 = active.function_space().mesh()
+        area1 = assemble(Constant(1.0) * dx(mesh1))
+        area2 = assemble(Constant(1.0) * dx(mesh2))
+        if abs(area1 - area2) > rtol * max(area1, area2):
+            raise ValueError(
+                f"_checksubmeshmeasure(): the two meshes have different measures {area1} and {area2}"
+            )
+        set1 = assemble(activeinterp * dx(mesh1))
+        set2 = assemble(active * dx(mesh2))
+        if abs(set1 - set2) > rtol * area2:
+            raise ValueError(
+                f"_checksubmeshmeasure(): the active sets have different measures {set2} and {set1}"
+            )
+
     def jaccard(self, active1, active2, submesh=False, qdegree=6, mesh=None):
-        """Compute the Jaccard metric of two sets, for example two active sets, from their indicator functions.  By definition, the Jaccard metric of two sets is
-            J(S,T) = |S cap T| / |S cup T|,
-        where |.| is area (measure) of the set.  Thus J(S,T) is the ratio of the area (measure) of the intersection divided by that of the union.
+        """Compute the Jaccard metric of two sets, for example two active sets.  By definition, the Jaccard metric J(S,T) of two sets is the ratio of the area (measure) of the intersection divided by that of the union:
+            J(S,T) = |S cap T| / |S cup T|.
+        Note that J(S,T) = J(T,S); it is a symmetric function.
 
-        Each of active1, active2 is an indicator function, given either as a DG0 Function or as a UFL expression, in any combination.  Since J(S,T) is symmetric, the order of the arguments only determines the mesh over which the integrals are computed, namely the mesh of the first DG0 Function argument.  If both arguments are UFL expressions then a mesh= argument is required; otherwise mesh= is not allowed.  A UFL expression argument is integrated using quadrature of degree qdegree, so qdegree has no effect if both arguments are DG0 Functions.
+        The sets S,T are the input variables active1, active2, each of which is an indicator function for the set, given either as a DG0 Function or as a UFL expression, in any combination.  If both arguments are UFL expressions then a mesh= keyword argument is required; otherwise mesh= is not allowed.  A UFL expression argument is integrated using quadrature of degree qdegree, so qdegree has no effect if both arguments are DG0 Functions.
 
-        If both arguments are DG0 Functions then, in serial, they can be on different meshes.  (In that case the project() method is used to put active2 on active1's mesh.)  If submesh==True then active2 is assumed to live on a submesh of active1, so interpolate onto the active1 mesh will work correctly.  *Note that this method works in parallel if submesh==True, or if either argument is a UFL expression.*"""
-        # FIXME how to check that, when submesh==True, active2 is actually on a submesh of active1?
+        If both arguments are DG0 Functions then, in serial, they can be on different meshes.  In that case the project() method is used to put active2 on active1's mesh.
+
+        If submesh==True then the mesh of active1 is assumed to be a refinement of the mesh of active2, meaning that each cell of the active1 mesh lies within a single cell of the active2 mesh.  Under that assumption interpolate() puts active2 onto the active1 mesh exactly, and it does so in parallel.  Regarding checking the submesh relation, no mesh object records such a relation between two separately-constructed meshes, so submesh==True is a promise by the caller.  However, _checksubmeshmeasure() verifies a necessary consequence of it.
+
+        This method works in parallel if either submesh==True, or if either indicator argument is a UFL expression."""
         isfem1 = isinstance(active1, Function)
         isfem2 = isinstance(active2, Function)
-        if self.debug:
-            for a, isfem in [(active1, isfem1), (active2, isfem2)]:
-                if isfem:
-                    self._checkDG0indicator(a)
         if isfem1 or isfem2:
             if mesh is not None:
                 raise ValueError(
@@ -1966,13 +1992,19 @@ class VIAMR(OptionsManager, AMAMixin):
                     "jaccard() with two UFL expressions requires a mesh= argument"
                 )
             imesh = mesh
+        if self.debug:
+            for a, isfem in [(active1, isfem1), (active2, isfem2)]:
+                if isfem:
+                    self._checkDG0indicator(a)
         if isfem1 and isfem2:
             mesh2 = active2.function_space().mesh()
             if submesh == False and (imesh.comm.size > 1 or mesh2.comm.size > 1):
                 raise ValueError("jaccard(.., submesh=False) is not valid in parallel")
             a1DG0 = active1.function_space()
             if submesh:
-                active2 = Function(a1DG0).interpolate(active2)
+                active2interp = Function(a1DG0).interpolate(active2)
+                self._checksubmeshmeasure(active2, active2interp)
+                active2 = active2interp
             else:
                 active2 = Function(a1DG0).project(active2)
             dV = dx(imesh)

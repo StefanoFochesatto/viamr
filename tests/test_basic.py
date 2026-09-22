@@ -165,9 +165,33 @@ def test_jaccard_submesh_uniform():
     x, _ = SpatialCoordinate(mesh)
     mark = Function(DG0).interpolate(conditional(x < 0.5, 1.0, 0.0))
     rmesh = amr.refinesbr2D(mesh, "uniform")
-    rx, _ = SpatialCoordinate(mesh)
-    rmark = Function(DG0).interpolate(conditional(x < 0.7, 1.0, 0.0))
-    assert amr.jaccard(mark, rmark, submesh=True) == amr.jaccard(mark, rmark)
+    _, rDG0 = amr.spaces(rmesh)
+    rx, _ = SpatialCoordinate(rmesh)
+    rmark = Function(rDG0).interpolate(conditional(rx < 0.55, 1.0, 0.0))
+    # the first argument lives on the refined mesh, so interpolating the second
+    # is exact and gives the same answer as the project() path
+    jsub = amr.jaccard(rmark, mark, submesh=True)
+    assert abs(jsub - amr.jaccard(rmark, mark)) < 1.0e-10
+    # the other order violates the refinement assumption; here it moves the
+    # measure of the rmark set from 0.55 to 0.60, which _checksubmeshmeasure() catches
+    with pytest.raises(ValueError):  # active sets have different measures
+        amr.jaccard(mark, rmark, submesh=True)
+
+
+def test_jaccard_submesh_different_domains():
+    # mesh1 sits inside the domain of mesh2, so interpolation succeeds, but the
+    # Jaccard integrals would be over different domains
+    amr = VIAMR(debug=True)
+    mesh1 = UnitSquareMesh(4, 4)
+    mesh2 = RectangleMesh(4, 4, 2.0, 1.0)
+    _, DG01 = amr.spaces(mesh1)
+    _, DG02 = amr.spaces(mesh2)
+    x1, _ = SpatialCoordinate(mesh1)
+    x2, _ = SpatialCoordinate(mesh2)
+    active1 = Function(DG01).interpolate(conditional(x1 < 0.5, 1.0, 0.0))
+    active2 = Function(DG02).interpolate(conditional(x2 < 0.5, 1.0, 0.0))
+    with pytest.raises(ValueError):  # meshes have different measures
+        amr.jaccard(active1, active2, submesh=True)
 
 
 def _jaccard_ufl_case(amr):
@@ -342,6 +366,7 @@ if __name__ == "__main__":
     test_nonoverlapping_jaccard()
     test_symmetry_jaccard()
     test_jaccard_submesh_uniform()
+    test_jaccard_submesh_different_domains()
     test_third_jaccard_ufl()
     test_jaccard_bad_arguments()
     test_hausdorff2D()
