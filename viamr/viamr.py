@@ -16,17 +16,17 @@ from .ama import AMAMixin, haveanimate
 
 
 class VIAMR(OptionsManager, AMAMixin):
-    r"""A VIAMR object manages adaptive mesh refinement (AMR) for a Firedrake
-    variational inequality (VI) solver, where the VI constraint set is defined by
-    box bounds (lb <= u <= ub).
+    r"""A VIAMR object computes a posteriori estimators for a Firedrake variational inequality (VI) solver, where the VI constraint set is defined by box bounds (lb <= u <= ub), and it manages adaptive mesh refinement (AMR) from such estimators.
 
     Central notions behind this class:
-      * The methods generate element markings, to be passed to tag-and-refine mesh refinement methods.  One method (see buildaveragedmetric() below) generates a metric to be passed to the animate mesh adaptation library.
-      * We implement certain rigorous a posteriori estimators for the classical obstacle problem---see nsvmark() below---but mathematical theory is unlikely to provide such rigorous estimates except for model problems.
-      * Other methods in the library are partly-heuristic, based on a PDE-type a posteriori estimator in the computed inactive set, with additional refinement in the vicinity of the free boundary.
-      * Refinement near the computed free boundary is compatible with the goals of certain free boundary models.  For example, one often solves a glacier problem in order to approximate which land is glaciated, and to outline that glaciated area.
+      * The methods generate DG0 element markings, to be passed to tag-and-refine mesh refinement methods.
+      * We implement certain rigorous a posteriori estimators for the classical obstacle problem---see nsvmark() below.
+      * Mathematical theory often does not provide existing, rigorous estimators for realistic problems.
+      * Some methods in the library are partly-heuristic, based on a PDE-type a posteriori estimator in the computed inactive set, with additional refinement in the vicinity of the free boundary.
+      * Refinement near the computed free boundary is compatible with the goals of certain VI models.
       * For some problems, refinement in the active set is worthwhile, but for some problems it is wasted effort.
-      * We including geometrical set measures (see hausdorff2D() and jaccard()), so that users can assess their solutions using more than Sobolev norms.
+      * We including geometrical set measures, specifically hausdorff2D() and jaccard(), so that users can assess their solutions using more than Sobolev norms.
+      * An extension of this class (AMAMixin), and specifically method buildaveragedmetric() below, generates a metric to be passed to the animate mesh adaptation library.
 
     The public mark-and-refine API of the VIAMR class consists of:
 
