@@ -644,7 +644,7 @@ for amrtype in refinetypes:
 
         # Do an AMR level.  Each non-uni branch times two phases separately:
         #   "mark" = whatever VIAMR itself computes (marking fields, or AMA's
-        #            metric construction including vcdmark())
+        #            metric construction including the VCD diffusion solve)
         #   "meshbuild" = the external backend call that actually builds the
         #            new mesh (PETSc SBR via refinesbr2D(), or Mmg/ParMmg via
         #            animate.adapt()) -- see refinesbr2D()'s docstring for why
@@ -704,7 +704,7 @@ for amrtype in refinetypes:
         else:
             # UDO + BR78/BV00 case
             t_mark0 = time.time()
-            mark = amr.udomark(uh, lb, n=1)
+            mark, _, _ = amr.fbmark(uh, (lb, None), udo_n=1)
             imark, tot_eta = applybr(uh, lb)
             mark = amr.unionmarks(mark, imark)
             t_mark1 = time.time()
@@ -761,7 +761,8 @@ for amrtype in refinetypes:
         fields += [uexact, error]
     if amrtype == "udobr":
         imark, tot_eta = applybr(uh, lb)
-        mark = amr.unionmarks(amr.udomark(uh, lb, n=1), imark)
+        fbmark, _, _ = amr.fbmark(uh, (lb, None), udo_n=1)
+        mark = amr.unionmarks(fbmark, imark)
         imark.rename("imark (BR)")
         mark.rename("mark")
         fields += [mark, imark]

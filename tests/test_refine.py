@@ -15,7 +15,7 @@ def test_overrefine_udo():
     psi = Function(CG1).interpolate(_get_ball_obstacle(x, y))
     u = Function(CG1).interpolate(conditional(psi > 0.0, psi, 0.0))
     unorm0 = norm(u)
-    mark = amr.udomark(u, psi)
+    mark, _, _ = amr.fbmark(u, (psi, None))
     assert amr.countmark(mark) == DG0.dim()  # everything gets marked
     # VTKFile("result_overrefine_udo.pvd").write(u, psi, mark)
     rmesh = mesh.refine_marked_elements(mark)  # netgen's refine method
@@ -35,7 +35,7 @@ def test_finer_udo():
     psi = Function(CG1).interpolate(_get_ball_obstacle(x, y))
     u = Function(CG1).interpolate(conditional(psi > 0.0, psi, 0.0))
     unorm0 = norm(u)
-    mark = amr.udomark(u, psi, n=1)  # note n=1 (default is n=2)
+    mark, _, _ = amr.fbmark(u, (psi, None), udo_n=1)
     assert amr.countmark(mark) == 90
     assert amr.countmark(mark) < DG0.dim()
     # VTKFile("result_finer_udo.pvd").write(u, psi, mark)
@@ -57,7 +57,7 @@ def test_refine_vcd():
     psi = Function(CG1).interpolate(_get_ball_obstacle(x, y))
     u = Function(CG1).interpolate(conditional(psi > 0.0, psi, 0.0))
     unorm0 = norm(u)
-    mark = amr.vcdmark(u, psi)
+    mark, _, _ = amr.fbmark(u, (psi, None), algorithm="vcd")
     assert amr.countmark(mark) == 13
     assert amr.countmark(mark) < DG0.dim()  # not everything gets marked
     # VTKFile("result_refine_vcd.pvd").write(u, psi, mark)
@@ -78,7 +78,7 @@ def test_refine_vcd_petscsbr():
     psi = Function(CG1).interpolate(_get_ball_obstacle(x, y))
     u = Function(CG1).interpolate(conditional(psi > 0.0, psi, 0.0))
     unorm0 = norm(u)
-    mark = amr.vcdmark(u, psi)
+    mark, _, _ = amr.fbmark(u, (psi, None), algorithm="vcd")
     rmesh = amr.refinesbr2D(mesh, mark)  # PETSc's skeleton-based refine method
     rCG1, _ = amr.spaces(rmesh)
     assert rCG1.dim() == 49
@@ -98,11 +98,11 @@ def test_refine_vcd_firedrake_petscsbr():
     psi = Function(CG1).interpolate(_get_ball_obstacle(x, y))
     u = Function(CG1).interpolate(conditional(psi > 0.0, psi, 0.0))
     unorm0 = norm(u)
-    mark = amr.vcdmark(u, psi)
+    mark, _, _ = amr.fbmark(u, (psi, None), algorithm="vcd")
     rmesh = amr.refinesbr2D(mesh, mark)  # PETSc's skeleton-based refine method
     rCG1, _ = amr.spaces(rmesh)
     # check that direct solver gets same result
-    markDS = amr.vcdmark(u, psi, directsolver=True)
+    markDS, _, _ = amr.fbmark(u, (psi, None), algorithm="vcd", vcd_directsolver=True)
     rmeshDS = amr.refinesbr2D(mesh, markDS)
     rCG1DS, _ = amr.spaces(rmeshDS)
     assert rCG1DS.dim() == rCG1.dim() == 73
@@ -848,10 +848,10 @@ def test_fixedrate_total():
     _fixedrate_total_case(VIAMR(debug=True))
 
 
-def _udomark_nontrivial_lb(amr):
+def _fbmark_nontrivial_lb(amr):
     # Shared "somewhat interesting obstacle configuration" used by
-    # test_udomark_nontrivial() here, and by
-    # tests/test_parallel.py::test_udomark_nontrivial_parallel() and
+    # test_fbmark_udo_nontrivial() here, and by
+    # tests/test_parallel.py::test_fbmark_udo_nontrivial_par() and
     # test_udo_regression().
     mesh = RectangleMesh(20, 20, 1, 1, distribution_parameters=VIAMR.PARALLEL_OVERLAP)
     CG1, _ = amr.spaces(mesh)
@@ -877,50 +877,66 @@ def _udomark_nontrivial_lb(amr):
     return u, lb
 
 
-def _udomark_nontrivial(amr):
-    # Shared by test_udomark_nontrivial() here and
-    # tests/test_parallel.py::test_udomark_nontrivial_parallel(), so the
+def _fbmark_udo_nontrivial(amr):
+    # Shared by test_fbmark_udo_nontrivial() here and
+    # tests/test_parallel.py::test_fbmark_udo_nontrivial_par(), so the
     # two assert the identical count from one definition.
-    u, lb = _udomark_nontrivial_lb(amr)
-    mark = amr.udomark(u, lb, n=2)
+    u, lb = _fbmark_nontrivial_lb(amr)
+    mark, marklower, markupper = amr.fbmark(u, (lb, None), udo_n=2)
     assert amr.countmark(mark) == 506
+    # with a one-sided bound, the union is the lower marking alone
+    assert amr.countmark(marklower) == 506
+    assert markupper is None
 
 
-def test_udomark_nontrivial():
-    _udomark_nontrivial(VIAMR())
+def test_fbmark_udo_nontrivial():
+    _fbmark_udo_nontrivial(VIAMR())
 
 
-def _udomark_restrict_case(amr):
-    # Shared by test_udomark_restrict() here and
-    # tests/test_parallel.py::test_udomark_restrict_parallel(), so the two
+def _fbmark_restrict_case(amr):
+    # Shared by test_fbmark_restrict() here and
+    # tests/test_parallel.py::test_fbmark_restrict_par(), so the two
     # assert the identical mesh sizes/counts from one definition. Exercises
-    # udomark(restrict=...), and thus VIAMR._filtermesh(), which otherwise
+    # fbmark(udo_restrict=...), and thus VIAMR._filtermesh(), which otherwise
     # has no test coverage.
-    u, lb = _udomark_nontrivial_lb(amr)
+    u, lb = _fbmark_nontrivial_lb(amr)
     mesh = u.function_space().mesh()
     assert amr.meshsizes(mesh)[1] == 800
 
-    markactive = amr.udomark(u, lb, n=2, restrict="active")
+    markactive, _, _ = amr.fbmark(u, (lb, None), udo_n=2, udo_restrict="active")
     meshactive = markactive.function_space().mesh()
     assert amr.meshsizes(meshactive)[1] == 154
     assert amr.countmark(markactive) == 154
 
-    markinactive = amr.udomark(u, lb, n=2, restrict="inactive")
+    markinactive, _, _ = amr.fbmark(u, (lb, None), udo_n=2, udo_restrict="inactive")
     meshinactive = markinactive.function_space().mesh()
     assert amr.meshsizes(meshinactive)[1] == 750
     assert amr.countmark(markinactive) == 456
 
     # unrestricted call still works and is unaffected by the restricted calls
-    markfull = amr.udomark(u, lb, n=2)
+    markfull, _, _ = amr.fbmark(u, (lb, None), udo_n=2)
     assert amr.countmark(markfull) == 506
 
 
-def test_udomark_restrict():
+def test_fbmark_restrict():
     amr = VIAMR(debug=True)
-    _udomark_restrict_case(amr)
-    u, lb = _udomark_nontrivial_lb(amr)
+    _fbmark_restrict_case(amr)
+    u, lb = _fbmark_nontrivial_lb(amr)
     with pytest.raises(ValueError):
-        amr.udomark(u, lb, restrict="bogus")
+        amr.fbmark(u, (lb, None), udo_restrict="bogus")
+
+
+def test_fbmark_bad_arguments():
+    amr = VIAMR(debug=True)
+    u, lb = _fbmark_nontrivial_lb(amr)
+    with pytest.raises(ValueError):  # at least one bound is required
+        amr.fbmark(u, (None, None))
+    with pytest.raises(ValueError):  # unknown algorithm
+        amr.fbmark(u, (lb, None), algorithm="bogus")
+    with pytest.raises(ValueError):  # vcd_* needs algorithm="vcd"
+        amr.fbmark(u, (lb, None), vcd_bracket=[0.1, 0.9])
+    with pytest.raises(ValueError):  # udo_* needs algorithm="udo"
+        amr.fbmark(u, (lb, None), algorithm="vcd", udo_n=2)
 
 
 def _nsv03mark_bilateral_soln(amr, m=32):
@@ -1195,8 +1211,10 @@ def test_upper_obstacle_elasto():
     assert 0 < amr.countmark(active) < DG0.dim()  # genuine contact set, not all/none
     assert amr.countmark(active) + amr.countmark(inactive) == DG0.dim()
 
-    mark = amr.udomark(u, ub, boxside="upper", n=1)
+    mark, marklower, markupper = amr.fbmark(u, (None, ub), udo_n=1)
     assert 0 < amr.countmark(mark) < DG0.dim()
+    assert marklower is None
+    assert amr.countmark(markupper) == amr.countmark(mark)
 
     _, fb = amr.freeboundarygraph2D(u, ub, boxside="upper")
     assert len(fb) > 0  # contact plateau has a nonempty free boundary
@@ -1224,6 +1242,7 @@ if __name__ == "__main__":
     test_nsvmark_curvedobstacle()
     test_nsvmark_badargs()
     test_fixedrate_total()
-    test_udomark_nontrivial()
-    test_udomark_restrict()
+    test_fbmark_udo_nontrivial()
+    test_fbmark_restrict()
+    test_fbmark_bad_arguments()
     test_upper_obstacle_elasto()

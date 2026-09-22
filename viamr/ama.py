@@ -16,8 +16,24 @@ class AMAMixin:
     methods that are the rest of the class.
 
     AMAMixin is not usable separately from VIAMR.  Specifically,
-    _isotropicfbmetric() calls VIAMR.vcdmark().  Also, self.metricparameters
+    _isotropicfbmetric() calls VIAMR._vcdsmooth().  Also, self.metricparameters
     and self.debug are set by VIAMR.__init__().
+
+    TODO: Convert buildaveragedmetric() and _isotropicfbmetric() to the
+    bounds=(lb,ub) signature used by the marking methods in VIAMR, namely
+    fbmark(), inactivemark(), and nsvmark(), and by the set-indicator methods
+    nodalactive(), elemactive(), and eleminactive().  These two AMAMixin methods
+    are the last ones taking the older unilateral pair of a bound plus
+    boxside="lower"/"upper"; the only other holdout in the library is
+    VIAMR.freeboundarygraph2D().  The conversion is not merely mechanical: with
+    box bounds there are two free boundaries, so the isotropic metric would be
+    built from two smoothed indicators, one per bound.  The options are to sum
+    the two gradient magnitudes before interpolating the metric, or to build two
+    isotropic metrics and combine them by animate intersection, as
+    buildaveragedmetric(intersect=True) already does for the isotropic and
+    Hessian metrics.  Which is right should be settled by a bilateral example,
+    e.g. examples/pollutant.py or examples/bilateral.py, and not by analogy
+    alone.
 
     Public API: setmetricparameters(), buildaveragedmetric().
 
@@ -58,10 +74,13 @@ class AMAMixin:
 
     def _isotropicfbmetric(self, mesh, uh, bound, CG1, P1tensor, boxside="lower"):
         """Construct a normalized free-boundary isotropic metric from abs(grad(s)),
-        where s is the (smooth) output of vcdmark().  Compare "L2" option in
-        animate.compute_isotropic_metric(); here we already have a P1 indicator.)"""
+        where s is the smoothed nodal active set indicator from _vcdsmooth(),
+        i.e. the first stage of the VCD algorithm in fbmark().  Compare "L2"
+        option in animate.compute_isotropic_metric(); here we already have a P1
+        indicator.)"""
         assert haveanimate, "animate import failed, method unavailable"
-        s = self.vcdmark(uh, bound, boxside=boxside, returnSmooth=True)
+        bounds = (None, bound) if boxside == "upper" else (bound, None)
+        s = self._vcdsmooth(uh, bounds)
         maggrads = Function(CG1).interpolate(sqrt(dot(grad(s), grad(s))))
         VIMetric = animate.RiemannianMetric(P1tensor)
         VIMetric.set_parameters(self.metricparameters)
@@ -82,7 +101,8 @@ class AMAMixin:
 
     def buildaveragedmetric(self, mesh, uh, bound, boxside="lower", gamma=0.50, intersect=False):
         """From the solution uh, of a unilateral obstacle problem with the given
-        bound (boxside="lower" or "upper"; see VIAMR.udomark()), constructs both
+        bound (boxside="lower" or "upper"; see the TODO in the AMAMixin doc
+        string above), constructs both
         an anisotropic Hessian-based metric and an isotropic metric computed from the
         magnitude of the gradient of the smoothed VCD indicator.  These metrics are averaged
         (linearly-combined) using gamma:

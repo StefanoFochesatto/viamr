@@ -129,7 +129,7 @@ parser.add_argument(
     type=int,
     default=1,
     metavar="N",
-    help="use udomark(.., n=N) [default=1]",
+    help="use fbmark(.., udo_n=N) [default=1]",
 )
 parser.add_argument(
     "-uniform",

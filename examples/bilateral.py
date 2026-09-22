@@ -172,14 +172,11 @@ for method in methods:
         print(f"    |u-u_h|_2 = {errsl2[-1]:.3e}, |u-u_h|_inf = {errsinf[-1]:.3e}")
 
         if method == "UDOBR":
-            # box form: the free-boundary marking is the union of the two
-            # one-sided UDO marks, as in examples/pollutant.py, while the
-            # inactive-set estimator takes the pair, so that it restricts to the
-            # elements touching *neither* obstacle
-            fmark = amr.unionmarks(
-                amr.udomark(uh, lb, boxside="lower", n=nUDO),
-                amr.udomark(uh, ub, boxside="upper", n=nUDO),
-            )
+            # box form: fbmark() unions the two one-sided UDO marks, as in
+            # examples/pollutant.py, while the inactive-set estimator takes the
+            # pair, so that it restricts to the elements touching *neither*
+            # obstacle
+            fmark, _, _ = amr.fbmark(uh, (lb, ub), udo_n=nUDO)
             residual = -div(grad(uh)) - f_ufl
             (imark, _, Eh) = amr.inactivemark(
                 uh, (lb, ub), estimator="br78", res=residual, theta=args.theta, method=markmethod

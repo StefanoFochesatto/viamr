@@ -19,9 +19,9 @@ from test_refine import (
     _nsv05mark_pyramid,
     _nsvmark_lbufl_null,
     _nsvmark_curvedobstacle,
-    _udomark_nontrivial,
-    _udomark_nontrivial_lb,
-    _udomark_restrict_case,
+    _fbmark_udo_nontrivial,
+    _fbmark_nontrivial_lb,
+    _fbmark_restrict_case,
 )
 
 
@@ -66,7 +66,7 @@ class VIAMRRegression(VIAMR):
         """Mark mesh using Unstructured Dilation Operator (UDO) algorithm."""
         mesh = uh.function_space().mesh()
         if mesh.comm.size > 1:
-            raise ValueError("udomark() is not valid in parallel")
+            raise ValueError("udomarkOLD() is not valid in parallel")
         # generate element-wise indicator for border set
         elemborder = self._elemborder(self.nodalactive(uh, (lb, None)))
         # _bfs_neighbors() constructs N^n(B) indicator
@@ -83,7 +83,7 @@ def test_refine_udo_par():
     u = Function(CG1).interpolate(conditional(psi > 0.0, psi, 0.0))
     unorm0 = norm(u)
     # VTKFile(f"result_refine_0.pvd").write(u)
-    mark1 = amr.udomark(u, psi)
+    mark1, _, _ = amr.fbmark(u, (psi, None))
     rmesh1 = mesh1.refine_marked_elements(mark1)  # netgen's refine method
     mesh2 = _get_netgen_mesh(TriHeight=0.1)
     CG1, _ = amr.spaces(mesh2)
@@ -92,7 +92,7 @@ def test_refine_udo_par():
     u = Function(CG1).interpolate(conditional(psi > 0.0, psi, 0.0))
     unorm0 = norm(u)
     # VTKFile("result_refine_0.pvd").write(u)
-    mark2 = amr.udomark(u, psi)
+    mark2, _, _ = amr.fbmark(u, (psi, None))
     rmesh2 = mesh2.refine_marked_elements(mark2)  # netgen's refine method
     assert abs(amr.jaccard(mark1, mark2, submesh=True) - 1.0) < 1.0e-10
     r1CG1, _ = amr.spaces(rmesh1)
@@ -101,17 +101,17 @@ def test_refine_udo_par():
 
 
 @pytest.mark.parallel(nprocs=3)
-def test_udomark_nontrivial_par():
-    _udomark_nontrivial(VIAMR())
+def test_fbmark_udo_nontrivial_par():
+    _fbmark_udo_nontrivial(VIAMR())
 
 
 def test_udo_regression():
     # This test utilizes the the old implementation of UDO which builds the neighborhood of the free boundary using breadth first search,
     # as a regression test for the dmplex based implementation.
     amr = VIAMRRegression()
-    u, lb = _udomark_nontrivial_lb(amr)
+    u, lb = _fbmark_nontrivial_lb(amr)
     markold = amr.udomarkOLD(u, lb, n=2)
-    marknew = amr.udomark(u, lb, n=2)
+    marknew, _, _ = amr.fbmark(u, (lb, None), udo_n=2)
     assert amr.jaccard(markold, marknew) == 1.0
 
 
@@ -213,18 +213,18 @@ def test_hausdorff2D_par():
 
 
 @pytest.mark.parallel(nprocs=3)
-def test_udomark_restrict_par():
-    # Confirms tests/test_refine.py::_udomark_restrict_case() -- i.e.
-    # udomark(restrict=...) and thus VIAMR._filtermesh(), which uses PETSc's
+def test_fbmark_restrict_par():
+    # Confirms tests/test_refine.py::_fbmark_restrict_case() -- i.e.
+    # fbmark(udo_restrict=...) and thus VIAMR._filtermesh(), which uses PETSc's
     # DMPlex "transform_filter" transform -- gives the same restricted
     # submesh sizes and mark counts regardless of process count.
-    _udomark_restrict_case(VIAMR(debug=True))
+    _fbmark_restrict_case(VIAMR(debug=True))
 
 
 if __name__ == "__main__":
     test_refine_udo_par()
     test_udo_regression()
-    test_udomark_nontrivial_par()
+    test_fbmark_udo_nontrivial_par()
     test_fixedrate_total_par()
     test_nsv03mark_nontrivial_par()
     test_nsv03mark_kink_decay_par()
@@ -234,4 +234,4 @@ if __name__ == "__main__":
     test_nsvmark_curvedobstacle_par()
     test_freeboundarygraph2D_par()
     test_hausdorff2D_par()
-    test_udomark_restrict_par()
+    test_fbmark_restrict_par()

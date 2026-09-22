@@ -20,7 +20,7 @@
 m0 = 10  # initial mesh is m0 x m0
 levels = 6  # number of AMR refinement levels
 theta = 0.5  # BR/UDO fixed-rate threshold in the inactive set
-udo_n = 1  # udomark() dilation levels
+udo_n = 1  # fbmark() UDO dilation levels
 primals = ["u", "s"]  # compare both primal-variable formulations
 
 import numpy as np
@@ -121,7 +121,7 @@ for primal in primals:
             res, Z = residual_u_ufl(w, a, lb)
         else:
             res, Z = residual_s_ufl(w, a, lb)
-        fbmark = amr.udomark(w, Constant(0.0), n=udo_n)  # because of flat bed, psi=0 regardless of -primal
+        fbmark, _, _ = amr.fbmark(w, (Constant(0.0), None), udo_n=udo_n)  # because of flat bed, psi=0 regardless of -primal
         imark, _, total_eta = amr.inactivemark(
             w, (Constant(0.0), None), estimator="bv00", res=res, alpha=Z, theta=theta, method="total"
         )

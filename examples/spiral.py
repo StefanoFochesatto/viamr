@@ -17,7 +17,7 @@ from firedrake.petsc import PETSc
 print = PETSc.Sys.Print  # enables correct printing in parallel
 from viamr import VIAMR
 
-# udomark() needs this overlap to give correct results in parallel
+# fbmark(algorithm="udo") needs this overlap to give correct results in parallel
 mesh0 = RectangleMesh(
     m0,
     m0,
@@ -101,9 +101,9 @@ for amrtype in typelist:
             residual = -div(grad(uh))
             imark, _, _ = amr.inactivemark(uh, (lb, None), estimator="br78", res=residual, method="total")
             if amrtype == "udobr":
-                mark = amr.udomark(uh, lb, n=0)
+                mark, _, _ = amr.fbmark(uh, (lb, None), udo_n=0)
             elif amrtype == "vcdbr":
-                mark = amr.vcdmark(uh, lb, bracket=[0.1, 0.9])
+                mark, _, _ = amr.fbmark(uh, (lb, None), algorithm="vcd", vcd_bracket=[0.1, 0.9])
             mark = amr.unionmarks(mark, imark)
         else:
             z = Constant(0.0)
@@ -121,9 +121,9 @@ for amrtype in typelist:
         residual = -div(grad(uh))
         imark, _, _ = amr.inactivemark(uh, (lb, None), estimator="br78", res=residual, method="total")
         if amrtype == "udobr":
-            fbmark = amr.udomark(uh, lb, n=1)
+            fbmark, _, _ = amr.fbmark(uh, (lb, None), udo_n=1)
         elif amrtype == "vcdbr":
-            fbmark = amr.vcdmark(uh, lb, bracket=[0.1, 0.9])
+            fbmark, _, _ = amr.fbmark(uh, (lb, None), algorithm="vcd", vcd_bracket=[0.1, 0.9])
         mark = amr.unionmarks(fbmark, imark)
         imark.rename("imark (BR)")
         fbmark.rename(f"fbmark ({amrtype})")

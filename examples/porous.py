@@ -258,7 +258,7 @@ for amrtype in refinetypes:
                 theta=0.5,
                 method="total",
             )
-            fbmark = amr.udomark(uh, lb, n=1)
+            fbmark, _, _ = amr.fbmark(uh, (lb, None), udo_n=1)
             mark = amr.unionmarks(fbmark, imark)
             eff.append(tot_eta / errqn[i])  # effectivity index vs quasi-norm error
             print(f"  eff_qn={eff[i]:.2f};  hausdorff2D(Gamma_u, Gamma_uh) = {hausstr}")

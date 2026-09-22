@@ -30,9 +30,7 @@ class VIAMR(OptionsManager, AMAMixin):
 
     The public mark-and-refine API of the VIAMR class consists of:
 
-      udomark():  marking method targeting refinement of the computed free boundary, based on a purely-discrete unstructured-dilation operation
-
-      vcdmark():  marking method targeting refinement of the computed free boundary, based on diffusing the computed free boundary using mesh size in a variable coefficient
+      fbmark():  marking method targeting refinement of the computed free boundaries, either by a purely-discrete unstructured-dilation operation (algorithm="udo") or by diffusing the computed active set indicator using mesh size in a variable coefficient (algorithm="vcd")
 
       inactivemark():  classical (PDE) a posteriori error estimator, applied in the computed inactive set, implementing either the method from Babushka & Rheinboldt (1978) (estimator="br78"), its weighted extension from Bernardi & Verfurth (2000) (estimator="bv00"), or CG1 recovery of the DG0 gradient (estimator="gradientrecovery")
 
@@ -66,8 +64,9 @@ class VIAMR(OptionsManager, AMAMixin):
 
       amr = VIAMR()
 
-      fbmark = amr.udomark(uh, lb)                             # free-boundary-targeted marking
-      fbmark = amr.vcdmark(uh, lb)                             # same, but based on diffusion
+      fbmark, _, _ = amr.fbmark(uh, (lb, ub), ..)              # free-boundary-targeted marking
+          algorithm="udo"                                      # unstructured dilation operator
+          algorithm="vcd"                                      # same, but based on diffusion
 
       imark, _, _ = amr.inactivemark(uh, (lb, ub), ..)         # mark using classical (PDE) estimator in inactive set
           estimator="br78", res=res_ufl                        # BR78 estimator
@@ -88,7 +87,7 @@ class VIAMR(OptionsManager, AMAMixin):
 
     Regarding returned values: fbmark, imark, and mark are element markings in DG0, i.e. indicator functions which are nonzero exactly on the marked elements, and rmesh is a refined mesh.
 
-    Note that unionmarks() can be used to refine along free boundaries computed by udomark() and/or vcdmark(), from both lower and upper bounds.
+    Note that fbmark() marks the free boundary of each bound separately, and unions the two markings.  The separate markings are also returned; see fbmark().
 
     There are also some utility methods, including: spaces(), meshsizes(), meshreport(), scalarrange(), checkadmissible(), and countmark().  Other methods starting with an underscore are (roughly) intended to be private to the VIAMR class.
 
@@ -97,18 +96,15 @@ class VIAMR(OptionsManager, AMAMixin):
     .. code-block:: python3
 
       import animate
-      metric = amr.buildaveragedmetric(mesh, uh, lb)            # VIAMR builds the metric ...
+      metric = amr.buildaveragedmetric(mesh, uh, lb)            # VIAMR builds the metric ...  FIXME bounds=(lb,ub)
       amesh = animate.adapt(mesh, metric)                       # ... caller adapts the mesh with it
 
     Known limitations:
       * Functions which do not work in parallel: 1. jaccard(..., submesh=False) with two DG0 Function arguments.
-      * Functions whose results depend on number of processes: 1. vcdmark(), 2. buildaveragedmetric() (via vcdmark()).
+      * Functions whose results depend on number of processes: 1. fbmark(algorithm="vcd"), 2. buildaveragedmetric() (via the same diffusion solve).
       * Functions which only work for 2D meshs: 1. freeboundarygraph2D(), 2. hausdorff2D(), 3. refinesbr2D()
-      * Functions which only work for 2D triangular meshes: 1. refinesbr2D()
 
     Regarding the last limitation, see the doc string of refinesbr2D(), and compare to refine_marked_elements() from NetGen/ngspetsc.  That ngspetsc method can be applied to DG0 markings from the current library; see the examples.
-
-    TODO: every method should be considered for a bounds=(lb,ub) signature, i.e. foo(..., bounds=(lb,ub), ...), replacing the bound plus boxside="lower"/"upper" pair everywhere.  At this point udomark(), vcdmark(), freeboundarygraph2D(), and buildaveragedmetric() do *not* use a bounds argument.
     """
 
     PARALLEL_OVERLAP = {
@@ -329,10 +325,11 @@ class VIAMR(OptionsManager, AMAMixin):
 
         In contrast to elemactive(), here a cell is marked as active only if it *and its neighboring cells* are active.  The test for active is based on testing at the DG0 degree of freedom, and according to activetol.  Returns a DG0 element-wise indicator, with thinned-active elements having value 1.
 
-        The implementation is inspired by VIAMR.udomark(): a thinned-active element
-        is exactly one which is *not* within one ring of an inactive element, i.e.
-        z = 1 - dilate1(inactive), computed via the same two constant-arity PyOP2
-        kernels udomark() uses (cell->node max-scatter, then node->cell max-gather),
+        The implementation is inspired by the UDO algorithm in VIAMR.fbmark():
+        a thinned-active element is exactly one which is *not* within one ring of
+        an inactive element, i.e. z = 1 - dilate1(inactive), computed via the same
+        two constant-arity PyOP2 kernels _udofbmark() uses (cell->node max-scatter,
+        then node->cell max-gather),
         with no DMPlex access.
         """
         mesh = uh.function_space().mesh()
@@ -676,22 +673,10 @@ class VIAMR(OptionsManager, AMAMixin):
         )
         return Function(DG0).interpolate(mark * large)
 
-    def udomark(self, uh, bound, boxside="lower", n=1, restrict=None):
-        """Mark the vicinity of the free-boundary using the Unstructured Dilation Operator (UDO) algorithm, for a unilateral obstacle problem with the given bound, which is a floor (uh >= bound) if boxside="lower" or a ceiling (uh <= bound) if boxside="upper".
-
-        The algorithm first computes an element-wise indicator for the free boundary.  Then the elements which neighbor free-boundary elements are added, and so on iteratively through n levels.  Note that n=0 already marks the free boundary.  The output is an element-wise marking for those elements near the free boundary which should be refined.
-
-        Optionally the marking can be restricted to the active side of the initially-marked elements
-        (restrict="active"), or to the inactive side (="inactive").
-
-        Bilateral obstacle problems, with box bounds lb <= uh <= ub, are straightforwardly addressed by this sequence:
-            markL = udomark(uh, lb, boxside="lower")
-            markU = udomark(uh, ub, boxside="upper")
-            mark = unionmarks(markL, markU)
-        """
-
-        # one-sided bounds pair for the set indicator methods
-        bounds = (None, bound) if boxside == "upper" else (bound, None)
+    def _udofbmark(self, uh, bounds, n=1, restrict=None):
+        """One-sided Unstructured Dilation Operator (UDO) marking of the vicinity
+        of the free boundary; see fbmark() for the algorithm and the meaning of
+        n and restrict.  Here bounds is one-sided, i.e. (lb, None) or (None, ub)."""
 
         # get mesh and border mark; added flag for restriction
         if restrict is not None:
@@ -734,31 +719,19 @@ class VIAMR(OptionsManager, AMAMixin):
                 defaultval=0.0
             )
 
-        return Function(DG0, name="mark (udomark)").interpolate(
+        return Function(DG0, name="mark (fbmark)").interpolate(
             border, allow_missing_dofs=True
         )
 
-    def vcdmark(
-        self,
-        uh,
-        bound,
-        boxside="lower",
-        bracket=[0.2, 0.8],
-        returnSmooth=False,
-        directsolver=False,
-        vcdsolveriters=4,
-    ):
-        """Mark mesh using Variable Coefficient Diffusion (VCD) algorithm, for a
-        unilateral obstacle problem with the given bound (boxside="lower" or
-        "upper"; see udomark()).  The algorithm computes a nodal active set indicator and then diffuses it, using a variable coefficient based on mesh geometry.  Diffusion is by solving a single backward Euler time step for the corresponding time-dependent diffusion equation.  The linear equations are solved by a fixed number of iterations of ICC-preconditioned CG.  Thresholding to capture the middle values of this field then marks only those elements which are close to the free boundary.  The output is an element-wise marking for elements to refine near the free boundary.
-        Tuning advice:  The bracket [a,b] should be adjusted as follows:
-          * lower a from default 0.2 to mark more elements in/near *inactive* set
-          * raise b from default 0.8 to mark more elements in/near *active* set"""
+    def _vcdsmooth(self, uh, bounds, directsolver=False, solveriters=4):
+        """Diffuse the nodal active set indicator, as the first stage of the
+        Variable Coefficient Diffusion (VCD) algorithm; see fbmark().  Returns
+        the smoothed indicator as a CG1 Function.  Also used by AMAMixin to build
+        an isotropic free-boundary metric."""
 
         # Compute nodal active set indicator
         mesh = uh.function_space().mesh()
-        CG1, DG0 = self.spaces(mesh)
-        bounds = (None, bound) if boxside == "upper" else (bound, None)
+        CG1, _ = self.spaces(mesh)
         nu = self.nodalactive(uh, bounds)
 
         # Diffuse according to square of cell diameter, with diffusivity D = (1/2) h^2.
@@ -783,19 +756,138 @@ class VIAMR(OptionsManager, AMAMixin):
             #          processes, because of ASM+ICC preconditioning
             sp = {
                 "ksp_type": "cg",
-                "ksp_max_it": vcdsolveriters,
+                "ksp_max_it": solveriters,
                 "ksp_convergence_test": "skip",
                 "pc_type": "icc",
             }
             if mesh.comm.size > 1:
                 sp.update({"pc_type": "asm", "pc_asm_overlap": 1, "sub_pc_type": "icc"})
         solve(a == L, u, solver_parameters=sp, options_prefix="viamr_vcd")
+        return u
 
-        # apply thresholding and interpolate into DG0
-        if returnSmooth:
-            return u
+    def _vcdfbmark(
+        self,
+        uh,
+        bounds,
+        bracket=[0.2, 0.8],
+        directsolver=False,
+        solveriters=4,
+    ):
+        """One-sided Variable Coefficient Diffusion (VCD) marking of the vicinity
+        of the free boundary; see fbmark() for the algorithm and the meaning of
+        bracket, directsolver, and solveriters.  Here bounds is one-sided, i.e.
+        (lb, None) or (None, ub)."""
+        _, DG0 = self.spaces(uh.function_space().mesh())
+        u = self._vcdsmooth(
+            uh, bounds, directsolver=directsolver, solveriters=solveriters
+        )
+        # threshold the smoothed indicator, and interpolate into DG0
         middleUFL = conditional(u > bracket[0], conditional(u < bracket[1], 1, 0), 0)
-        return Function(DG0, name="mark (vcdmark)").interpolate(middleUFL)
+        return Function(DG0, name="mark (fbmark)").interpolate(middleUFL)
+
+    def fbmark(
+        self,
+        uh,
+        bounds,
+        algorithm="udo",
+        udo_n=None,
+        udo_restrict=None,
+        vcd_bracket=None,
+        vcd_directsolver=None,
+        vcd_solveriters=None,
+    ):
+        """Mark the vicinity of the computed free boundary, for an obstacle
+        problem with the given bounds = (lb, ub), meaning lb <= uh <= ub.  Either
+        entry may be None for a problem constrained on one side only, so
+        (lb, None) is a lower obstacle alone; see e.g. nodalactive().
+
+        Each bound has its own free boundary, and it is marked separately.  We
+        return the triple
+            (mark, marklower, markupper)
+        where mark is the union of the two markings, and where marklower or
+        markupper is None if the corresponding bound is None.  Usually only
+        mark is wanted:
+            fbmark, _, _ = amr.fbmark(uh, (lb, ub))
+
+        The algorithm is one of:
+
+          algorithm="udo":  The Unstructured Dilation Operator (UDO) algorithm.
+          It first computes an element-wise indicator for the free boundary.
+          Then the elements which neighbor free-boundary elements are added, and
+          so on iteratively through udo_n levels; note that udo_n=0 already marks
+          the free boundary.  The default is udo_n=1.  Optionally the marking can
+          be restricted to the active side of the initially-marked elements
+          (udo_restrict="active"), or to the inactive side (="inactive").
+
+          algorithm="vcd":  The Variable Coefficient Diffusion (VCD) algorithm.
+          It computes a nodal active set indicator and then diffuses it, using a
+          variable coefficient based on mesh geometry.  Diffusion is by solving a
+          single backward Euler time step for the corresponding time-dependent
+          diffusion equation.  The linear equations are solved by a fixed number
+          of iterations of ICC-preconditioned CG, namely vcd_solveriters=4 by
+          default, or by a direct solver if vcd_directsolver=True.  Thresholding
+          to capture the middle values vcd_bracket=[a,b] of this field, [0.2,0.8]
+          by default, then marks only those elements which are close to the free
+          boundary.
+
+        Parameters which do not apply to the chosen algorithm are not allowed.
+
+        Tuning advice for vcd_bracket=[a,b]:
+          * lower a from default 0.2 to mark more elements in/near *inactive* set
+          * raise b from default 0.8 to mark more elements in/near *active* set"""
+
+        lb, ub = bounds
+        if lb is None and ub is None:
+            raise ValueError("fbmark() requires at least one non-None bound")
+        if algorithm == "udo":
+            for pname, p in [
+                ("vcd_bracket", vcd_bracket),
+                ("vcd_directsolver", vcd_directsolver),
+                ("vcd_solveriters", vcd_solveriters),
+            ]:
+                if p is not None:
+                    raise ValueError(f"{pname} is not allowed unless algorithm='vcd'")
+            udo_n = 1 if udo_n is None else udo_n
+        elif algorithm == "vcd":
+            for pname, p in [("udo_n", udo_n), ("udo_restrict", udo_restrict)]:
+                if p is not None:
+                    raise ValueError(f"{pname} is not allowed unless algorithm='udo'")
+            vcd_bracket = [0.2, 0.8] if vcd_bracket is None else vcd_bracket
+            vcd_directsolver = False if vcd_directsolver is None else vcd_directsolver
+            vcd_solveriters = 4 if vcd_solveriters is None else vcd_solveriters
+        else:
+            raise ValueError(f"unknown algorithm='{algorithm}'; must be 'udo' or 'vcd'")
+
+        # mark each side separately; note that diffusing, or dilating, the
+        # nodal indicator of the *union* of the two active sets would not
+        # resolve a free boundary where a lower and an upper active set are
+        # close together
+        def sidemark(onesided, side):
+            if algorithm == "udo":
+                m = self._udofbmark(uh, onesided, n=udo_n, restrict=udo_restrict)
+            else:
+                m = self._vcdfbmark(
+                    uh,
+                    onesided,
+                    bracket=vcd_bracket,
+                    directsolver=vcd_directsolver,
+                    solveriters=vcd_solveriters,
+                )
+            m.rename(f"mark (fbmark {side})")
+            return m
+
+        marklower = None if lb is None else sidemark((lb, None), "lower")
+        markupper = None if ub is None else sidemark((None, ub), "upper")
+        if marklower is None or markupper is None:
+            oneside = marklower if markupper is None else markupper
+            mark = Function(oneside.function_space(), name="mark (fbmark)").assign(
+                oneside
+            )
+        else:
+            mark = Function(
+                marklower.function_space(), name="mark (fbmark)"
+            ).interpolate(self.unionmarks(marklower, markupper))
+        return (mark, marklower, markupper)
 
     def fixedratemark(self, eta, theta, method):
         """Marks elements according to the values of estimator eta in DG0 and a threshold which depends on the scalar theta.
@@ -1926,8 +2018,9 @@ class VIAMR(OptionsManager, AMAMixin):
 
     def freeboundarygraph2D(self, uh, bound, boxside="lower"):
         """Compute the graph (vertices and edges) of the computed free boundary
-        of a 2D unilateral obstacle problem with the given bound (boxside="lower"
-        or "upper"; see udomark()), as (x,y) coordinates.  Works for
+        of a 2D unilateral obstacle problem with the given bound, which is a
+        floor (uh >= bound) if boxside="lower" or a ceiling (uh <= bound) if
+        boxside="upper", as (x,y) coordinates.  Works for
         meshes with triangular or quadrilateral cells.  The free boundary
         vertices are those incident to both a bordering (partially-active)
         element and a fully-active element; see _elemborder() and

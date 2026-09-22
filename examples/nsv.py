@@ -280,7 +280,7 @@ for method in methods:
         # Theorem 2.7 in NSV05
         extra = ""
         if method == "UDOBR":
-            fmark = amr.udomark(uh, lb, n=nUDO)
+            fmark, _, _ = amr.fbmark(uh, (lb, None), udo_n=nUDO)
             residual = -div(grad(uh)) - f_ufl
             (imark, _, Eh) = amr.inactivemark(
                 uh, (lb, None), estimator="br78", res=residual, theta=marktheta, method=markmethod

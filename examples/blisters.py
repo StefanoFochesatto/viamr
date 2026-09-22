@@ -121,9 +121,9 @@ for i in range(levels + 1):
         break
 
     if useVCD:
-        mark = amr.vcdmark(u, lb, bracket=[0.05, 0.85])
+        mark, _, _ = amr.fbmark(u, (lb, None), algorithm="vcd", vcd_bracket=[0.05, 0.85])
     else:
-        mark = amr.udomark(u, lb, n=1)
+        mark, _, _ = amr.fbmark(u, (lb, None), udo_n=1)
     residual = -div(grad(u)) - fsource
     imark, _, _ = amr.inactivemark(u, (lb, None), estimator="br78", res=residual)
     mark = amr.unionmarks(mark, imark)

@@ -79,13 +79,9 @@ for i in range(refinements + 1):
     if i == refinements:
         break
 
-    # ub is an upper obstacle, so its call needs boxside="upper"; the default
-    # boxside="lower" would treat ub as a floor, which is harmless with
-    # debug=False but trips the debug-mode checkadmissible() assertion
-    # (uh >= ub) with debug=True
-    marklower = amr.udomark(u, lb, boxside="lower", n=1)
-    markupper = amr.udomark(u, ub, boxside="upper", n=1)
-    mark = amr.unionmarks(marklower, markupper)
+    # fbmark() marks the free boundary of each bound separately, and returns
+    # the two markings along with their union
+    mark, marklower, markupper = amr.fbmark(u, (lb, ub), udo_n=1)
     mesh = mesh.refine_marked_elements(mark)  # uses Netgen refinement
     # VTKFile(f'test{i}.pvd').write(u, f, w, lb, ub, marklower, markupper, mark)
 

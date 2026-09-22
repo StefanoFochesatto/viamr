@@ -43,14 +43,14 @@ def test_mark_none():
     CG1, _ = amr.spaces(mesh)
     (x, y) = SpatialCoordinate(mesh)
     psi = Function(CG1).interpolate(_get_ball_obstacle(x, y))
-    mark = amr.udomark(psi, psi)  # all active
+    mark, _, _ = amr.fbmark(psi, (psi, None))  # all active
     assert norm(mark, "L1") == 0.0
-    mark = amr.vcdmark(psi, psi)  # all active
+    mark, _, _ = amr.fbmark(psi, (psi, None), algorithm="vcd")  # all active
     assert norm(mark, "L1") == 0.0
     lift = Function(CG1).interpolate(psi + 1.0)
-    mark = amr.udomark(lift, psi)  # all inactive
+    mark, _, _ = amr.fbmark(lift, (psi, None))  # all inactive
     assert norm(mark, "L1") == 0.0
-    mark = amr.vcdmark(lift, psi)  # all inactive
+    mark, _, _ = amr.fbmark(lift, (psi, None), algorithm="vcd")  # all inactive
     assert norm(mark, "L1") == 0.0
 
 
