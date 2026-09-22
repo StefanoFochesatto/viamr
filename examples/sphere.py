@@ -340,14 +340,14 @@ def activeexactUFL(r):
     return conditional(le(r, afree), 1.0, 0.0)
 
 
-def errornorm_deg(u, uh, fixeddegree=6):
+def errornorm_deg(u, uh, fixeddegree=5):
     """L^2 error norm, but avoiding TSFC warning"""
     # set high degree quadrature to avoid TSFC warning
     normsq = assemble((u - uh) ** 2 * dx(degree=fixeddegree))
     return np.sqrt(normsq)
 
 
-def errornorm_reconstructed_deg(r, uh, activeh, fixeddegree=6):
+def errornorm_reconstructed_deg(r, uh, activeh, fixeddegree=5):
     """L^2 error norm against reconstructed-uh form of numerical solution"""
     tildeuh = conditional(eq(activeh, 1.0), psiUFL(r), uh)  # reconstructed-uh
     # high degree quadrature important in next line; setting it avoids TSFC warning
@@ -355,7 +355,7 @@ def errornorm_reconstructed_deg(r, uh, activeh, fixeddegree=6):
     return np.sqrt(normsq)
 
 
-def errornorm_H1semi_deg(u, uh, fixeddegree=6):
+def errornorm_H1semi_deg(u, uh, fixeddegree=5):
     """H^1 seminorm (i.e. Dirichlet-energy / grad-L^2) error norm of the plain
     (not reconstructed-uh) numerical solution, avoiding the TSFC warning.  This is
     the norm inactivemark()'s unweighted BR78 estimator directly targets
@@ -365,7 +365,7 @@ def errornorm_H1semi_deg(u, uh, fixeddegree=6):
     return np.sqrt(normsq)
 
 
-def errornorm_Linf(amr, u, uh, pdegree=4):
+def errornorm_Linf(amr, u, uh, pdegree=3):
     """Approximate sup-norm (L^infty) error, via interpolation of the
     (generally non-polynomial) exact-minus-computed difference into a
     higher-degree CG^p space, then VIAMR.scalarrange() for a parallel-safe
@@ -378,7 +378,7 @@ def errornorm_Linf(amr, u, uh, pdegree=4):
     return amr.scalarrange(err)[1]
 
 
-def errornorm_Linf_reconstructed(amr, r, uh, activeh, pdegree=4):
+def errornorm_Linf_reconstructed(amr, r, uh, activeh, pdegree=3):
     """Sup-norm (L^infty) error against the reconstructed-uh form of the
     numerical solution (see errornorm_reconstructed_deg), rather than against
     the plain uh.  This is the right comparison for methods (e.g. UDOBR)
