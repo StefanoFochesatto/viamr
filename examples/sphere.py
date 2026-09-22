@@ -386,10 +386,14 @@ def errornorm_Linf_reconstructed(amr, r, uh, activeh, pdegree=4):
     u=psi there regardless of resolution: the plain sup norm is then
     dominated by the (known, not-actually-erroneous) gap between the coarse
     uh and the true psi, rather than by genuine solution error.  Uses the
-    same CG^p-interpolation + VIAMR.scalarrange() technique as
-    errornorm_Linf(); see its docstring re. non-polynomial data."""
+    interpolation + VIAMR.scalarrange() technique of errornorm_Linf(); see its
+    docstring re. non-polynomial data.  Unlike there, the target space is
+    discontinuous because tildeuh jumps across the active set boundary.
+    The equispaced variant is used because the default DG nodes ("spectral"
+    variant) lie strictly inside the element, which would miss the vertices
+    and bias the sup norm low."""
     tildeuh = conditional(eq(activeh, 1.0), psiUFL(r), uh)  # reconstructed-uh
-    W = FunctionSpace(uh.function_space().mesh(), "CG", pdegree)
+    W = FunctionSpace(uh.function_space().mesh(), "DG", pdegree, variant="equispaced")
     err = Function(W).interpolate(abs(uexactUFL(r) - tildeuh))
     return amr.scalarrange(err)[1]
 
