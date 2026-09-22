@@ -588,7 +588,7 @@ for amrtype in refinetypes:
             print(f"  |u_exact - u_h|_{{H^1}} = {errnorm_h1:.3e}")
             print(f"  ||u_exact - u_h||_infty = {errnorm_Linf:.3e}")
             print(f"  ||u_exact - tilde u_h||_infty = {errnorm_Linf_recon:.3e}")
-            jaccard = amr.jaccardUFL(activeexactUFL(r), activeh)
+            jaccard = amr.jaccard(activeexactUFL(r), activeh)
             print(f"  jaccard(A_uexact, A_uh) = {jaccard:.5f}")
             uexact = Function(V, name="u_exact").interpolate(uexactUFL(r))
             _, fbexact = amr.freeboundarygraph2D(uexact, lb)

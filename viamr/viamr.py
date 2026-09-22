@@ -58,7 +58,7 @@ class VIAMR(OptionsManager, AMAMixin):
 
       hausdorff2D():  compute Hausdorff distance between edge sets E1, E2 in planar (2D) mesh
 
-      jaccard(), jaccardUFL():  compute Jaccard similarity index between two element-marked sets, e.g. active sets  FIXME unify signature
+      jaccard():  compute Jaccard similarity index between two sets, e.g. active sets, each given by a DG0 indicator function or a UFL expression
 
     Some default calls to the major mark-and-refine methods are:
 
@@ -101,7 +101,7 @@ class VIAMR(OptionsManager, AMAMixin):
       amesh = animate.adapt(mesh, metric)                       # ... caller adapts the mesh with it
 
     Known limitations:
-      * Functions which do not work in parallel: 1. jaccard(..., submesh=False).
+      * Functions which do not work in parallel: 1. jaccard(..., submesh=False) with two DG0 Function arguments.
       * Functions whose results depend on number of processes: 1. vcdmark(), 2. buildaveragedmetric() (via vcdmark()).
       * Functions which only work for 2D meshs: 1. freeboundarygraph2D(), 2. hausdorff2D(), 3. refinesbr2D()
       * Functions which only work for 2D triangular meshes: 1. refinesbr2D()
@@ -1838,61 +1838,63 @@ class VIAMR(OptionsManager, AMAMixin):
             return self._dmplextransform(mesh, "refine_regular")
         return self._dmplextransform(mesh, "refine_sbr", indicator=indicator)
 
-    def jaccard(self, active1, active2, submesh=False):
-        """Compute the Jaccard metric from two element-wise DG0 active set indicators.  By definition, the Jaccard metric of two sets is
+    def _checkDG0indicator(self, active):
+        """Assert that active is a DG0 Function with values in [0,1]."""
+        aDG0 = active.function_space()
+        _, DG0 = self.spaces(aDG0.mesh())
+        assert aDG0.ufl_element() == DG0.ufl_element()
+        if len(active.dat.data_ro) > 0:
+            assert min(active.dat.data_ro) >= 0.0
+            assert max(active.dat.data_ro) <= 1.0
+
+    def jaccard(self, active1, active2, submesh=False, qdegree=6, mesh=None):
+        """Compute the Jaccard metric of two sets, for example two active sets, from their indicator functions.  By definition, the Jaccard metric of two sets is
             J(S,T) = |S cap T| / |S cup T|,
-        where |.| is area (measure) of the set.  Thus J(S,T) the ratio of the area (measure) of the intersection divided by that of the union.  The inputs are the indicator functions of the sets as DG0 functions.  In serial they can be on different meshes.  (In that case project()
-        method is used to put them on active1's mesh.)  If submesh==True then active2 is assumed to live on a submesh of active1, so interpolate onto the active1 mesh will work correctly.  *Note that with submesh==True this function works in parallel.*"""
+        where |.| is area (measure) of the set.  Thus J(S,T) is the ratio of the area (measure) of the intersection divided by that of the union.
+
+        Each of active1, active2 is an indicator function, given either as a DG0 Function or as a UFL expression, in any combination.  Since J(S,T) is symmetric, the order of the arguments only determines the mesh over which the integrals are computed, namely the mesh of the first DG0 Function argument.  If both arguments are UFL expressions then a mesh= argument is required; otherwise mesh= is not allowed.  A UFL expression argument is integrated using quadrature of degree qdegree, so qdegree has no effect if both arguments are DG0 Functions.
+
+        If both arguments are DG0 Functions then, in serial, they can be on different meshes.  (In that case the project() method is used to put active2 on active1's mesh.)  If submesh==True then active2 is assumed to live on a submesh of active1, so interpolate onto the active1 mesh will work correctly.  *Note that this method works in parallel if submesh==True, or if either argument is a UFL expression.*"""
         # FIXME how to check that, when submesh==True, active2 is actually on a submesh of active1?
-        a1DG0 = active1.function_space()
-        a2DG0 = active2.function_space()
-        mesh1 = a1DG0.mesh()
-        mesh2 = a2DG0.mesh()
+        isfem1 = isinstance(active1, Function)
+        isfem2 = isinstance(active2, Function)
         if self.debug:
-            _, DG01 = self.spaces(mesh1)
-            assert a1DG0.ufl_element() == DG01.ufl_element()
-            _, DG02 = self.spaces(mesh2)
-            assert a2DG0.ufl_element() == DG02.ufl_element()
-        if submesh == False and (mesh1.comm.size > 1 or mesh2.comm.size > 1):
-            raise ValueError("jaccard(.., submesh=False) is not valid in parallel")
-        if self.debug:
-            for a in [active1, active2]:
-                if len(a.dat.data_ro) > 0:
-                    assert min(a.dat.data_ro) >= 0.0
-                    assert max(a.dat.data_ro) <= 1.0
-        if submesh:
-            new2 = Function(a1DG0).interpolate(active2)
+            for a, isfem in [(active1, isfem1), (active2, isfem2)]:
+                if isfem:
+                    self._checkDG0indicator(a)
+        if isfem1 or isfem2:
+            if mesh is not None:
+                raise ValueError(
+                    "jaccard(.., mesh=..) is only valid if both sets are UFL expressions"
+                )
+            imesh = (active1 if isfem1 else active2).function_space().mesh()
         else:
-            new2 = Function(a1DG0).project(active2)
-        AreaIntersection = assemble(new2 * active1 * dx(mesh1))
-        AreaUnion = assemble((new2 + active1 - (new2 * active1)) * dx(mesh1))
+            if mesh is None:
+                raise ValueError(
+                    "jaccard() with two UFL expressions requires a mesh= argument"
+                )
+            imesh = mesh
+        if isfem1 and isfem2:
+            mesh2 = active2.function_space().mesh()
+            if submesh == False and (imesh.comm.size > 1 or mesh2.comm.size > 1):
+                raise ValueError("jaccard(.., submesh=False) is not valid in parallel")
+            a1DG0 = active1.function_space()
+            if submesh:
+                active2 = Function(a1DG0).interpolate(active2)
+            else:
+                active2 = Function(a1DG0).project(active2)
+            dV = dx(imesh)
+        else:
+            if submesh:
+                raise ValueError(
+                    "jaccard(.., submesh=True) is only valid if both sets are DG0 Functions"
+                )
+            dV = dx(imesh, degree=qdegree)
+        AreaIntersection = assemble(active1 * active2 * dV)
+        AreaUnion = assemble((active1 + active2 - (active1 * active2)) * dV)
         if AreaUnion <= 0.0:
             warnings.warn(
                 "VIAMR.jaccard() called with two empty sets (AreaUnion <= 0.0); "
-                "returning -1.0"
-            )
-            return -1.0
-        return AreaIntersection / AreaUnion
-
-    def jaccardUFL(self, active1, active2, qdegree=6):
-        """Version of jaccard() for when active1 is a UFL expression.
-        Uses high-degree quadrature.  Always valid in parallel."""
-        a2DG0 = active2.function_space()
-        mesh2 = a2DG0.mesh()
-        if self.debug:
-            _, DG02 = self.spaces(mesh2)
-            assert a2DG0.ufl_element() == DG02.ufl_element()
-        if self.debug:
-            if len(active2.dat.data_ro) > 0:
-                assert min(active2.dat.data_ro) >= 0.0
-                assert max(active2.dat.data_ro) <= 1.0
-        AreaIntersection = assemble(active1 * active2 * dx(mesh2, degree=qdegree))
-        AreaUnion = assemble(
-            (active2 + active1 - (active2 * active1)) * dx(mesh2, degree=qdegree)
-        )
-        if AreaUnion <= 0.0:
-            warnings.warn(
-                "VIAMR.jaccardUFL() called with two empty sets (AreaUnion <= 0.0); "
                 "returning -1.0"
             )
             return -1.0

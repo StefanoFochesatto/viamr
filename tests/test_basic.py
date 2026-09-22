@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 from firedrake import *
 from viamr import VIAMR
 
@@ -169,16 +170,42 @@ def test_jaccard_submesh_uniform():
     assert amr.jaccard(mark, rmark, submesh=True) == amr.jaccard(mark, rmark)
 
 
-def test_third_jaccard_ufl():
-    mesh = UnitSquareMesh(4, 4)
+def _jaccard_ufl_case(amr):
+    # Shared by test_third_jaccard_ufl() here and
+    # tests/test_parallel.py::test_third_jaccard_ufl_par(), so the two
+    # assert the identical Jaccard indices from one definition.  On the square
+    # [-1,1]^2 the top half and the right half overlap in one quadrant, so
+    # J = 1 / 3.
     mesh = RectangleMesh(4, 4, Lx=1.0, Ly=1.0, originX=-1.0, originY=-1.0)
-    amr = VIAMR(debug=True)
     _, DG0 = amr.spaces(mesh)
     x, y = SpatialCoordinate(mesh)
     active1 = conditional(y > 0, 1, 0)  # top half as UFL
     right = conditional(x > 0, 1, 0)
     active2 = Function(DG0).interpolate(right)  # right half as DG0
-    assert abs(amr.jaccardUFL(active1, active2) - 1.0 / 3.0) < 1.0e-10
+    assert abs(amr.jaccard(active1, active2) - 1.0 / 3.0) < 1.0e-10
+    # J is symmetric, so the DG0 argument may come first
+    assert abs(amr.jaccard(active2, active1) - 1.0 / 3.0) < 1.0e-10
+    # two UFL expressions need a mesh over which to integrate
+    assert abs(amr.jaccard(active1, right, mesh=mesh) - 1.0 / 3.0) < 1.0e-10
+
+
+def test_third_jaccard_ufl():
+    _jaccard_ufl_case(VIAMR(debug=True))
+
+
+def test_jaccard_bad_arguments():
+    mesh = RectangleMesh(4, 4, Lx=1.0, Ly=1.0, originX=-1.0, originY=-1.0)
+    amr = VIAMR(debug=True)
+    _, DG0 = amr.spaces(mesh)
+    x, y = SpatialCoordinate(mesh)
+    top = conditional(y > 0, 1, 0)
+    rightDG0 = Function(DG0).interpolate(conditional(x > 0, 1, 0))
+    with pytest.raises(ValueError):  # two UFL expressions require mesh=
+        amr.jaccard(top, top)
+    with pytest.raises(ValueError):  # mesh= requires two UFL expressions
+        amr.jaccard(top, rightDG0, mesh=mesh)
+    with pytest.raises(ValueError):  # submesh= requires two DG0 Functions
+        amr.jaccard(top, rightDG0, submesh=True)
 
 
 def _hausdorff2D_case(amr):
@@ -316,6 +343,7 @@ if __name__ == "__main__":
     test_symmetry_jaccard()
     test_jaccard_submesh_uniform()
     test_third_jaccard_ufl()
+    test_jaccard_bad_arguments()
     test_hausdorff2D()
     test_quad_mesh_hausdorff2D()
     test_freeboundarygraph2D_circle()

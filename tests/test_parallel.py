@@ -7,6 +7,7 @@ from test_basic import (
     _get_ball_obstacle,
     _freeboundarygraph2D_circle_case,
     _hausdorff2D_case,
+    _jaccard_ufl_case,
 )
 from test_refine import (
     _NSV05_PYRAMID_COUNTS,
@@ -194,6 +195,14 @@ def test_freeboundarygraph2D_par():
     coordsV, coordsE = _freeboundarygraph2D_circle_case(VIAMR(debug=True))
     assert len(coordsV) == 36
     assert len(coordsE) == 36
+
+
+@pytest.mark.parallel(nprocs=3)
+def test_third_jaccard_ufl_par():
+    # Confirms tests/test_basic.py::_jaccard_ufl_case() gives the same Jaccard
+    # indices regardless of process count, i.e. that jaccard() is valid in
+    # parallel when either set is given as a UFL expression.
+    _jaccard_ufl_case(VIAMR(debug=True))
 
 
 @pytest.mark.parallel(nprocs=3)
