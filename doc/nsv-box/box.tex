@@ -488,12 +488,17 @@ Adding \eqref{eq:Gh-second} and \eqref{eq:Gh-first} and cancelling leaves \eqref
 
 As with Lemma~\ref{lem:almostGO}, this derivation only used the $\Th = \ThC \sqcup \Thplus$ split, $\sigma_h$'s definition, and linearity of $\Pih$ and $\Ih$; which obstacle is active on $\ThC$ is not relevant.  The cancellation between \eqref{eq:Gh-second} and \eqref{eq:Gh-first} is exactly why $\tilde\sigma_h$, rather than $\sigma_h$ itself,\footnote{An un-cancelled $\Thplus$ term in \eqref{eq:Gh-repn} would not shrink at the rate needed for a second-order estimator; see the discussion after \cite[formula (3.6)]{NSV03}.} appears in \eqref{eq:Gh}.  Note that the sign convention for jump \eqref{eq:jump} does not affect the localized estimator \eqref{eq:Rp} itself, which needs only $|\jump{\partial_\nu u_h}|$.
 
-\subsection{Localized residual and quadrature estimators}  Following \cite[\S 3.2]{NSV03}, our next task is to bound $\Gh$ in a dual space larger than $H^{-1}(\Om)$.  Let
+\subsection{Localized residual and quadrature estimators}  Following \cite[\S 3.2]{NSV03}, our next task is to bound $\Gh$ in the dual space $W^*$ of
 \begin{equation}
 \label{eq:W}
   W := \{\varphi \in H_0^1(\Om) : \nabla\varphi \in BV(\Om)^d\},
 \end{equation}
-equipped with the seminorm $\varphi \mapsto |D^2\varphi|_{\mathrm{var}}(\Om)$ already used in \eqref{eq:PihBV}.  This space is clearly smaller than $H_0^1(\Om)$, but it is slightly larger than $W^{2,1}(\Om) \cap H_0^1(\Om)$, because $\nabla\varphi \in W^{1,1}(\Om)^d$ implies $\nabla\varphi \in BV(\Om)^d$ but not conversely.  Note that $W$ still contains the discrete space $\Vhr$.  Measuring $\Gh$ against test functions from $W$, rather than $H_0^1(\Om)$, tests it on fewer functions, but in a stronger seminorm, which is what permits the second-order bound \eqref{eq:Ghbound} later.
+equipped with the seminorm $\varphi \mapsto |D^2\varphi|_{\mathrm{var}}(\Om)$ already used in \eqref{eq:PihBV}.  This space is clearly smaller than $H_0^1(\Om)$, but it is slightly larger than $W^{2,1}(\Om) \cap H_0^1(\Om)$, because $\nabla\varphi \in W^{1,1}(\Om)^d$ implies $\nabla\varphi \in BV(\Om)^d$ but not conversely.  Note that $W$ also contains the discrete space $\Vhr$.  Measuring $\Gh$ against test functions from $W$, rather than $H_0^1(\Om)$, tests it on fewer functions.  On the other hand, we measure by a second-order seminorm, which is what permits the $h^2$ scaling in bound \eqref{eq:Ghbound} later.
+
+\begin{remark}[$W^*$ versus $H^{-1}(\Om)$]
+\label{rem:dualsizes}
+Because $W \subset H_0^1(\Om)$, one might expect every element of $H^{-1}(\Om)$ to be bounded on $W$ with respect to the seminorm $|D^2\varphi|_{\mathrm{var}}(\Om)$.  This holds if $d=2$, but not if $d=3$.  The Sobolev-type inequality $\|\nabla\varphi\|_{0,d';\Om} \preceq |D^2\varphi|_{\mathrm{var}}(\Om)$, with $d' = d/(d-1)$, which is used for \eqref{eq:Qhbound} below, controls the $H_0^1(\Om)$ seminorm only when $d'=2$, and $d'=3/2$ when $d=3$.  This distinction does not affect the analysis, which needs only that the norm $\|\Gh\|_{-2,\infty;\Om}$, defined in \eqref{eq:dualnormbv}, is finite, and bound \eqref{eq:Ghbound} shows this in both dimensions.
+\end{remark}
 
 For $1 \le p \le \infty$, with dual exponent $p' = p/(p-1)$, define the \emph{localized residual} $R_p$, element-wise over $T\in\Th$, by
 \begin{equation}
