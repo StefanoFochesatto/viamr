@@ -256,7 +256,7 @@ The discrete problem corresponding to \eqref{eq:VI} reads
   \left< \nabla u_h, \nabla(v_h - u_h)\right> \ge \left< f, v_h - u_h\right>
   \qquad \text{for all } v_h \in \Kh,
 \end{equation}
-which again admits a unique solution.
+which again admits a unique solution.\strut
 
 For interior nodes $z \in \Nhr$, define $\sigma_h \in \Vh$ nodally by
 \begin{equation}
@@ -265,11 +265,13 @@ For interior nodes $z \in \Nhr$, define $\sigma_h \in \Vh$ nodally by
   = \left< \nabla u_h, \nabla \phi_h^z \right> - \left< f, \phi_h^z \right>,
 \end{equation}
 whence $\sigma_h(z) = \bigl(\int_\Om \phi_h^z\bigr)^{-1}
-\bigl(\left< \nabla u_h, \nabla \phi_h^z\right> - \left< f, \phi_h^z\right>\bigr)$.  This is the nodal residual of \cite[\S 2.1]{NSV03}, an unnumbered formula there, but here with the same sign convention \eqref{eq:sigma} as for $\sigma$ itself.  Note that while $\sigma \in H^{-1}(\Om)$ is a quite general object, generally a measure, $\sigma_h \in \Vh$ is a piecewise-linear function which merely assigns a real value for each interior node in the mesh; one might even regard $\sigma_h$ as a collection of delta measures at nodes.  Definition \eqref{eq:sigmah} is extended to boundary nodes in subsection \ref{subsec:boundarynodes} below.
+\bigl(\left< \nabla u_h, \nabla \phi_h^z\right> - \left< f, \phi_h^z\right>\bigr)$.  This is the nodal residual of \cite[\S 2.1]{NSV03}, an unnumbered formula there, but here with the same sign convention \eqref{eq:sigma} as for $\sigma$ itself.  Note that while $\sigma \in H^{-1}(\Om)$ is a quite general object, generally a measure, $\sigma_h \in \Vh$ is a piecewise-linear function which merely assigns a real value for each interior node in the mesh; one might even regard $\sigma_h$ as a collection of delta measures at nodes.
+
+Definition \eqref{eq:sigmah} will be extended to boundary nodes in the next subsection.
 
 \subsection{Nodal complementarity}  The fact that admissibility is nodal implies a strong consequence for the sign of $\sigma_h$ at interior nodes, as follows.
 
-\begin{proposition} \label{prop:nodalsign}  Let $\Nhbot := \{z \in \Nh : u_h(z) = \psiloh(z)\}$ and $\Nhtop := \{z \in \Nh : u_h(z) = \psiuph(z)\}$ be the lower and upper \emph{nodal contact (active) sets}; they are disjoint by \eqref{eq:disc-nondeg}.  Then
+\begin{proposition}[Nodal complementarity] \label{prop:nodalsign}  Let $\Nhbot := \{z \in \Nh : u_h(z) = \psiloh(z)\}$ and $\Nhtop := \{z \in \Nh : u_h(z) = \psiuph(z)\}$ be the lower and upper \emph{nodal contact (active) sets}; they are disjoint by \eqref{eq:disc-nondeg}.  Then
 \begin{align}
 \label{eq:nodalcomp}
   z \in \Nhr \cap \Nhbot \ &\implies\ \sigma_h(z) \ge 0, \\
@@ -328,7 +330,7 @@ Thus, at a boundary node whose star lies wholly in one active set, we keep the c
 
 In the unilateral setting of \cite{NSV03}, interpreted under our sign convention, $\sigma_h \ge 0$ holds \emph{throughout} $\bar\Om$.  In that case, raising $u_h$ by a non-negative multiple of any nodal basis function preserves admissibility, so \eqref{eq:tsigma} is available with $t > 0$ at every interior node.  With box constraints that fails, and $\sigma_h$ has no global sign.  The nodal statements \eqref{eq:nodalcomp} and \eqref{eq:sigmah-bnd} take their place; they are the discrete form of complementarity structure \eqref{eq:sigmasign}.
 
-The nodal values of $\sigma_h$ can be non-zero only on the nodal active sets $\Nhbot \cup \Nhtop$.  However, if we take the piecewise-linear form of $\sigma_h$ then nodal complementarity does not extend into the elements; if $\sigma_h$ is regarded as piecewise-linear then it can be non-zero in any element having an active vertex in $\Nhbot \cup \Nhtop$.
+Nodal values $\sigma_h(z)$ can be non-zero only for nodes $z$ in the active sets $\Nhbot \cup \Nhtop$.  However, if we take the piecewise-linear form of $\sigma_h$ then nodal complementarity does not extend into the elements; if $\sigma_h$ is regarded as piecewise-linear then it can be non-zero in any element having an active vertex in $\Nhbot \cup \Nhtop$.
 
 \subsection{Thinned/eroded element-wise active sets}  Following but extending \cite{NSV03}, we now partition the elements $\Th$ into three parts according to whether the star \eqref{eq:star} of an element is fully-active:
 \begin{align}
@@ -357,21 +359,20 @@ $T \in \Thbot \implies \sigma_h \ge 0$ on $T$, and $T \in \Thtop \implies \sigma
 \end{corollary}
 
 \begin{proof}
-Suppose $z\in \Nhr$ is an interior node and a vertex of $T \in \Thbot$, thus $\sigma_h(z) \ge 0$ by Proposition \ref{prop:nodalsign}.  If instead $z$ is a boundary node then, because every element containing $z$ meets $T$, we have $\Uh(z) \subset \Uh(T) \subset \{u_h = \psiloh\}$, and the boundary-node definition \eqref{eq:sigmah-bnd} gives $\sigma_h(z) = \hat\sigma_h(z)^+ \ge 0$.  Either way $\sigma_h \ge 0$ at each vertex of $T$, whence $\sigma_h \ge 0$ throughout $T$ by Lemma \ref{lem:affine}; symmetrically $\sigma_h \le 0$ on each $T \in \Thtop$.
+Suppose $z\in \Nhr$ is an interior node and a vertex of $T \in \Thbot$, thus $\sigma_h(z) \ge 0$ by Proposition \ref{prop:nodalsign}.  If instead $z$ is a boundary node then, because every element containing $z$ meets $T$, we have $\Uh(z) \subset \Uh(T) \subset \{u_h = \psiloh\}$, and the boundary-node definition \eqref{eq:sigmah-bnd} gives $\sigma_h(z) = \hat\sigma_h(z)^+ \ge 0$.  Either way $\sigma_h \ge 0$ at each vertex of $T$, whence $\sigma_h \ge 0$ throughout $T$ by Lemma \ref{lem:affine}.  Likewise, $\sigma_h \le 0$ on each $T \in \Thtop$.
 \end{proof}
 
-\subsection{Positivity-preserving interpolation}  We record here the ball-averaging interpolation operator of Chen \& Nochetto \cite{ChenNochetto2000}, since the constructions in \S 4 and \S 5 both use it.  The construction does not depend on the obstacles, so it is unchanged for the box-constrained case; we simply state it following \cite[\S 2.2]{NSV03}, and cite \cite{ChenNochetto2000} for proofs.
+\subsection{Positivity-preserving interpolation}  We record here the ball-averaging interpolation operator of Chen \& Nochetto \cite{ChenNochetto2000}, since the constructions in \S 4 and \S 5 both use it.  The construction does not depend on the obstacles, so it is unchanged for the box-constrained case, thus we simply state it following \cite[\S 2.2]{NSV03}; see \cite{ChenNochetto2000} for proofs.
 
-To define the interpolation operator $\Pih : L_1(\Om) \to \Vhr$, fix the mesh $\Th$ and then, for each $z \in \Nhr$, fix a ball $B(z) \subset \Uh(z)$, centered at $z$ and contained in its star, with radius comparable to the local mesh size near $z$.  On a non-uniform mesh the radius will vary from node to node; $B(z)$ is generally \emph{not} one ball translated throughout $\Om$.  The precise choice of radius, needed for \eqref{eq:Pihprops} to hold uniformly in $h$, does not concern us, but see \cite[\S 6]{NSV03}.
-
-For $\varphi \in L_1(\Om)$, set
+To define $\Pih : L_1(\Om) \to \Vhr$, fix the mesh $\Th$ and then, for each $z \in \Nhr$, fix a ball $B(z) \subset \Uh(z)$, centered at $z$ and contained in its star, with radius comparable to the local mesh size near $z$.  (The precise choice of radius, needed for \eqref{eq:Pihprops} to hold uniformly in $h$, does not concern us, but see \cite[\S 6]{NSV03}.)  For $\varphi \in L_1(\Om)$, set
 \begin{equation}
 \label{eq:Pih}
   \Pih\varphi(z) := \frac{1}{|B(z)|}\int_{B(z)}\varphi, \qquad z \in \Nhr.
 \end{equation}
-Linearity is clear, because the balls $B(z)$ only depend on the mesh and not the input $\varphi$, and positivity is immediate: the average of a non-negative function over a ball is non-negative.  (We call a linear operator $A$ \emph{positive} if $\varphi \ge 0$ implies $A\varphi \ge 0$.)  Note $\Pih$ is not a projection: $\Pih^2 \ne \Pih$ in general.
 
-Write $\|\cdot\|_{0,p;\omega}$ for the $L^p(\omega)$ norm over measurable $\omega \subset \bar\Om$.  Chen \& Nochetto \cite{ChenNochetto2000} show that, for every $1\le p\le\infty$, $T\in\Th$, and interior side $S\in\Sh$, and for $\varphi \in W_0^{1,p}(\Om)$,
+Linearity is clear for $\Pih$, because the balls $B(z)$ depend on the mesh, not the input $\varphi$, and positivity\footnote{A linear operator $A$ is \emph{positive} if $\varphi \ge 0$ implies $A\varphi \ge 0$.} is immediate.  Note that $\Pih$ is not a projection: $\Pih^2 \ne \Pih$ in general.
+
+Write $\|\cdot\|_{0,p;\omega}$ for the $L^p(\omega)$ norm over measurable $\omega \subset \bar\Om$.  Chen \& Nochetto \cite{ChenNochetto2000} show that for every $1\le p\le\infty$, $\varphi \in W_0^{1,p}(\Om)$, $T\in\Th$, and interior side $S\in\Sh$,
 \begin{align}
 \label{eq:Pihprops}
   \|\nabla\Pih\varphi\|_{0,p;T} &\preceq \|\nabla\varphi\|_{0,p;\Uh(T)}, \\
@@ -384,41 +385,46 @@ If in addition $\varphi \in W_0^{1,1}(\Om)$ and $\nabla\varphi \in BV(\Om)^d$, t
   \|\varphi-\Pih\varphi\|_{0,1;T} &\preceq h_T^2\, |D^2\varphi|_{\mathrm{var}}(\Uh(T)), \\
   \|\varphi-\Pih\varphi\|_{0,1;S} &\preceq h_S\, |D^2\varphi|_{\mathrm{var}}(\Uh(S)), \notag
 \end{align}
-where $|D^2\varphi|_{\mathrm{var}} := \sum_{i=1}^d |D\partial_i\varphi|_{\mathrm{var}}$ sums the variation measures of the components of $\nabla\varphi$, and $|D^2\varphi|_{\mathrm{var}}(\omega) = \|D^2\varphi\|_{0,1;\omega}$ whenever $\varphi \in W^{2,1}(\Om)$ and $\omega \subset \Om$ is measurable.  We will need the estimates \eqref{eq:Pihprops} and \eqref{eq:PihBV} in following sections; observe that these estimates bound the interpolation error using stars.
+where $|D^2\varphi|_{\mathrm{var}} := \sum_{i=1}^d |D\partial_i\varphi|_{\mathrm{var}}$ sums the variation measures \cite{EvansGariepy2015} of the components of $\nabla\varphi$, and $|D^2\varphi|_{\mathrm{var}}(\omega) = \|D^2\varphi\|_{0,1;\omega}$ whenever $\varphi \in W^{2,1}(\Om)$ and $\omega \subset \Om$ is measurable.
+
+Estimates \eqref{eq:Pihprops} and \eqref{eq:PihBV} bound the interpolation error using stars.  Observe that shape-regularity gives the patches $\Uh(T)$, $\Uh(S)$ finite overlap, thus
+\begin{equation}
+\label{eq:starobservation}
+  \sum_{T\in\Th} |D^2\varphi|_{\mathrm{var}}(\Uh(T)) \preceq |D^2\varphi|_{\mathrm{var}}(\Om),
+\end{equation}
+and likewise over sides $S$.  We will need this observation, and estimates \eqref{eq:Pihprops} and \eqref{eq:PihBV}, in the following sections.
 
 
 \section{A posteriori estimator} \label{sec:estimator}
 
-This section begins the construction of a bilateral form of the \cite{NSV03} estimator, which runs through \S \ref{sec:efficiency}.  Our estimator is assembled from the element-wise contact sets $\Thbot,\Thtop$ of \eqref{eq:Thsplit}, but its detachment terms are localized to the star-dilated strict contact sets defined in \S \ref{sec:barriers}.
+This section begins the construction of a bilateral form of the \cite{NSV03} estimator, which runs through \S \ref{sec:efficiency}.  Our estimator is assembled from the element-wise contact sets $\Thbot,\Thtop$ of \eqref{eq:Thsplit}, but its detachment terms will be localized to the star-dilated strict contact sets, defined only in \S \ref{sec:barriers}.
 
-Write $\ThC := \Thbot \cup \Thtop$ for the set of elements whose stars are in contact with the obstacles; note $\ThC$ is the analog of $\mathcal{T}_h^0$ in \cite{NSV03}.  Recalling \eqref{eq:Thsplit}, we have partitioned the elements as follows (Figure \ref{fig:nodalelem}, right):
+Write $\ThC := \Thbot \cup \Thtop$ for the full collection of elements whose stars are in contact with the obstacles; note $\ThC$ is the analog of $\mathcal{T}_h^0$ in \cite{NSV03}.  Recalling \eqref{eq:Thsplit}, we have partitioned the triangulation as follows (Figure \ref{fig:nodalelem}, right):
 \begin{equation}
 \label{eq:elemdisjoint}
 \Th = \ThC \sqcup \Thplus = \Thbot \sqcup \Thtop \sqcup \Thplus.
 \end{equation}
 
-\subsection{The Galerkin functional}
-
-Define $\tilde\sigma_h \in H^{-1}(\Om)$ by
+\subsection{The Galerkin functional}  Define $\tilde\sigma_h \in H^{-1}(\Om)$ by
 \begin{equation}
 \label{eq:sigmatilde}
   \left<\tilde\sigma_h,\varphi\right> := \sum_{T\in\ThC}\int_T \sigma_h\varphi + \sum_{T\in\Thplus}\int_T \Ih(\sigma_h\Pih\varphi), \qquad \varphi \in H_0^1(\Om).
 \end{equation}
-This is exactly \cite[formula (3.1)]{NSV03}: on wholly-contact elements $\tilde\sigma_h$ agrees with $\sigma_h$ itself; on the other elements $\Thplus$, which are inactive or transitional, the test function is first replaced by its positivity-preserving interpolant $\Pih\varphi$ before pairing with $\sigma_h$.  Nothing in \eqref{eq:sigmatilde} distinguishes lower from upper contact, so we have kept \cite{NSV03}'s definition.
+This is exactly \cite[formula (3.1)]{NSV03}: on wholly-contact elements $\tilde\sigma_h$ agrees with $\sigma_h$ itself; on the other elements $\Thplus$, which are inactive or transitional, the test function is first replaced by its positivity-preserving interpolant $\Pih\varphi$, defined on the nodes, before pairing with $\sigma_h$.  Nothing in \eqref{eq:sigmatilde} distinguishes lower from upper contact, so we have kept \cite{NSV03}'s definition.
 
 The \emph{Galerkin functional} $\Gh \in H^{-1}(\Om)$ is
 \begin{equation}
 \label{eq:Gh}
   \left<\Gh,\varphi\right> := -\left<\nabla u_h,\nabla\varphi\right> + \left< f + \tilde\sigma_h,\varphi\right>, \qquad \varphi \in H_0^1(\Om).
 \end{equation}
-This is \cite[formula (3.3)]{NSV03}, but with $\tilde\sigma_h$ entering with the opposite sign, consistent with our sign for $\sigma_h$.  Definition \eqref{eq:sigma} of the continuum residual $\sigma$ eliminates $f$ to give an equivalent expression of the Galerkin functional:
+This is \cite[formula (3.3)]{NSV03}, but with $\tilde\sigma_h$ entering with the opposite sign, consistent with our sign for $\sigma_h$.  Definition \eqref{eq:sigma} of the continuum residual $\sigma$ eliminates $f$ to give an equivalent expression to \eqref{eq:Gh}:
 \begin{equation}
 \label{eq:Ghagain}
 \left<\Gh,\varphi\right> = \left<\nabla(u-u_h),\nabla\varphi\right> - \left<\sigma-\tilde\sigma_h,\varphi\right>.
 \end{equation}
 Thus $\Gh$ measures two mismatches at once, between $u$ and $u_h$, and between the exact residual $\sigma$ and its discrete surrogate $\tilde\sigma_h$.
 
-Consider the application of $\Gh$ to a piecewise-linear function $\varphi_h$.  The following Lemma can be read as saying that the result would be zero if $\sigma_h$ and $\tilde \sigma_h$ were computing the same thing, and if the inner products $\left<\cdot,\cdot\right>$ and $\left<\cdot,\cdot\right>_h$ were the same.  Because these statements are not true, we ``almost'' have orthogonality.  Every step in the proof uses only the disjoint split $\Th = \ThC \sqcup \Thplus$, and unconditional definition \eqref{eq:sigmah} of $\sigma_h$ at interior nodes, so the result is independent of which obstacle contacts the (thinned) active elements $\ThC$.
+Consider the application of $\Gh$ to a piecewise-linear function $\varphi_h$.  The following Lemma can be read as saying that the result would be zero if $\sigma_h$ and $\tilde \sigma_h$ were computing the same thing, and if the inner products $\left<\cdot,\cdot\right>$ and $\left<\cdot,\cdot\right>_h$ were the same.  Because these statements are not true, we ``almost'' have orthogonality.  Every step in the proof uses only the disjoint split $\Th = \ThC \sqcup \Thplus$, and unconditional definition \eqref{eq:sigmah} of $\sigma_h$ at interior nodes, so the result is independent of which obstacle contacts the fully-active elements $\ThC$.
 
 \begin{lemma}[Almost Galerkin orthogonality]
 \label{lem:almostGO}
@@ -432,14 +438,12 @@ For all $\varphi_h \in \Vhr$,
 \end{lemma}
 
 \begin{proof}
-For $\varphi_h\in\Vhr$, \eqref{eq:sigmah} gives $\left<\nabla u_h,\nabla\varphi_h\right> = \left< f,\varphi_h\right> + \left<\sigma_h,\varphi_h\right>_h$: this is $\sigma_h$'s defining relation at interior nodes, and it holds at \emph{every} $z\in\Nhr$ unconditionally, so by linearity it holds for every $\varphi_h \in \Vhr$.  Substituting into \eqref{eq:Gh},
-\[
-  \left<\Gh,\varphi_h\right> = -\bigl(\left< f,\varphi_h\right> + \left<\sigma_h,\varphi_h\right>_h\bigr) + \left< f,\varphi_h\right> + \left<\tilde\sigma_h,\varphi_h\right> = \left<\tilde\sigma_h,\varphi_h\right> - \left<\sigma_h,\varphi_h\right>_h,
-\]
-the first equality in \eqref{eq:almostGO}.  For the second, $\left<\sigma_h,\varphi_h\right>_h = \sum_{T\in\Th}\int_T \Ih(\sigma_h\varphi_h)$ by definition \eqref{eq:lumped}.  Subtracting this from \eqref{eq:sigmatilde} and collecting, the $\ThC$ part gives $\int_T \bigl(\sigma_h\varphi_h - \Ih(\sigma_h\varphi_h)\bigr)$, and the $\Thplus$ part gives $\int_T \bigl(\Ih(\sigma_h\Pih\varphi_h) - \Ih(\sigma_h\varphi_h)\bigr) = \int_T \Ih\bigl(\sigma_h(\Pih\varphi_h-\varphi_h)\bigr)$ by linearity of $\Ih$.
+For $\varphi_h\in\Vhr$, \eqref{eq:sigmah} gives $\left<\nabla u_h,\nabla\varphi_h\right> = \left< f,\varphi_h\right> + \left<\sigma_h,\varphi_h\right>_h$: this is $\sigma_h$'s defining relation at interior nodes, and it holds at \emph{every} $z\in\Nhr$ unconditionally, so by linearity it holds for every $\varphi_h \in \Vhr$.  Substituting this into \eqref{eq:Gh} yields
+   $$\left<\Gh,\varphi_h\right> = -\bigl(\left< f,\varphi_h\right> + \left<\sigma_h,\varphi_h\right>_h\bigr) + \left< f,\varphi_h\right> + \left<\tilde\sigma_h,\varphi_h\right> = \left<\tilde\sigma_h,\varphi_h\right> - \left<\sigma_h,\varphi_h\right>_h,$$
+the first equality in \eqref{eq:almostGO}.  Next, $\left<\sigma_h,\varphi_h\right>_h = \sum_{T\in\Th}\int_T \Ih(\sigma_h\varphi_h)$ by definition \eqref{eq:lumped}.  Subtracting this from \eqref{eq:sigmatilde} and collecting, the $\ThC$ part gives $\int_T \bigl(\sigma_h\varphi_h - \Ih(\sigma_h\varphi_h)\bigr)$, and the $\Thplus$ part gives $\int_T \bigl(\Ih(\sigma_h\Pih\varphi_h) - \Ih(\sigma_h\varphi_h)\bigr) = \int_T \Ih\bigl(\sigma_h(\Pih\varphi_h-\varphi_h)\bigr)$ by linearity of $\Ih$.
 \end{proof}
 
-In the following Lemma, $\Rh$ is a residual estimator, a conceptual descendent of the one in Babuška \& Rheinboldt \cite{BabuskaRheinboldt1978}, while $\Qh$ is a quadrature error.  We represent $\Gh$ as \eqref{eq:Gh-repn}, leading to the essential \emph{a posteriori} bound \eqref{eq:Ghbound} at the end of this section.
+At this point we begin to reveal the estimator.  In the following Lemma, $\Rh$ is a residual estimator, descending from the original in Babuška \& Rheinboldt \cite{BabuskaRheinboldt1978}, while $\Qh$ is a quadrature error.  Representation \eqref{eq:Gh-repn} of $\Gh$ will lead to \emph{a posteriori} bound \eqref{eq:Ghbound} below.
 
 \begin{lemma}[Representation formula for $\Gh$]
 \label{lem:Gh-repn}
@@ -448,13 +452,13 @@ For each interior side $S \in \Sh$, let $T^-,T^+ \in \Th$ be the elements meetin
 \label{eq:jump}
   \jump{\partial_\nu u_h} := \partial_\nu u_h|_{T^+} - \partial_\nu u_h|_{T^-}
 \end{equation}
-for the jump across $S$.  Define $\Rh \in H^{-1}(\Om)$, and $\Qh \in \Vhr^*$, a linear functional on the discrete space, by
+for the jump across $S$.  Define $\Rh \in H^{-1}(\Om)$, and $\Qh \in (\Vhr)^*$, a linear functional on the discrete space, by
 \begin{align}
 \label{eq:RhQh}
   \left<\Rh,\varphi\right> &:= \sum_{S\in\Sh}\int_S \jump{\partial_\nu u_h}\,\varphi + \sum_{T\in\ThC}\int_T (f+\sigma_h)\varphi + \sum_{T\in\Thplus}\int_T f\varphi, \\
-  \left<\Qh,\varphi_h\right> &:= \sum_{T\in\ThC}\int_T \bigl(\sigma_h\varphi_h - \Ih(\sigma_h\varphi_h)\bigr). \notag
+  \left<\Qh,\varphi_h\right> &:= \sum_{T\in\ThC}\int_T \bigl(\sigma_h\varphi_h - \Ih(\sigma_h\varphi_h)\bigr), \notag
 \end{align}
-Then, for $\varphi \in H_0^1(\Om)$,
+for test functions $\varphi \in H_0^1(\Om)$ and $\varphi_h \in \Vhr$ respectively.  Then, for $\varphi \in H_0^1(\Om)$,
 \begin{equation}
 \label{eq:Gh-repn}
   \left<\Gh,\varphi\right> = \left<\Rh,\varphi-\Pih\varphi\right> + \left<\Qh,\Pih\varphi\right>.
@@ -462,40 +466,32 @@ Then, for $\varphi \in H_0^1(\Om)$,
 \end{lemma}
 
 \begin{proof}
-Split $\left<\Gh,\varphi\right> = \left<\Gh,\varphi-\Pih\varphi\right> + \left<\Gh,\Pih\varphi\right>$, and evaluate each term.
-
-For $\left<\Gh,\varphi-\Pih\varphi\right>$, use definition \eqref{eq:Gh} with $\varphi$ replaced by $\varphi - \Pih\varphi \in H_0^1(\Om)$.  Integrate $\left<\nabla u_h,\nabla(\varphi-\Pih\varphi)\right>$ by parts elementwise: $u_h$ is affine on each $T$, so no interior element term survives, leaving only the interior jump terms.  (There is no boundary term since $\varphi-\Pih\varphi$ vanishes on $\dOm$.)  Concretely, for any $v \in H_0^1(\Om)$ the two elements along $S$ contribute $\partial_\nu u_h|_{T^-}$ and $-\partial_\nu u_h|_{T^+}$, their outward normals at $S$ being $\nu$ and $-\nu$, so with convention \eqref{eq:jump}
+Split $\left<\Gh,\varphi\right> = \left<\Gh,\varphi-\Pih\varphi\right> + \left<\Gh,\Pih\varphi\right>$, and evaluate each term.  For $\left<\Gh,\varphi-\Pih\varphi\right>$, use definition \eqref{eq:Gh} with $\varphi$ replaced by $\varphi - \Pih\varphi \in H_0^1(\Om)$.  Integrate $\left<\nabla u_h,\nabla(\varphi-\Pih\varphi)\right>$ by parts elementwise: $u_h$ is affine on each $T$, so no interior element term survives, leaving only the interior jump terms.  (There is no boundary term since $\varphi-\Pih\varphi$ vanishes on $\dOm$.)  Concretely, for any $v \in H_0^1(\Om)$ the two elements along $S$ contribute $\partial_\nu u_h|_{T^-}$ and $-\partial_\nu u_h|_{T^+}$, their outward normals at $S$ being $\nu$ and $-\nu$, so from \eqref{eq:jump} we have
 \begin{equation}
 \label{eq:byparts}
   \left<\nabla u_h,\nabla v\right> = -\sum_{S\in\Sh}\int_S \jump{\partial_\nu u_h}\,v,
 \end{equation}
-and the leading minus sign in \eqref{eq:Gh} turns this into the first sum in \eqref{eq:RhQh}, defining $\Rh$.  For $\left<\tilde\sigma_h,\varphi-\Pih\varphi\right>$, use definition \eqref{eq:sigmatilde}.  On $\ThC$, $\tilde\sigma_h=\sigma_h$ directly, while on $\Thplus$, $\tilde\sigma_h$ pairs against $\Pih$ applied to the test function, and by linearity of $\Pih$, $\Pih(\varphi-\Pih\varphi) = \Pih\varphi - \Pih^2\varphi$.  Altogether,
+and the leading minus sign in \eqref{eq:Gh} turns this into the first sum in \eqref{eq:RhQh}.  For $\left<\tilde\sigma_h,\varphi-\Pih\varphi\right>$, use definition \eqref{eq:sigmatilde}.  On $\ThC$, $\tilde\sigma_h=\sigma_h$ directly, while on $\Thplus$, $\tilde\sigma_h$ pairs against $\Pih$ applied to the test function, and by linearity of $\Pih$, $\Pih(\varphi-\Pih\varphi) = \Pih\varphi - \Pih^2\varphi$.  Altogether,
 \begin{equation}
 \label{eq:Gh-first}
   \left<\Gh,\varphi-\Pih\varphi\right> = \left<\Rh,\varphi-\Pih\varphi\right> \ +\ \sum_{T\in\Thplus}\int_T \Ih\bigl(\sigma_h(\Pih\varphi-\Pih^2\varphi)\bigr).
 \end{equation}
-
 For $\left<\Gh,\Pih\varphi\right>$, apply Lemma~\ref{lem:almostGO} with $\varphi_h=\Pih\varphi\in\Vhr$:
 \begin{equation}
 \label{eq:Gh-second}
   \left<\Gh,\Pih\varphi\right> = \left<\Qh,\Pih\varphi\right> \ -\ \sum_{T\in\Thplus}\int_T \Ih\bigl(\sigma_h(\Pih\varphi-\Pih^2\varphi)\bigr).
 \end{equation}
-
 Adding \eqref{eq:Gh-second} and \eqref{eq:Gh-first} and cancelling leaves \eqref{eq:Gh-repn}.
 \end{proof}
 
-As with Lemma~\ref{lem:almostGO}, this derivation only used the $\Th = \ThC \sqcup \Thplus$ split, $\sigma_h$'s definition, and linearity of $\Pih$ and $\Ih$; which obstacle is active on $\ThC$ is not relevant.  The cancellation at the end of the proof is exactly why $\tilde\sigma_h$, rather than $\sigma_h$ itself, appears in \eqref{eq:Gh}.  (An un-cancelled $\Thplus$ term in \eqref{eq:Gh-repn} would not shrink at the rate needed for a second-order estimator; see the discussion after \cite[formula (3.6)]{NSV03}.)
+As with Lemma~\ref{lem:almostGO}, this derivation only used the $\Th = \ThC \sqcup \Thplus$ split, $\sigma_h$'s definition, and linearity of $\Pih$ and $\Ih$; which obstacle is active on $\ThC$ is not relevant.  The cancellation between \eqref{eq:Gh-second} and \eqref{eq:Gh-first} is exactly why $\tilde\sigma_h$, rather than $\sigma_h$ itself,\footnote{An un-cancelled $\Thplus$ term in \eqref{eq:Gh-repn} would not shrink at the rate needed for a second-order estimator; see the discussion after \cite[formula (3.6)]{NSV03}.} appears in \eqref{eq:Gh}.  Note that the sign convention for jump \eqref{eq:jump} does not affect the localized estimator \eqref{eq:Rp} itself, which needs only $|\jump{\partial_\nu u_h}|$.
 
-Note that the sign convention for jump \eqref{eq:jump} does not affect the localized estimator \eqref{eq:Rp} itself, which needs only $|\jump{\partial_\nu u_h}|$.
-
-\subsection{Localized residual and quadrature estimators}
-
-Following \cite[\S\S 4--5]{NSV03}, our next task is to bound $\Gh$ in a dual space larger than $H^{-1}(\Om)$.  As in \cite[\S 3.2]{NSV03}, let
+\subsection{Localized residual and quadrature estimators}  Following \cite[\S\S 4--5]{NSV03}, our next task is to bound $\Gh$ in a dual space larger than $H^{-1}(\Om)$.  As in \cite[\S 3.2]{NSV03}, let
 \begin{equation}
 \label{eq:W}
   W := \{\varphi \in H_0^1(\Om) : \nabla\varphi \in BV(\Om)^d\},
 \end{equation}
-equipped with the seminorm $\varphi \mapsto |D^2\varphi|_{\mathrm{var}}(\Om)$ already used in \eqref{eq:PihBV}.  This space is slightly larger than $W^{2,1}(\Om) \cap H_0^1(\Om)$, because $\nabla\varphi \in W^{1,1}(\Om)^d$ implies $\nabla\varphi \in BV(\Om)^d$ but not conversely, and it still contains the discrete space $\Vhr$; both facts matter below.  Measuring $\Gh$ against $W$ rather than $H_0^1(\Om)$ tests it on fewer functions, but in a stronger seminorm, which is what makes the second-order bound \eqref{eq:Ghbound} available.
+equipped with the seminorm $\varphi \mapsto |D^2\varphi|_{\mathrm{var}}(\Om)$ already used in \eqref{eq:PihBV}.  This space is clearly smaller than $H_0^1(\Om)$, but it is slightly larger than $W^{2,1}(\Om) \cap H_0^1(\Om)$, because $\nabla\varphi \in W^{1,1}(\Om)^d$ implies $\nabla\varphi \in BV(\Om)^d$ but not conversely.  Note that $W$ still contains the discrete space $\Vhr$.  Measuring $\Gh$ against test functions from $W$, rather than $H_0^1(\Om)$, tests it on fewer functions, but in a stronger seminorm, which is what permits the second-order bound \eqref{eq:Ghbound} later.
 
 For $1 \le p \le \infty$, with dual exponent $p' = p/(p-1)$, define the \emph{localized residual} $R_p$, element-wise over $T\in\Th$, by
 \begin{equation}
@@ -505,20 +501,20 @@ For $1 \le p \le \infty$, with dual exponent $p' = p/(p-1)$, define the \emph{lo
 \end{equation}
 This is \cite[formula (3.7)]{NSV03}, again with the sign of $\sigma_h$ flipped: the first term is the usual interior-flux-jump contribution over $\partial T$, and the second is the residual magnitude $|f+\sigma_h|$ on wholly-active elements, matching the volume density of $\Rh$ in \eqref{eq:RhQh}, or the bare source term $|f|$ elsewhere.  Nothing here refers to the nature of the active obstacle, so \eqref{eq:Rp} is unchanged from the unilateral case.
 
-By the BV-approximation properties \eqref{eq:PihBV} of $\Pih$, and because shape-regularity gives the patches $\Uh(T)$, $\Uh(S)$ finite overlap, so that $\sum_{T\in\Th} |D^2\varphi|_{\mathrm{var}}(\Uh(T)) \preceq |D^2\varphi|_{\mathrm{var}}(\Om)$ and likewise over sides, definition \eqref{eq:RhQh} of $\Rh$ gives
+By BV-approximation properties \eqref{eq:PihBV} and observation \eqref{eq:starobservation}, definition \eqref{eq:RhQh} of $\Rh$ gives
 \begin{equation}
 \label{eq:Rhbound}
   \bigl|\left<\Rh,\varphi-\Pih\varphi\right>\bigr| \ \preceq\ \|h^2 R_\infty\|_{0,\infty;\Om}\, |D^2\varphi|_{\mathrm{var}}(\Om)
 \end{equation}
 for $\varphi \in W$.  This is \cite[formula (3.8)]{NSV03}.
 
-The second term $\left<\Qh,\Pih\varphi\right>$ in the representation formula \eqref{eq:Gh-repn} accounts for the effect of quadrature.  It too is independent of obstacle type, and it already arises for an unconstrained linear problem.  For $v_h,w_h$ affine on $T$ the mass-lumping error satisfies $\bigl|\int_T (v_h w_h - \Ih(v_h w_h))\bigr| \preceq h_T^2 \int_T |\nabla v_h| |\nabla w_h|$; applying this with $v_h = \sigma_h$ and $w_h = \Pih\varphi$, summing over $T \in \ThC$, and using the H\"older inequality with the conjugate pair $(d,d')$ gives the first bound in \eqref{eq:Qhbound} below.  Applying the first bound in \eqref{eq:Pihprops} together with the Sobolev-type inequality $\|\nabla\varphi\|_{0,d';\Om} \preceq |D^2\varphi|_{\mathrm{var}}(\Om)$, valid for $\varphi \in W$, gives the second.  Altogether we have \cite[formula (3.9)]{NSV03}, namely
+The term $\left<\Qh,\Pih\varphi\right>$ in representation formula \eqref{eq:Gh-repn} accounts for the effect of quadrature, and it already arises for an unconstrained linear problem.  For $v_h,w_h$ affine on $T$ the mass-lumping error satisfies $\bigl|\int_T (v_h w_h - \Ih(v_h w_h))\bigr| \preceq h_T^2 \int_T |\nabla v_h| |\nabla w_h|$; applying this with $v_h = \sigma_h$ and $w_h = \Pih\varphi$, summing over $T \in \ThC$, and using the H\"older inequality with the conjugate pair $(d,d')$ gives the first bound in \eqref{eq:Qhbound} below.  Applying the first bound in \eqref{eq:Pihprops} together with the Sobolev-type inequality $\|\nabla\varphi\|_{0,d';\Om} \preceq |D^2\varphi|_{\mathrm{var}}(\Om)$, valid for $\varphi \in W$, gives the second.  Altogether we have \cite[formula (3.9)]{NSV03}, namely
 \begin{equation}
 \label{eq:Qhbound}
   \bigl|\left<\Qh,\Pih\varphi\right>\bigr| \ \preceq\ \|h^2\nabla\sigma_h\|_{0,d;\Lamh}\, \|\nabla\Pih\varphi\|_{0,d';\Om}
   \ \preceq\ \|h^2\nabla\sigma_h\|_{0,d;\Lamh}\, |D^2\varphi|_{\mathrm{var}}(\Om),
 \end{equation}
-where $\Lamh := \Lamhbot \cup \Lamhtop = \bigcup_{T\in\ThC} T$ is the region combining all wholly-contact elements.  We have generalized from the unilateral case, namely \cite[formula (2.4)]{NSV03}, to bilateral in the obvious way.
+where $\Lamh := \Lamhbot \cup \Lamhtop = \bigcup_{T\in\ThC} T$ is the region combining all wholly-contact elements.
 
 Bounds \eqref{eq:Rhbound} and \eqref{eq:Qhbound} use the same seminorm $|D^2\varphi|_{\mathrm{var}}(\Om)$, over $\varphi\in W$, so by \eqref{eq:Gh-repn} they combine to bound $\Gh$ in a dual norm.  Specifically, for an operator $\mathcal{A} \in H^{-1}(\Om)$ define
 \begin{equation}
@@ -531,6 +527,8 @@ Applying this to $\Gh$, \eqref{eq:Rhbound} and \eqref{eq:Qhbound} yield
   \|\Gh\|_{-2,\infty;\Om} \preceq\ \|h^2 R_\infty\|_{0,\infty;\Om} \ +\ \|h^2\nabla\sigma_h\|_{0,d;\Lamh},
 \end{equation}
 which is formula (3.10) in \cite{NSV03}.  As with the Galerkin functional itself, nothing in its derivation distinguishes lower from upper contact.
+
+At this point we have generalized from the unilateral case, namely \cite[formula (2.4)]{NSV03}, to bilateral bounds in the obvious way.  Formula \eqref{eq:Ghbound} will lead to the pointwise estimator in \S \ref{sec:pointwise}, but before we get there we must modify \cite{NSV03}'s unilateral barrier construction in non-trivial ways, so as to handle bilateral bounds.
 
 
 \section{Barriers} \label{sec:barriers}
