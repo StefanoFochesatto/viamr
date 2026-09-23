@@ -79,13 +79,13 @@ TO DO.
 
 \section{Introduction and goals} \label{sec:intro}
 
-The VIAMR library\footnote{\href{https://github.com/StefanoFochesatto/viamr}{github.com/StefanoFochesatto/viamr}} implements a variety of adaptive mesh refinement (AMR) and mesh adaptation algorithms for variational inequalities (VIs).  These methods are based on \emph{a posteriori} estimators, and also certain heuristics, when marking elements for refinement.  Specifically for classical obstacle problems, namely unilateral problems where the operator is the linear Laplacian, the library implements certain rigorous estimators from Nochetto, Siebert, \& Veeser \cite{NSV03,NSV05}.  For these estimators, reliability (error bounded by estimator) and efficiency (estimator bounded by error) are proven in the $L^\infty$, plus localization for the \cite{NSV05} estimator.
+The VIAMR library\footnote{\href{https://github.com/StefanoFochesatto/viamr}{github.com/StefanoFochesatto/viamr}} implements a variety of adaptive mesh refinement (AMR) and mesh adaptation algorithms for variational inequalities (VIs).  These methods are based on \emph{a posteriori} estimators, and also certain heuristics, when marking elements for refinement.  Specifically for classical obstacle problems, namely unilateral problems where the operator is the linear Laplacian, the library implements certain rigorous estimators from Nochetto, Siebert, \& Veeser \cite{NSV03,NSV05}.  For these estimators, reliability (error bounded by estimator) and efficiency (estimator bounded by error) are proven in the $L^\infty$ norm, plus localization for the \cite{NSV05} estimator.
 
-This paper explains extends the \cite{NSV03} estimator to the bilateral or box-constrained case, that is, with continuous lower \emph{and upper} bounds.  Reliability and efficiency are proven for box constraints.  However, we leave open the further refinements of \cite{NSV05} in the bilateral setting, namely full localization and barrier sets; see Remark~\ref{rem:localization}.  Furthermore, such precision is generally not available for nonlinear and/or degenerate operators, and it is not proven for the other heuristic methods in the VIAMR library.
+This paper extends the \cite{NSV03} estimator to the bilateral or box-constrained case, that is, with continuous lower \emph{and upper} bounds.  Reliability and efficiency are proven for box constraints.  However, we leave open the further refinements of \cite{NSV05} in the bilateral setting, namely full localization and barrier sets; see Remark~\ref{rem:localization}.  Furthermore, such precision is generally not available for nonlinear and/or degenerate operators, and it is not proven for the other heuristic methods in the VIAMR library.
 
 We are not aware of any pointwise \emph{a posteriori} theory for the bilateral problem, which is why we spell this out.  Somewhat nearby, Ot\'arola, Rankin, \& Salgado \cite{Otarolaetal2019} prove reliable and efficient maximum-norm \emph{a posteriori} bounds for a problem with genuine box constraints, using the machinery of \cite{NSV03}, but their constrained variable is a control, and it is determined by a pointwise projection of the adjoint state, so there is no free boundary of the present kind, and no pointwise barrier construction of the sort in \S \ref{sec:barriers}; by contrast our constrained variable is the solution of the VI itself.
 
-The paper is organized into sections, but they group into two major parts.  Sections \ref{sec:setup} and \ref{sec:discretization} form the first part; they state the continuum bilateral problem, quantify the separation of its two contact sets, and build the discretization.  Nothing in the first part is specific to the constructed estimators.  For the second part, Sections \ref{sec:estimator} through \ref{sec:efficiency} are the bilateral form of the estimator of \cite{NSV03}, which is assembled from continuous barrier functions and element-wise contact sets, and they prove reliability and efficiency.  Section \ref{sec:discuss} concludes with a discussion of the implementation, and an outlook.
+The paper is organized into sections, but they group into two major parts.  Sections \ref{sec:setup} and \ref{sec:discretization} form the first part; they state the continuum bilateral problem, quantify the separation of its two contact sets, and build the discretization.  Nothing in the first part is specific to the constructed estimators.  For the second part, Sections \ref{sec:estimator} through \ref{sec:efficiency} are the bilateral form of the estimator of \cite{NSV03}, which is assembled from element-wise contact sets, and they prove reliability, via continuous barrier functions, and efficiency.  Section \ref{sec:discuss} concludes with a discussion of the implementation, and an outlook.
 
 
 \section{Continuum problem} \label{sec:setup}
@@ -116,7 +116,7 @@ The VI form of the classical obstacle problem reads:\footnote{Inequality \eqref{
   \left< \nabla u, \nabla(v - u)\right> \ge \left< f, v - u\right>
   \qquad \text{for all } v \in \mathcal{K}.
 \end{equation}
-This is the immediate generalization of problem (1.1) of \cite{NSV03}, from a one-sided constraint to the bilateral case, and \eqref{eq:VI} admits a unique solution $u \in \mathcal{K}$ \cite[Theorem 6.2]{KinderlehrerStampacchia1980}.
+This is the immediate generalization of problem (1.1) of \cite{NSV03}, from a one-sided constraint to the bilateral case, and \eqref{eq:VI} admits a unique solution $u \in \mathcal{K}$ \cite[Theorem 6.2]{KinderlehrerStampacchia1980}.  We assume in addition that $u$ is continuous on $\bar\Om$, a hypothesis discussed in the next subsection.
 
 Let $\sigma \in H^{-1}(\Om) = H_0^1(\Om)^*$ be the \emph{residual} or \emph{dual variable} or \emph{multiplier} defined by
 \begin{equation}
@@ -151,7 +151,7 @@ For the continuum problem, compactness of $\bar\Om$ allows us to quantify the se
 \end{equation}
 equivalently the largest constant with $\psilo + \delta_{\min} \le \psiup$ on $\bar\Om$.  The minimum is attained, and positive, by nondegeneracy \eqref{eq:nondeg}, continuity of $\psiup - \psilo$, and compactness of $\bar\Om$.
 
-At each point of $\Omega$, one of the two bounds in \eqref{eq:K} must be slack, so a continuous $u$ is, near any contact point, the solution of a one-sided problem.  Since $f \in L^\infty(\Om)$ and either obstacle is in $C^{0,\alpha}(\bar\Om)$, it follows that $u \in C^{0,\beta}(\bar\Om)$ also \cite[Theorem 2.1]{FinziVita1982}, with $\beta < \alpha$ under inhomogeneous boundary conditions \cite{Biroli1979}.  Let $L_u$ be the H\"older seminorm for $u$, i.e.\ the least constant with $|u(x) - u(y)| \le L^\top |x-y|^\beta$ for all $x,y \in \bar\Om$.  Also, noting $\psiup \in C^{0,\alpha}(\bar\Om)$, let $L^\top \ge 0$ be the H\"older seminorm of $\psiup$ on $\bar\Om$.  The values $L_u,L^\top$ are finite, but they can be zero.  Therefore, regarding possible division by zero in \eqref{eq:r0} below, we make the convention that a term is omitted from the minimum if its denominator vanishes, i.e.\ if $\psiup$ or $u$ is constant, respectively; this regards the quotients as $+\infty$ in such cases.
+Regarding the continuity assumed for $u$, by \eqref{eq:nondeg} one of the two bounds in \eqref{eq:K} is slack on a neighborhood of each contact point, so a continuous $u$ locally solves a one-sided problem.  Since $f \in L^\infty(\Om)$ and either obstacle is in $C^{0,\alpha}(\bar\Om)$, the unilateral theory then gives $u \in C^{0,\beta}(\bar\Om)$ \cite[Theorem 2.1]{FinziVita1982}, with $\beta < \alpha$ under inhomogeneous boundary conditions \cite{Biroli1979}.  This argument presupposes continuity, which is why we assume it.  Let $L_u$ be the H\"older seminorm for $u$, i.e.\ the least constant with $|u(x) - u(y)| \le L_u |x-y|^\beta$ for all $x,y \in \bar\Om$.  Also, noting $\psiup \in C^{0,\alpha}(\bar\Om)$, let $L^\top \ge 0$ be the H\"older seminorm of $\psiup$ on $\bar\Om$.  The values $L_u,L^\top$ are finite, but they can be zero.  Therefore, regarding possible division by zero in \eqref{eq:r0} below, we make the convention that a term is omitted from the minimum if its denominator vanishes, i.e.\ if $\psiup$ or $u$ is constant, respectively; this regards the quotients as $+\infty$ in such cases.
 
 \begin{proposition}[Separation of the contact sets]
 \label{prop:separation}
@@ -180,7 +180,7 @@ $L^\top r^\alpha < \delta_{\min}/2$ and $L_u r^\beta < \delta_{\min}/2$, by defi
 $r \ge r_0$, and $\operatorname{dist}(\Cbot,\Ctop) \ge r_0$ follows.
 \end{proof}
 
-Proposition~\ref{prop:separation} gives an explicit, data-determined lower bound $r_0$ on the spatial separation of the bilateral contact sets $\Cbot, \Ctop$.  Figure~\ref{fig:separation} illustrates the geometry.  The gap $\delta_{\min}$ is vertical, and determined directly by the obstacles alone, whereas $r_0$ is a horizontal distance in $\Om$ depending on the H\"older regularity of the solution\footnote{Thus $r_0$ is ultimately controlled by the data $f,g,\psilo,\psiup$, through the regularity theory \cite{KinderlehrerStampacchia1980}.} $u$.   A positive value $r_0$ stops degeneration of the transition band between the contact sets, so that the discrete (element-wise) classification in the next Section tracks the true sets closely.
+Proposition~\ref{prop:separation} gives an explicit, data-determined lower bound $r_0$ on the spatial separation of the bilateral contact sets $\Cbot, \Ctop$.  Figure~\ref{fig:separation} illustrates the geometry.  The gap $\delta_{\min}$ is vertical, and determined directly by the obstacles alone, whereas $r_0$ is a horizontal distance in $\Om$ depending on the H\"older regularity of the solution\footnote{Thus $r_0$ is ultimately controlled by the data $f,g,\psilo,\psiup$, through the regularity theory \cite{KinderlehrerStampacchia1980}.} $u$.   A positive value $r_0$ stops degeneration of the transition band between the contact sets, so one expects the discrete (element-wise) classification in the next Section to track the true sets on sufficiently fine meshes.
 
 \begin{figure}[ht]
 \centering
@@ -213,7 +213,7 @@ Let $\Ih:C(\bar\Om) \to \Vh$ be the Lagrange interpolation operator onto $\Vh$. 
 \label{eq:lumped}
 \left< v_h, w_h\right>_h := \int_\Om \Ih(v_h w_h), \qquad v_h, w_h \in \Vh.
 \end{equation}
-Also as in \cite{NSV03}, in what follows $C$ denotes different constants depending only on $\gamma^*$, $\Om$, and $d$, and $\preceq$ indicates $\le$ up to such a constant.  Then next two Lemmas are special to piecewise-\emph{linear} interpolation.  They need no acuteness or mesh-fineness assumption on $\Th$, but they do not hold generally for higher-order elements.
+Also as in \cite{NSV03}, in what follows $C$ denotes different constants depending only on $\gamma^*$, $\Om$, and $d$, and $\preceq$ indicates $\le$ up to such a constant.  The next two Lemmas are special to piecewise-\emph{linear} interpolation.  They need no acuteness or mesh-fineness assumption on $\Th$, but they do not hold generally for higher-order elements.
 
 \begin{lemma}[Vanishing affine functions on simplices]
 \label{lem:affine}
@@ -231,7 +231,7 @@ $\Ih w \le \Ih \zeta$ on $\bar\Om$, for any mesh $\Th$.
 \end{lemma}
 
 \begin{proof}
-By linearity of $\Ih$, $\Ih \zeta - \Ih w = \Ih(\zeta - w)$, and $\zeta - w \ge 0$ at every node. On each $T \in \Th$, $\Ih(\zeta-w)$ is affine, hence $\Ih(\zeta-w) \ge 0$ on $T$, for every $T$, by the Lemma \ref{lem:affine}.
+By linearity of $\Ih$, $\Ih \zeta - \Ih w = \Ih(\zeta - w)$, and $\zeta - w \ge 0$ at every node. On each $T \in \Th$, $\Ih(\zeta-w)$ is affine, hence $\Ih(\zeta-w) \ge 0$ on $T$, for every $T$, by Lemma \ref{lem:affine}.
 \end{proof}
 
 Set $\psiloh := \Ih \psilo$ and $\psiuph := \Ih \psiup$.  Applying Lemma~\ref{lem:monotone} to $\psilo \le \psiup$ shows $\psiloh \le \psiuph$.  Applying the same Lemma to the uniform-gap form of \eqref{eq:deltamin} gives
@@ -245,7 +245,7 @@ Note this holds for \emph{every} mesh, not just fine ones. The compatibility con
 \begin{equation}
 \label{eq:Kh}
   \Kh := \{v_h \in \Vh \mid \psiloh \le v_h \le \psiuph \text{ in } \Om,
-    \ v_h = \Ih g \text{ on } \dOm\},
+    \ v_h = \Ih g \text{ on } \dOm\}.
 \end{equation}
 This set is closed and convex.  We may show it is non-empty by choosing $v_h \in \Vh$ nodally, equal to $\Ih g$ at boundary nodes, and anywhere in the non-empty interval $[\psiloh(z),\psiuph(z)]$ at interior nodes, and applying Lemma~\ref{lem:affine} to promote these nodal inequalities to all of $\bar\Om$.  As noted by \cite{Ciarlet2002} and \cite{NSV03} for the unilateral case, $\Kh$ is in general not a subset of $\mathcal{K}$ defined by \eqref{eq:K}, so in this sense our approximation is non-conforming.  More generally, because definition \eqref{eq:Kh} compares piecewise-linear functions, admissibility is decided at the nodes alone.
 
@@ -265,7 +265,7 @@ For interior nodes $z \in \Nhr$, define $\sigma_h \in \Vh$ nodally by
   = \left< \nabla u_h, \nabla \phi_h^z \right> - \left< f, \phi_h^z \right>,
 \end{equation}
 whence $\sigma_h(z) = \bigl(\int_\Om \phi_h^z\bigr)^{-1}
-\bigl(\left< \nabla u_h, \nabla \phi_h^z\right> - \left< f, \phi_h^z\right>\bigr)$.  This is the nodal residual of \cite[\S 2.1]{NSV03}, an unnumbered formula there, but here with the same sign convention \eqref{eq:sigma} as for $\sigma$ itself.  Note that while $\sigma \in H^{-1}(\Om)$ is a quite general object, generally a measure, $\sigma_h \in \Vh$ is a piecewise-linear function which merely assigns a real value for each interior node in the mesh; one might even regard $\sigma_h$ as a collection of delta measures at nodes.
+\bigl(\left< \nabla u_h, \nabla \phi_h^z\right> - \left< f, \phi_h^z\right>\bigr)$.  This is the nodal residual of \cite[\S 2.1]{NSV03}, an unnumbered formula there, but here with the same sign convention \eqref{eq:sigma} as for $\sigma$ itself.  Note that while $\sigma \in H^{-1}(\Om)$ is a quite general object, generally a measure, $\sigma_h \in \Vh$ is a piecewise-linear function which merely assigns a real value for each node in the mesh; one might even regard $\sigma_h$ as a collection of delta measures at nodes.
 
 Definition \eqref{eq:sigmah} will be extended to boundary nodes in the next subsection.
 
@@ -352,14 +352,14 @@ The active element sets in \eqref{eq:Thsplit} are exactly what the library's \te
 Regarding the implementation, both \texttt{elemactive()} and \texttt{thinelemactive()} decide activity by evaluating the gap at a single DG0 degree of freedom, the cell centroid, and comparing to a tolerance \texttt{tol}$>0$, rather than by testing every vertex.  For piecewise-linear $u_h$ and $\psiloh$ the centroid value of $u_h - \psiloh$ is the average of the vertex values, and this gap is non-negative because $u_h \in \Kh$, so at zero tolerance the two tests agree; see Lemma \ref{lem:affine}.  At \texttt{tol}$>0$ the centroid test is slightly weaker, but the tests coincide in the \texttt{tol}$\to 0$ limit.
 \end{remark}
 
-At this point we can see that the element-wise sets \eqref{eq:Thsplit} promote the nodal-sign properties of $\sigma_h$, Proposition \ref{prop:nodalsign}, to pointwise ones within these set, as follows.   However, \emph{on elements in $\Thplus$, no pointwise sign for $\sigma_h$ is claimed}.
+At this point we can see that the element-wise sets \eqref{eq:Thsplit} promote the nodal-sign properties of $\sigma_h$, Proposition \ref{prop:nodalsign}, to pointwise ones within these sets, as follows.   However, \emph{on elements in $\Thplus$, no pointwise sign for $\sigma_h$ is claimed}.
 
 \begin{corollary} \label{cor:sigmahsign}
 $T \in \Thbot \implies \sigma_h \ge 0$ on $T$, and $T \in \Thtop \implies \sigma_h \le 0$ on $T$.
 \end{corollary}
 
 \begin{proof}
-Suppose $z\in \Nhr$ is an interior node and a vertex of $T \in \Thbot$, thus $\sigma_h(z) \ge 0$ by Proposition \ref{prop:nodalsign}.  If instead $z$ is a boundary node then, because every element containing $z$ meets $T$, we have $\Uh(z) \subset \Uh(T) \subset \{u_h = \psiloh\}$, and the boundary-node definition \eqref{eq:sigmah-bnd} gives $\sigma_h(z) = \hat\sigma_h(z)^+ \ge 0$.  Either way $\sigma_h \ge 0$ at each vertex of $T$, whence $\sigma_h \ge 0$ throughout $T$ by Lemma \ref{lem:affine}.  Likewise, $\sigma_h \le 0$ on each $T \in \Thtop$.
+Suppose $z\in \Nhr$ is an interior node and a vertex of $T \in \Thbot$.  Then $z \in \Nhbot$ because $T \subset \Uh(T) \subset \{u_h = \psiloh\}$, thus $\sigma_h(z) \ge 0$ by Proposition \ref{prop:nodalsign}.  If instead $z$ is a boundary node then, because every element containing $z$ meets $T$, we have $\Uh(z) \subset \Uh(T) \subset \{u_h = \psiloh\}$, and the boundary-node definition \eqref{eq:sigmah-bnd} gives $\sigma_h(z) = \hat\sigma_h(z)^+ \ge 0$.  Either way $\sigma_h \ge 0$ at each vertex of $T$, whence $\sigma_h \ge 0$ throughout $T$ by Lemma \ref{lem:affine}.  Likewise, $\sigma_h \le 0$ on each $T \in \Thtop$.
 \end{proof}
 
 \subsection{Positivity-preserving interpolation}  We record here the ball-averaging interpolation operator of Chen \& Nochetto \cite{ChenNochetto2000}, since the constructions in \S 4 and \S 5 both use it.  The construction does not depend on the obstacles, so it is unchanged for the box-constrained case, thus we simply state it following \cite[\S 2.2]{NSV03}; see \cite{ChenNochetto2000} for proofs.
@@ -399,7 +399,7 @@ and likewise over sides $S$.  We will need this observation, and estimates \eqre
 
 This section begins the construction of a bilateral form of the \cite{NSV03} estimator, which runs through \S \ref{sec:efficiency}.  Our estimator is assembled from the element-wise contact sets $\Thbot,\Thtop$ of \eqref{eq:Thsplit}, but its detachment terms will be localized to the star-dilated strict contact sets, defined only in \S \ref{sec:barriers}.
 
-Write $\ThC := \Thbot \cup \Thtop$ for the full collection of elements whose stars are in contact with the obstacles; note $\ThC$ is the analog of $\mathcal{T}_h^0$ in \cite{NSV03}.  Recalling \eqref{eq:Thsplit}, we have partitioned the triangulation as follows (Figure \ref{fig:nodalelem}, right):
+Write $\ThC := \Thbot \cup \Thtop$ for the full collection of elements whose stars lie wholly in a contact set; note $\ThC$ is the analog of $\mathcal{T}_h^0$ in \cite{NSV03}.  Recalling \eqref{eq:Thsplit}, we have partitioned the triangulation as follows (Figure \ref{fig:nodalelem}, right):
 \begin{equation}
 \label{eq:elemdisjoint}
 \Th = \ThC \sqcup \Thplus = \Thbot \sqcup \Thtop \sqcup \Thplus.
@@ -486,7 +486,7 @@ Adding \eqref{eq:Gh-second} and \eqref{eq:Gh-first} and cancelling leaves \eqref
 
 As with Lemma~\ref{lem:almostGO}, this derivation only used the $\Th = \ThC \sqcup \Thplus$ split, $\sigma_h$'s definition, and linearity of $\Pih$ and $\Ih$; which obstacle is active on $\ThC$ is not relevant.  The cancellation between \eqref{eq:Gh-second} and \eqref{eq:Gh-first} is exactly why $\tilde\sigma_h$, rather than $\sigma_h$ itself,\footnote{An un-cancelled $\Thplus$ term in \eqref{eq:Gh-repn} would not shrink at the rate needed for a second-order estimator; see the discussion after \cite[formula (3.6)]{NSV03}.} appears in \eqref{eq:Gh}.  Note that the sign convention for jump \eqref{eq:jump} does not affect the localized estimator \eqref{eq:Rp} itself, which needs only $|\jump{\partial_\nu u_h}|$.
 
-\subsection{Localized residual and quadrature estimators}  Following \cite[\S\S 4--5]{NSV03}, our next task is to bound $\Gh$ in a dual space larger than $H^{-1}(\Om)$.  As in \cite[\S 3.2]{NSV03}, let
+\subsection{Localized residual and quadrature estimators}  Following \cite[\S 3.2]{NSV03}, our next task is to bound $\Gh$ in a dual space larger than $H^{-1}(\Om)$.  Let
 \begin{equation}
 \label{eq:W}
   W := \{\varphi \in H_0^1(\Om) : \nabla\varphi \in BV(\Om)^d\},
@@ -528,7 +528,7 @@ Applying this to $\Gh$, \eqref{eq:Rhbound} and \eqref{eq:Qhbound} yield
 \end{equation}
 which is formula (3.10) in \cite{NSV03}.  As with the Galerkin functional itself, nothing in its derivation distinguishes lower from upper contact.
 
-At this point we have generalized from the unilateral case, namely \cite[formula (2.4)]{NSV03}, to bilateral bounds in the obvious way.  Formula \eqref{eq:Ghbound} will lead to the pointwise estimator in \S \ref{sec:pointwise}, but before we get there we must modify \cite{NSV03}'s unilateral barrier construction in non-trivial ways, so as to handle bilateral bounds.
+At this point we have generalized from the unilateral case, namely \cite[\S 3]{NSV03}, to bilateral bounds in the obvious way.  Formula \eqref{eq:Ghbound} will lead to the pointwise estimator in \S \ref{sec:pointwise}, but before we get there we must modify \cite{NSV03}'s unilateral barrier construction in non-trivial ways, so as to handle bilateral bounds.
 
 
 \section{Barriers} \label{sec:barriers}
