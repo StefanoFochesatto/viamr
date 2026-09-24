@@ -535,7 +535,7 @@ Applying this to $\Gh$, \eqref{eq:Rhbound} and \eqref{eq:Qhbound} yield
 \end{equation}
 which is formula (3.10) in \cite{NSV03}.
 
-\subsection{A first-order bound on the Galerkin functional}  Bound \eqref{eq:Ghbound} controls $\Gh$ in the dual norm \eqref{eq:dualnormbv}, which is built on the seminorm $|D^2\varphi|_{\mathrm{var}}(\Om)$.  The H\"older estimate needs instead the dual norm of $W_0^{1,p'}(\Om)$, built on $\|\nabla\varphi\|_{0,p';\Om}$.  This is where a quantity which is first-order quantity arises; \S \ref{sec:pointwise} returns to this issue and revises the estimate to give second order.
+\subsection{A first-order bound on the Galerkin functional}  Bound \eqref{eq:Ghbound} controls $\Gh$ in the dual norm \eqref{eq:dualnormbv}, which is built on the seminorm $|D^2\varphi|_{\mathrm{var}}(\Om)$.  The H\"older estimate needs instead the dual norm of $W_0^{1,p'}(\Om)$, built on $\|\nabla\varphi\|_{0,p';\Om}$.  This is where a quantity which is first-order in $h$ arises; \S \ref{sec:pointwise} returns to this issue and revises the estimate to give second order.
 
 \begin{lemma}[$L^p$ bound on $\Gh$]
 \label{lem:Ghp}
@@ -566,7 +566,7 @@ For the quadrature part, the mass-lumping bound already used for \eqref{eq:Qhbou
 Adding the two bounds gives \eqref{eq:Ghp}.
 \end{proof}
 
-Nothing in this section distinguishes lower from upper contact, so the unilateral results of \cite[\S 3]{NSV03} carry over directly to bilateral bounds.  Bound \eqref{eq:Ghp} will lead to the pointwise estimator in \S \ref{sec:pointwise}, but before we get there we must modify \cite{NSV03}'s unilateral barrier construction in non-trivial ways, so as to handle bilateral bounds.
+Nothing in this section distinguishes lower from upper contact, so the unilateral results of \cite[\S 3]{NSV03} carry over directly to bilateral bounds.  Bound \eqref{eq:Ghbound} will lead to the pointwise estimator in \S \ref{sec:pointwise}, but before we get there we must modify \cite{NSV03}'s unilateral barrier construction in non-trivial ways, so as to handle bilateral bounds.
 
 
 \section{Barriers} \label{sec:barriers}
@@ -597,7 +597,7 @@ is the norm of the dual space of $W_0^{1,p'}(\Om)$.  Now apply Lemma~\ref{lem:Gh
 
 This justifies the continuity of $w$ used below.  Note that the box constraint enters \eqref{eq:holder} only through $\ThC$ inside $R_p$, and through $\Lamh$; the linear theory behind the De Giorgi--Nash estimate knows nothing of the obstacles.
 
-\subsection{Barrier criteria}  Now we consider candidate barriers, which differ by a constant ``$c$'', to be determined, and for which the gradients equal $\nabla u_h + \nabla w$, so certain reductions will apply.  The next Lemma states sufficient conditions on $c$, $\sigma$, and $\tilde\sigma_h$ so that the candidates are in fact barriers.  These conditions will be satisfied in Propositions \ref{prop:upperbarrier} and \ref{prop:lowerbarrier}, with different $c$ for the upper and lower barriers.  Recall definition \eqref{eq:sigma} of $\sigma$ and \eqref{eq:sigmatilde} of $\tilde\sigma_h$.
+\subsection{Barrier criteria}  Now we consider candidate barriers, which differ by $\pm c$, where $c$ is a constant to be determined, and for which the gradients equal $\nabla u_h + \nabla w$, so certain reductions will apply.  The next Lemma states sufficient conditions on $c$, $\sigma$, and $\tilde\sigma_h$ so that the candidates are in fact barriers.  These conditions will be satisfied in Propositions \ref{prop:upperbarrier} and \ref{prop:lowerbarrier}, with different $c$ for the upper and lower barriers.  Recall definition \eqref{eq:sigma} of $\sigma$ and \eqref{eq:sigmatilde} of $\tilde\sigma_h$.
 
 \begin{lemma}[Barrier criteria]
 \label{lem:barriercrit}
@@ -606,15 +606,15 @@ If $c \ge \|g - \Ih g\|_{0,\infty;\dOm}$ is a constant then the functions
 u^\top &:= u_h + w + c, \label{eq:candc} \\
 u_\bot &:= u_h + w - c, \notag
 \end{align}
-for $w \in H_0^1(\Om) \cap C(\bar\Om)$ solving \eqref{eq:w}, satisfy
+for $w$ solving \eqref{eq:w}, satisfy
 \begin{itemize}
-\item[(a)] If $v := (u - u^\top)^+ \ge 0$ then $v \in H_0^1(\Om) \cap C(\bar\Om)$ and
+\item[(a)] If $v := (u - u^\top)^+$ then $v \in H_0^1(\Om) \cap C(\bar\Om)$ and
 \begin{equation}
 \label{eq:barrierenergy}
   \|\nabla v\|_{0,2;\Om}^2 = \left<\sigma,v\right> - \left<\tilde\sigma_h,v\right>.
 \end{equation}
 Thus if $\left<\sigma,v\right> \le 0$ and $\left<\tilde\sigma_h,v\right> \ge 0$ then in fact $v\equiv 0$ and $u \le u^\top$ in $\Om$.
-\item[(b)] If $v := (u_\bot - u)^+ \ge 0$ then $v \in H_0^1(\Om) \cap C(\bar\Om)$, and
+\item[(b)] If $v := (u_\bot - u)^+$ then $v \in H_0^1(\Om) \cap C(\bar\Om)$, and
 \begin{equation}
 \|\nabla v\|_{0,2;\Om}^2 = \left<\tilde\sigma_h,v\right> - \left<\sigma,v\right>.
 \end{equation}
@@ -633,7 +633,7 @@ Since $w \in H_0^1(\Om)$ is continuous (Lemma \ref{lem:holder}) it vanishes on $
 thus \eqref{eq:barrierenergy}.  Finally, if the two pairings have the stated signs then $\|\nabla v\|_{0,2;\Om} = 0$, so $v$ is constant, and $v \in H_0^1(\Om)$ then forces $v \equiv 0$.  That is, $u \le u^\top$.
 \end{proof}
 
-Consider the upper barrier, so that we need $\left<\sigma,v\right> \le 0$ and $\left<\tilde\sigma_h,v\right> \ge 0$, so that $u^\top$ is a bound on $u$.  Either function $v$ in the Lemma is continuous and non-negative, so, $\sigma$ being a signed Radon measure (\S \ref{sec:setup}), the pairing is integration \cite[Theorem 6.9]{KinderlehrerStampacchia1980}, and the Jordan decomposition $\sigma = \mu_\bot - \mu_\top$ gives
+Consider the upper barrier.  We need to show $\left<\sigma,v\right> \le 0$ and $\left<\tilde\sigma_h,v\right> \ge 0$ to conclude that $u^\top$ is a bound on $u$.  Either function $v$ in the Lemma is continuous and non-negative, so, $\sigma$ being a signed Radon measure (\S \ref{sec:setup}), the pairing is integration \cite[Theorem 6.9]{KinderlehrerStampacchia1980}, and the Jordan decomposition $\sigma = \mu_\bot - \mu_\top$ gives
 \begin{equation}
 \label{eq:sigmapairing}
   \left<\sigma,v\right> = \int_\Om v\,d\mu_\bot - \int_\Om v\,d\mu_\top \ \le\ \int_\Om v\,d\mu_\bot .
@@ -668,11 +668,11 @@ their star-dilations, each a union of closed elements by definition \eqref{eq:st
 \begin{figure}[ht]
 \centering
 \input{tikz/stardilate}
-\caption{An illustration of strict nodal contact sets and their star dilations.  Left: $\Nh^+$ and $\Nh^-$ from \eqref{eq:Nhpm} as filled dots, with the remaining nodes of $\Nhbot$ and $\Nhtop$, but where $\sigma_h=0$, as open circles.  Right: the star dilations $\ombot = \Uh(\Nh^+)$ and $\omtop = \Uh(\Nh^-)$ from \eqref{eq:omegas}, each one ring of elements larger than the node set generating it.}
+\caption{An illustration of strict nodal contact sets and their star dilations.  Left: $\Nh^+$ and $\Nh^-$ from \eqref{eq:Nhpm} as filled dots.  Open circles suggest nodes of $\Nhbot$ and $\Nhtop$ where $\sigma_h=0$.  Right: Star dilations $\ombot = \Uh(\Nh^+)$ and $\omtop = \Uh(\Nh^-)$ from \eqref{eq:omegas}; each is one ring of elements larger than the node sets.}
 \label{fig:stardilate}
 \end{figure}
 
-The barrier proofs use two consequences of definitions \eqref{eq:omegas}.  Regarding $\sigma_h$ as a piecewise-linear function, first note that
+The barrier proofs below, of Propositions \ref{prop:upperbarrier} and \ref{prop:lowerbarrier}, use certain consequences of definitions \eqref{eq:omegas}.  Regarding $\sigma_h$ as a piecewise-linear function, first note that
 \begin{equation}
 \label{eq:omegacontains}
   \{\sigma_h < 0\} \subset \omtop \qquad \text{and} \qquad \{\sigma_h > 0\} \subset \ombot,
