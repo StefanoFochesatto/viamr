@@ -535,61 +535,105 @@ Applying this to $\Gh$, \eqref{eq:Rhbound} and \eqref{eq:Qhbound} yield
 \end{equation}
 which is formula (3.10) in \cite{NSV03}.
 
-Nothing in this section distinguishes lower from upper contact, so the unilateral results of \cite[\S 3]{NSV03} carry over directly to bilateral bounds.  Formula \eqref{eq:Ghbound} will lead to the pointwise estimator in \S \ref{sec:pointwise}, but before we get there we must modify \cite{NSV03}'s unilateral barrier construction in non-trivial ways, so as to handle bilateral bounds.
+\subsection{A first-order bound on the Galerkin functional}  Bound \eqref{eq:Ghbound} controls $\Gh$ in the dual norm \eqref{eq:dualnormbv}, which is built on the seminorm $|D^2\varphi|_{\mathrm{var}}(\Om)$.  The H\"older estimate needs instead the dual norm of $W_0^{1,p'}(\Om)$, built on $\|\nabla\varphi\|_{0,p';\Om}$.  This is where a quantity which is first-order quantity arises; \S \ref{sec:pointwise} returns to this issue and revises the estimate to give second order.
+
+\begin{lemma}[$L^p$ bound on $\Gh$]
+\label{lem:Ghp}
+Let $1 \le p \le \infty$, with dual exponent $p' = p/(p-1)$.  Then
+\begin{equation}
+\label{eq:Ghp}
+  \bigl|\left<\Gh,\varphi\right>\bigr| \ \preceq\ \Bigl(\|h R_p\|_{0,p;\Om} + \|h^2\nabla\sigma_h\|_{0,p;\Lamh}\Bigr)\,\|\nabla\varphi\|_{0,p';\Om}
+\end{equation}
+for all $\varphi \in W_0^{1,p'}(\Om)$.
+\end{lemma}
+
+\begin{proof}
+Start from the representation formula \eqref{eq:Gh-repn}.  Write $\varrho_T := f + \sigma_h$ if $T\in\ThC$ and $\varrho_T := f$ if $T\in\Thplus$, matching the second term of \eqref{eq:Rp}.  For the residual part of \eqref{eq:Gh-repn}, apply H\"older's inequality on each side and element appearing in definition \eqref{eq:RhQh} of $\Rh$, and then the second and third estimates of \eqref{eq:Pihprops}, the latter two with exponent $p'$, so that $h_S^{1-1/p'} = h_S^{1/p}$:
+\begin{align*}
+  \bigl|\left<\Rh,\varphi-\Pih\varphi\right>\bigr|
+  &\le \sum_{S\in\Sh} \bigl\|\jump{\partial_\nu u_h}\bigr\|_{0,p;S}\,\|\varphi-\Pih\varphi\|_{0,p';S}
+     + \sum_{T\in\Th} \|\varrho_T\|_{0,p;T}\,\|\varphi-\Pih\varphi\|_{0,p';T} \\
+  &\preceq \sum_{S\in\Sh} h_S^{1/p}\bigl\|\jump{\partial_\nu u_h}\bigr\|_{0,p;S}\,\|\nabla\varphi\|_{0,p';\Uh(S)}
+     + \sum_{T\in\Th} h_T\|\varrho_T\|_{0,p;T}\,\|\nabla\varphi\|_{0,p';\Uh(T)}.
+\end{align*}
+In definition \eqref{eq:Rp} the side term of $R_p|_T$ carries the factor $h_T^{-1/p'}|T|^{-1/p}$, so, after a discrete H\"older inequality in the pair $(p,p')$ and the finite overlap of the patches $\Uh(T)$ and $\Uh(S)$, both sums are bounded by $\|hR_p\|_{0,p;\Om}\,\|\nabla\varphi\|_{0,p';\Om}$.
+
+For the quadrature part, the mass-lumping bound already used for \eqref{eq:Qhbound}, but now with the H\"older pair $(p,p')$ in place of $(d,d')$, together with the first estimate of \eqref{eq:Pihprops} and the same finite overlap, gives
+\[
+  \bigl|\left<\Qh,\Pih\varphi\right>\bigr| \ \preceq\ \|h^2\nabla\sigma_h\|_{0,p;\Lamh}\,\|\nabla\Pih\varphi\|_{0,p';\Om}
+  \ \preceq\ \|h^2\nabla\sigma_h\|_{0,p;\Lamh}\,\|\nabla\varphi\|_{0,p';\Om}.
+\]
+Adding the two bounds gives \eqref{eq:Ghp}.
+\end{proof}
+
+Nothing in this section distinguishes lower from upper contact, so the unilateral results of \cite[\S 3]{NSV03} carry over directly to bilateral bounds.  Bound \eqref{eq:Ghp} will lead to the pointwise estimator in \S \ref{sec:pointwise}, but before we get there we must modify \cite{NSV03}'s unilateral barrier construction in non-trivial ways, so as to handle bilateral bounds.
 
 
 \section{Barriers} \label{sec:barriers}
 
-Following \cite[\S 4]{NSV03}, we now bracket the exact solution between continuous \emph{barriers}, $u_\bot \le u \le u^\top$, built from the discrete solution $u_h$, the data $g,\psilo,\psiup$, and a Galerkin correction $w$.
-
-In fact, $w \in H_0^1(\Om)$ is defined as the Riesz representation of the Galerkin functional:
+\subsection{Representative of the Galerkin functional}  Following \cite[\S 4]{NSV03}, in this section we will bracket the exact solution between continuous barriers, $u_\bot \le u \le u^\top$.  They are built from the discrete solution $u_h$, the data $g,\psilo,\psiup$, and a Galerkin correction $w$.  The latter is defined as the Riesz representation of the Galerkin functional, so $w \in H_0^1(\Om)$ satisfies
 \begin{equation}
 \label{eq:w}
   \int_\Om \nabla w \cdot \nabla\varphi = \left<\Gh,\varphi\right> \qquad \text{for all } \varphi \in H_0^1(\Om).
 \end{equation}
-As in \cite[\S 4]{NSV03}, $w$ is continuous; Lemma~\ref{lem:holder} below establishes H\"older continuity of $w$ in the box-constrained case.
 
+\begin{lemma}[H\"older continuity of $w$]
+\label{lem:holder}
+The solution $w$ of \eqref{eq:w} is H\"older continuous.  More precisely, for every $p > d$ there is $\alpha \in (0,1)$ such that
+\begin{equation}
+\label{eq:holder}
+  \|w\|_{C^{0,\alpha}(\bar\Om)} \ \preceq\ \|h R_p\|_{0,p;\Om} + \|h^2\nabla\sigma_h\|_{0,p;\Lamh},
+\end{equation}
+where the hidden constant depends on $\Om$ and $p$, and it goes to $+\infty$ as $p \downarrow d$.
+\end{lemma}
 
-\subsection{Reduction to two pairings}
+\begin{proof}
+The classical H\"older estimate of De Giorgi and Nash \cite[Theorem C.2]{KinderlehrerStampacchia1980}, applied to \eqref{eq:w}, gives $\|w\|_{C^{0,\alpha}(\bar\Om)} \preceq \|\Gh\|_{-1,p;\Om}$, where
+\[
+  \|\Gh\|_{-1,p;\Om} := \sup\bigl\{\left<\Gh,\varphi\right> \,:\, \varphi \in W_0^{1,p'}(\Om),\ \|\nabla\varphi\|_{0,p';\Om} \le 1\bigr\}
+\]
+is the norm of the dual space of $W_0^{1,p'}(\Om)$.  Now apply Lemma~\ref{lem:Ghp}.
+\end{proof}
 
-The next Lemma considers candidate barriers, with values of ``$c$'' to be determined.  The barrier gradient is $\nabla u_h + \nabla w$, so certain reductions apply, and we find sufficient conditions in terms of $c$, $\sigma$, and $\tilde\sigma_h$ so that the candidates are in fact barriers.  These conditions will be satisfied in Propositions \ref{prop:upperbarrier} and \ref{prop:lowerbarrier} below, with different $c$ for the two barriers.
+This justifies the continuity of $w$ used below.  Note that the box constraint enters \eqref{eq:holder} only through $\ThC$ inside $R_p$, and through $\Lamh$; the linear theory behind the De Giorgi--Nash estimate knows nothing of the obstacles.
 
-\begin{lemma}[Barrier criterion]
+\subsection{Barrier criteria}  Now we consider candidate barriers, which differ by a constant ``$c$'', to be determined, and for which the gradients equal $\nabla u_h + \nabla w$, so certain reductions will apply.  The next Lemma states sufficient conditions on $c$, $\sigma$, and $\tilde\sigma_h$ so that the candidates are in fact barriers.  These conditions will be satisfied in Propositions \ref{prop:upperbarrier} and \ref{prop:lowerbarrier}, with different $c$ for the upper and lower barriers.  Recall definition \eqref{eq:sigma} of $\sigma$ and \eqref{eq:sigmatilde} of $\tilde\sigma_h$.
+
+\begin{lemma}[Barrier criteria]
 \label{lem:barriercrit}
 If $c \ge \|g - \Ih g\|_{0,\infty;\dOm}$ is a constant then the functions
 \begin{align}
-u^\top &:= u_h + w + c \label{eq:candc} \\
-u_\bot &:= u_h + w - c \notag
+u^\top &:= u_h + w + c, \label{eq:candc} \\
+u_\bot &:= u_h + w - c, \notag
 \end{align}
-satisfy
+for $w \in H_0^1(\Om) \cap C(\bar\Om)$ solving \eqref{eq:w}, satisfy
 \begin{itemize}
-\item[(a)] If $v := (u - u^\top)^+$ then $v \ge 0$, $v \in H_0^1(\Om) \cap C(\bar\Om)$, and
+\item[(a)] If $v := (u - u^\top)^+ \ge 0$ then $v \in H_0^1(\Om) \cap C(\bar\Om)$ and
 \begin{equation}
 \label{eq:barrierenergy}
   \|\nabla v\|_{0,2;\Om}^2 = \left<\sigma,v\right> - \left<\tilde\sigma_h,v\right>.
 \end{equation}
-Thus if $\left<\sigma,v\right> \le 0$ and $\left<\tilde\sigma_h,v\right> \ge 0$ then $u \le u^\top$ in $\Om$.
-\item[(b)] If $v := (u_\bot - u)^+$ then $v \ge 0$, $v \in H_0^1(\Om) \cap C(\bar\Om)$, and
+Thus if $\left<\sigma,v\right> \le 0$ and $\left<\tilde\sigma_h,v\right> \ge 0$ then in fact $v\equiv 0$ and $u \le u^\top$ in $\Om$.
+\item[(b)] If $v := (u_\bot - u)^+ \ge 0$ then $v \in H_0^1(\Om) \cap C(\bar\Om)$, and
 \begin{equation}
 \|\nabla v\|_{0,2;\Om}^2 = \left<\tilde\sigma_h,v\right> - \left<\sigma,v\right>.
 \end{equation}
-Thus if $\left<\sigma,v\right> \ge 0$ and $\left<\tilde\sigma_h,v\right> \le 0$ then $u_\bot \le u$ in $\Om$.
+Thus if $\left<\sigma,v\right> \ge 0$ and $\left<\tilde\sigma_h,v\right> \le 0$ then in fact $v\equiv 0$ and $u_\bot \le u$ in $\Om$.
 \end{itemize}
 \end{lemma}
 
 \begin{proof}
-We prove (a); part (b) is the same computation with the roles of the two functions in $v$ exchanged and the sign of $c$ reversed.
+We prove (a); part (b) is the same computation with roles exchanged.
 
-Since $w \in H_0^1(\Om)$ is continuous it vanishes on $\dOm$, while $u = g$ and $u_h = \Ih g$ there.  Hence $(u - u^\top)|_{\dOm} = (g - \Ih g) - c \le 0$, by the hypothesis on $c$, so $v$ vanishes on $\dOm$.  Also $v \ge 0$ by definition, and $v$ is continuous because $u$, $u_h$, and $w$ are, so $v\in H_0^1(\Om) \cap C(\bar\Om)$.  For \eqref{eq:barrierenergy}, recall $\nabla v = \nabla(u-u^\top)$ almost everywhere on $\{v > 0\}$ and $\nabla v = 0$ almost everywhere elsewhere.  Therefore, using $\nabla u^\top = \nabla u_h + \nabla w$, and then using \eqref{eq:w} and \eqref{eq:Ghagain} as well,
-\[
-  \|\nabla v\|_{0,2;\Om}^2 = \int_\Om \nabla(u - u^\top)\cdot\nabla v
-  = \left<\nabla(u-u_h),\nabla v\right> - \left<\Gh,v\right>
-  = \left<\sigma - \tilde\sigma_h,\,v\right>.
-\]
-Finally, if the two pairings have the stated signs then $\|\nabla v\|_{0,2;\Om} = 0$, so $v$ is constant, and $v \in H_0^1(\Om)$ then forces $v \equiv 0$.  That is, $u \le u^\top$.
+Since $w \in H_0^1(\Om)$ is continuous (Lemma \ref{lem:holder}) it vanishes on $\dOm$, while $u = g$ and $u_h = \Ih g$ there.  Hence $(u - u^\top)|_{\dOm} = (g - \Ih g) - c \le 0$, by the hypothesis on $c$, so $v$ vanishes on $\dOm$.  Also $v \ge 0$ by definition, and $v$ is continuous because $u$, $u_h$, and $w$ are, so $v\in H_0^1(\Om) \cap C(\bar\Om)$.  Recall $\nabla v = \nabla(u-u^\top)$ almost everywhere on $\{v > 0\}$ and $\nabla v = 0$ almost everywhere elsewhere.  Therefore, using $\nabla u^\top = \nabla u_h + \nabla w$, and then using \eqref{eq:w} and \eqref{eq:Ghagain} as well,
+\begin{align*}
+\|\nabla v\|_{0,2;\Om}^2 &= \int_\Om \nabla(u - u^\top)\cdot\nabla v = \left<\nabla(u-u_h),\nabla v\right> - \left<\nabla w, \nabla v\right> \\
+  &= \left<\nabla(u-u_h),\nabla v\right> - \left<\Gh,v\right> = \left<\sigma - \tilde\sigma_h,\,v\right>,
+\end{align*}
+thus \eqref{eq:barrierenergy}.  Finally, if the two pairings have the stated signs then $\|\nabla v\|_{0,2;\Om} = 0$, so $v$ is constant, and $v \in H_0^1(\Om)$ then forces $v \equiv 0$.  That is, $u \le u^\top$.
 \end{proof}
 
-Consider the upper barrier, so that we need $\left<\sigma,v\right> \le 0$ and $\left<\tilde\sigma_h,v\right> \ge 0$.  Either function $v$ in the Lemma is continuous and non-negative, so, $\sigma$ being a signed Radon measure (\S \ref{sec:setup}), the pairing is integration \cite[Theorem 6.9]{KinderlehrerStampacchia1980}, and the Jordan decomposition $\sigma = \mu_\bot - \mu_\top$ gives
+Consider the upper barrier, so that we need $\left<\sigma,v\right> \le 0$ and $\left<\tilde\sigma_h,v\right> \ge 0$, so that $u^\top$ is a bound on $u$.  Either function $v$ in the Lemma is continuous and non-negative, so, $\sigma$ being a signed Radon measure (\S \ref{sec:setup}), the pairing is integration \cite[Theorem 6.9]{KinderlehrerStampacchia1980}, and the Jordan decomposition $\sigma = \mu_\bot - \mu_\top$ gives
 \begin{equation}
 \label{eq:sigmapairing}
   \left<\sigma,v\right> = \int_\Om v\,d\mu_\bot - \int_\Om v\,d\mu_\top \ \le\ \int_\Om v\,d\mu_\bot .
@@ -776,64 +820,9 @@ Bounding $\|w\|_{0,\infty;\Om}$, a question about the linear problem \eqref{eq:w
 
 \section{Pointwise estimates} \label{sec:pointwise}
 
-Estimate \eqref{eq:barrierbound} is computable except for $\|w\|_{0,\infty;\Om}$, and $w$ solves the linear problem \eqref{eq:w}.  The obstacles enter that problem only as the data $\Gh$, and \S \ref{sec:estimator} has already put $\Gh$ into a form which does not distinguish them.  Consequently this section follows \cite[\S 5]{NSV03} without structural change, and the box constraint appears only in the readings $\ThC = \Thbot \cup \Thtop$ inside \eqref{eq:Rp} and $\Lamh = \Lamhbot \cup \Lamhtop$ in \eqref{eq:Qhbound}.  We write the argument out anyway, both because those readings have to be checked and because the section supplies the continuity of $w$ used in \S \ref{sec:barriers}.
+Estimate \eqref{eq:barrierbound} is computable except for $\|w\|_{0,\infty;\Om}$, while $w$ solves the linear problem \eqref{eq:w} from the Galerkin functional $\Gh$.  The obstacles enter that problem only via $\Gh$, and the formulas in \S \ref{sec:estimator} do not distinguish them.  Consequently this section follows \cite[\S 5]{NSV03} without structural change; the box constraints appear only in the contact-agnostic collection $\ThC = \Thbot \cup \Thtop$, inside \eqref{eq:Rp}, and likewise via $\Lamh = \Lamhbot \cup \Lamhtop$ in \eqref{eq:Qhbound}.  We write the argument out because the logic has to be checked anyway.
 
-The difficulty addressed here is a mismatch of orders.  What linear theory controls directly is a H\"older norm of $w$, and only by a first-order quantity, whereas $\|u-u_h\|_{0,\infty;\Om}$ must be bounded by a second-order estimator.  Following \cite[\S 5.1]{NSV03}, the resolution comes in three steps.  We first bound $w$ in $C^{0,\alpha}(\bar\Om)$ by the first-order quantity.  We then bound a mollified point value $\left<\delta,w\right>$ by a second-order quantity, using a regularized Green's function.  Finally we combine the two, in such a way that the first-order term acquires a positive power of $h_{\min}$ and is thereby demoted to second order.
-
-
-\subsection{A first-order bound on the Galerkin functional}
-
-Bound \eqref{eq:Ghbound} controls $\Gh$ in the dual norm \eqref{eq:dualnormbv}, which is built on the seminorm $|D^2\varphi|_{\mathrm{var}}(\Om)$.  The H\"older estimate needs instead the dual norm of $W_0^{1,p'}(\Om)$, built on $\|\nabla\varphi\|_{0,p';\Om}$, and this is where the first-order quantity arises.
-
-\begin{lemma}[$L^p$ bound on $\Gh$]
-\label{lem:Ghp}
-Let $1 \le p \le \infty$, with dual exponent $p' = p/(p-1)$.  Then
-\begin{equation}
-\label{eq:Ghp}
-  \bigl|\left<\Gh,\varphi\right>\bigr| \ \preceq\ \Bigl(\|h R_p\|_{0,p;\Om} + \|h^2\nabla\sigma_h\|_{0,p;\Lamh}\Bigr)\,\|\nabla\varphi\|_{0,p';\Om}
-\end{equation}
-for all $\varphi \in W_0^{1,p'}(\Om)$.
-\end{lemma}
-
-\begin{proof}
-Start from the representation formula \eqref{eq:Gh-repn}.  Write $\varrho_T := f + \sigma_h$ if $T\in\ThC$ and $\varrho_T := f$ if $T\in\Thplus$, matching the second term of \eqref{eq:Rp}.  For the residual part of \eqref{eq:Gh-repn}, apply H\"older's inequality on each side and element appearing in definition \eqref{eq:RhQh} of $\Rh$, and then the second and third estimates of \eqref{eq:Pihprops}, the latter two with exponent $p'$, so that $h_S^{1-1/p'} = h_S^{1/p}$:
-\begin{align*}
-  \bigl|\left<\Rh,\varphi-\Pih\varphi\right>\bigr|
-  &\le \sum_{S\in\Sh} \bigl\|\jump{\partial_\nu u_h}\bigr\|_{0,p;S}\,\|\varphi-\Pih\varphi\|_{0,p';S}
-     + \sum_{T\in\Th} \|\varrho_T\|_{0,p;T}\,\|\varphi-\Pih\varphi\|_{0,p';T} \\
-  &\preceq \sum_{S\in\Sh} h_S^{1/p}\bigl\|\jump{\partial_\nu u_h}\bigr\|_{0,p;S}\,\|\nabla\varphi\|_{0,p';\Uh(S)}
-     + \sum_{T\in\Th} h_T\|\varrho_T\|_{0,p;T}\,\|\nabla\varphi\|_{0,p';\Uh(T)}.
-\end{align*}
-In definition \eqref{eq:Rp} the side term of $R_p|_T$ carries the factor $h_T^{-1/p'}|T|^{-1/p}$, so, after a discrete H\"older inequality in the pair $(p,p')$ and the finite overlap of the patches $\Uh(T)$ and $\Uh(S)$, both sums are bounded by $\|hR_p\|_{0,p;\Om}\,\|\nabla\varphi\|_{0,p';\Om}$.
-
-For the quadrature part, the mass-lumping bound already used for \eqref{eq:Qhbound}, but now with the H\"older pair $(p,p')$ in place of $(d,d')$, together with the first estimate of \eqref{eq:Pihprops} and the same finite overlap, gives
-\[
-  \bigl|\left<\Qh,\Pih\varphi\right>\bigr| \ \preceq\ \|h^2\nabla\sigma_h\|_{0,p;\Lamh}\,\|\nabla\Pih\varphi\|_{0,p';\Om}
-  \ \preceq\ \|h^2\nabla\sigma_h\|_{0,p;\Lamh}\,\|\nabla\varphi\|_{0,p';\Om}.
-\]
-Adding the two bounds gives \eqref{eq:Ghp}.
-\end{proof}
-
-\begin{lemma}[H\"older continuity of $w$]
-\label{lem:holder}
-The Riesz representation $w$ of \eqref{eq:w} is H\"older continuous.  More precisely, for every $p > d$ there is $\alpha \in (0,1)$ such that
-\begin{equation}
-\label{eq:holder}
-  \|w\|_{C^{0,\alpha}(\bar\Om)} \ \preceq\ \|h R_p\|_{0,p;\Om} + \|h^2\nabla\sigma_h\|_{0,p;\Lamh},
-\end{equation}
-where the hidden constant depends on $\Om$ and $p$, and blows up as $p \downarrow d$.
-\end{lemma}
-
-\begin{proof}
-The classical H\"older estimate of De Giorgi and Nash, applied to \eqref{eq:w}, gives $\|w\|_{C^{0,\alpha}(\bar\Om)} \preceq \|\Gh\|_{-1,p;\Om}$, where
-\[
-  \|\Gh\|_{-1,p;\Om} := \sup\bigl\{\left<\Gh,\varphi\right> \,:\, \varphi \in W_0^{1,p'}(\Om),\ \|\nabla\varphi\|_{0,p';\Om} \le 1\bigr\}
-\]
-is the norm of the dual space of $W_0^{1,p'}(\Om)$; see \cite[Theorem C.2]{KinderlehrerStampacchia1980}.  Now apply Lemma~\ref{lem:Ghp}.
-\end{proof}
-
-This justifies the continuity of $w$ used in \S \ref{sec:barriers}.  Note that the box constraint enters \eqref{eq:holder} only through $\ThC$ inside $R_p$, and through $\Lamh$; the linear theory behind the De Giorgi--Nash estimate knows nothing of the obstacles.
-
+A difficulty addressed in \cite{NSV03} and here is a mismatch of orders.  What linear theory controls directly is a H\"older norm of $w$ (Lemma \ref{lem:holder}), by a term which is first-order in $h$, whereas $\|u-u_h\|_{0,\infty;\Om}$ must eventually be bounded by a second-order estimator.  Following \cite[\S 5.1]{NSV03}, the resolution is to start from the bound \eqref{eq:holder} on $w\in C^{0,\alpha}(\bar\Om)$ and then bound a mollified point value $\left<\delta,w\right>$ by a second-order quantity, by using a regularized Green's function.  The first-order term acquires a positive power of $h_{\min}$ and is thereby demoted to second order.
 
 \subsection{Maximum norm of \texorpdfstring{$w$}{w}}
 
