@@ -649,10 +649,7 @@ in which the first sum is already non-negative, because $\sigma_h \ge 0$ pointwi
 
 Proposition \ref{prop:upperbarrier} below will set $c$ so that these considerations apply, and we get $u\le u^\top$.  The lower barrier is symmetric in every respect.
 
-
-\subsection{Star-dilated strict contact sets}
-
-Recalling definition \eqref{eq:sigmah}, let
+\subsection{Star-dilated strict contact sets}  \label{subsec:stardilate}  Recalling definition \eqref{eq:sigmah}, let
 \begin{equation}
 \label{eq:Nhpm}
   \Nh^+ := \{z \in \Nh \,:\, \sigma_h(z) > 0\}, \qquad
@@ -768,38 +765,38 @@ Figure \ref{fig:barrieruni} illustrates the barriers constructed in Propositions
 \end{figure}
 
 
-\subsection{Preliminary pointwise error estimate}  We can easily convert the results in Propositions \ref{prop:upperbarrier} and \ref{prop:lowerbarrier} into a pointwise \emph{a posteriori} bound.  In fact, subtracting $u_h$ from the barrier relationship $u_\bot \le u \le u^\top$ gives
+\subsection{Preliminary pointwise error estimate}  We can now convert the results in Propositions \ref{prop:upperbarrier} and \ref{prop:lowerbarrier} into a pointwise \emph{a posteriori} bound.  In fact, subtracting $u_h$ from the barrier relationship $u_\bot \le u \le u^\top$ gives
 \begin{equation}
 \label{eq:maxbarriers}
 |u-u_h| \le \max \{|u_\bot-u_h|, |u^\top-u_h|\} = \max \{|w-c_\bot|, |w+c^\top|\}
 \end{equation}
-pointwise, and $\bigl|w \pm \|w\|_{0,\infty;\Om}\bigr| \le 2 \|w\|_{0,\infty;\Om}$ pointwise, thus the Propositions give
+pointwise.  Because also $\bigl|w \pm \|w\|_{0,\infty;\Om}\bigr| \le 2 \|w\|_{0,\infty;\Om}$ pointwise, the Propositions give
 \begin{align}
 \label{eq:barrierbound}
   \|u-u_h\|_{0,\infty;\Om} \ \le\ & 2\|w\|_{0,\infty;\Om} + \|g-\Ih g\|_{0,\infty;\dOm} \\
   &+ \|(\psilo-u_h)^+\|_{0,\infty;\Om} + \|(u_h-\psiup)^+\|_{0,\infty;\Om} \notag \\
-  &+ \|(\psiup-u_h)^+\|_{0,\infty;\omtop} + \|(u_h-\psilo)^+\|_{0,\infty;\ombot}, \notag
+  &+ \|(\psiup-u_h)^+\|_{0,\infty;\omtop} + \|(u_h-\psilo)^+\|_{0,\infty;\ombot}. \notag
 \end{align}
-the box-constrained form of \cite[formula (4.8)]{NSV03}.  Besides $\|w\|_{0,\infty;\Om}$, every term on the right is computable from the discrete solution and the given data.
+This is the box-constrained form of \cite[formula (4.8)]{NSV03}, but see Remarks \ref{rem:unilateral}\textendash\ref{rem:localization} below, regarding the precise comparison.  Besides $\|w\|_{0,\infty;\Om}$, every term on the right side of \eqref{eq:barrierbound} is computable from the discrete solution and the given data.
+
+The four obstacle terms in \eqref{eq:barrierbound} come in two different kinds.  The two which are suprema over $\Om$ measure the failure of $u_h$ to be admissible for the continuum problem, and they are controlled by the obstacle interpolation errors: since $\Ih \psilo = \psiloh \le u_h \le \psiuph = \Ih \psiup$ in $\Om$,
+\begin{align}
+\label{eq:violationbound}
+  \|(\psilo-u_h)^+\|_{0,\infty;\Om} &\le \|\psilo-\psiloh\|_{0,\infty;\Om}, \\
+  \|(u_h-\psiup)^+\|_{0,\infty;\Om} &\le \|\psiup-\psiuph\|_{0,\infty;\Om}. \notag
+\end{align}
+Thus these terms are $O(h^2)$ for obstacles $\psilo,\psiup \in W^{2,\infty}(\Om)$.
+
+The other two obstacle terms in \eqref{eq:barrierbound}, suprema over $\omtop,\ombot$ respectively, are not interpolation errors.  They measure how far $u_h$ has detached from a continuum obstacle on the region where the discrete residual $\sigma_h$ asserts that it is attached; see definition \eqref{eq:omegas}.  That these are measured over the star-dilated sets, rather than over $\{\sigma_h \ne 0\}$ as in \cite{NSV03}, turns out to cost nothing in the efficiency theory; see Remark~\ref{rem:noextraring} later.
 
 \begin{remark}[Replacement of a maximum by a sum]
 \label{rem:maxreplace}
 In preliminary bound \eqref{eq:barrierbound}, a maximum would do in place of the sum, but only with the terms paired as they occur in the shift constants \eqref{eq:cupper} and \eqref{eq:clower}, namely as $\max\{\|(\psilo-u_h)^+\|_{0,\infty;\Om} + \|(\psiup-u_h)^+\|_{0,\infty;\omtop},\,\|(u_h-\psiup)^+\|_{0,\infty;\Om} + \|(u_h-\psilo)^+\|_{0,\infty;\ombot}\}$.  Such a maximum saves at most a factor of two, and the two suprema within a branch are attained on different elements in general, so the saving does not descend to an element-wise indicator.  We prefer the symmetric expression.
 \end{remark}
 
-The four obstacle terms in \eqref{eq:barrierbound} come in two different kinds.  The two which are suprema over $\Om$ measure the failure of $u_h$ to be admissible for the continuum problem, and they are controlled by the obstacle interpolation errors: since $u_h \ge \psiloh$ and $u_h \le \psiuph$ in $\Om$,
-\begin{equation}
-\label{eq:violationbound}
-  \|(\psilo-u_h)^+\|_{0,\infty;\Om} \le \|\psilo-\psiloh\|_{0,\infty;\Om}, \quad
-  \|(u_h-\psiup)^+\|_{0,\infty;\Om} \le \|\psiup-\psiuph\|_{0,\infty;\Om},
-\end{equation}
-each therefore $O(h^2)$ for obstacles $\psilo,\psiup \in W^{2,\infty}(\Om)$.
-
-The other two obstacle terms in \eqref{eq:barrierbound}, suprema over $\omtop,\ombot$ respectively, are not interpolation errors.  They measure how far $u_h$ has \emph{detached} from a continuum obstacle on the region where the discrete residual asserts that it is attached.  That these are measured over the star-dilated sets \eqref{eq:omegas}, rather than over $\{\sigma_h \ne 0\}$ as in \cite{NSV03}, turns out to cost nothing in the efficiency theory; see Remark~\ref{rem:noextraring} in \S \ref{sec:efficiency}.
-
 \begin{remark}[The unilateral case]
 \label{rem:unilateral}
-If the upper obstacle is absent then $\omtop = \emptyset$ by Remark~\ref{rem:unilateralstars}, and $u^\top = u_h + w + c^\top$ is exactly \cite[formula (4.2)]{NSV03}.  The lower barrier reduces to \cite[formula (4.6)]{NSV03} except that our localized term is measured over $\ombot$ rather than over $\{\sigma_h>0\}$, a subset by \eqref{eq:omegacontains}.  As Remark~\ref{rem:whystar} explains, this one-ring enlargement is what replaces the global sign; we keep it for simplicity of presentation in the unilateral case.
+If the upper obstacle is absent then $\omtop = \emptyset$ by Remark~\ref{rem:unilateralstars}, and $u^\top = u_h + w + c^\top$ is exactly \cite[formula (4.2)]{NSV03}.  The lower barrier reduces to \cite[formula (4.6)]{NSV03} except that our localized term is measured over $\ombot$ rather than over $\{\sigma_h>0\}$, a subset by \eqref{eq:omegacontains}.  As Remark~\ref{rem:whystar} already explained, this one-ring enlargement is what replaces the global sign; we keep it in the unilateral case for simplicity.
 \end{remark}
 
 \begin{remark}[Computable detachment]
@@ -809,7 +806,7 @@ Following Remark 4.3 in \cite{NSV03}, the proofs of Propositions~\ref{prop:upper
 
 \begin{remark}[Full localization and barrier sets]
 \label{rem:localization}
-Our estimator localizes to the star-dilated sets \eqref{eq:omegas} and not to the contact sets themselves; see Remark~\ref{rem:unilateral}.  For the unilateral problem, in \cite{NSV05} Nochetto, Siebert, and Veeser close the corresponding gap, producing estimators which, apart from obstacle resolution, vanish identically within the full-contact set, and then use the pointwise bounds to construct barrier sets, that is, computable regions containing the free boundary, under a stability condition there.  We regard the bilateral analogues of both refinements as open.  Note that the bilateral problem has two free boundaries, so bilateral barrier sets would have to be shown disjoint before they localize either one; Proposition~\ref{prop:separation} is a natural tool, since $r_0$ bounds $\operatorname{dist}(\Cbot,\Ctop)$ from below in terms of the data.
+For the unilateral problem, in a later work, Nochetto, Siebert, and Veeser \cite{NSV05} produced estimators which, apart from obstacle resolution, vanish identically within the full-contact set.  Furthermore, under a Caffarelli-type stability condition, namely $f + \triangle \psilo \le -\lambda<0$ in $\Om$ (in our notation), they used the pointwise bounds to construct computable barrier \emph{sets} containing the free boundary.  We regard the bilateral analogues of these refinements as open.
 \end{remark}
 
 Bounding $\|w\|_{0,\infty;\Om}$, a question about the linear problem \eqref{eq:w} only, is taken up next.
