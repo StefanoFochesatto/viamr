@@ -938,9 +938,9 @@ $\|\sigma-\tilde\sigma_h\|_{-2,\infty;\Om} \preceq E_h$.
 \begin{proof}
 Let $\varphi \in W \cap W^{2,1}(\Om)$ with $|D^2\varphi|_{\mathrm{var}}(\Om)\le 1$.  Integrating by parts in \eqref{eq:Ghagain}, and using $u - u_h = g - \Ih g$ on $\dOm$,
 \[
-  \left<\sigma-\tilde\sigma_h,\varphi\right> = -\left<u-u_h,\Delta\varphi\right> + \int_{\dOm}(g-\Ih g)\,\partial_\nu\varphi - \left<\Gh,\varphi\right>.
+  \left<\sigma-\tilde\sigma_h,\varphi\right> = -\left<u-u_h,\triangle\varphi\right> + \int_{\dOm}(g-\Ih g)\,\partial_\nu\varphi - \left<\Gh,\varphi\right>.
 \]
-Here $\|\Delta\varphi\|_{0,1;\Om} \le |D^2\varphi|_{\mathrm{var}}(\Om) \le 1$, a trace estimate gives $\|\nabla\varphi\|_{0,1;\dOm} \preceq |D^2\varphi|_{\mathrm{var}}(\Om)$, and $\left<\Gh,\varphi\right>$ is bounded by \eqref{eq:Ghbound}.  Taking the supremum over such $\varphi$,
+Here $\|\triangle\varphi\|_{0,1;\Om} \le |D^2\varphi|_{\mathrm{var}}(\Om) \le 1$, a trace estimate gives $\|\nabla\varphi\|_{0,1;\dOm} \preceq |D^2\varphi|_{\mathrm{var}}(\Om)$, and $\left<\Gh,\varphi\right>$ is bounded by \eqref{eq:Ghbound}.  Taking the supremum over such $\varphi$,
 \[
   \|\sigma-\tilde\sigma_h\|_{-2,\infty;\Om} \preceq \|u-u_h\|_{0,\infty;\Om} + \|g-\Ih g\|_{0,\infty;\dOm} + \|h^2R_\infty\|_{0,\infty;\Om} + \|h^2\nabla\sigma_h\|_{0,d;\Lamh}.
 \]
@@ -1007,12 +1007,12 @@ Let $\omega \subset \Om$ be open and let $\varphi \in W$ have support a compact 
 \end{lemma}
 
 \begin{proof}
-By \eqref{eq:Ghagain}, $\left<\Gh,\varphi\right> = \left<\nabla(u-u_h),\nabla\varphi\right> - \left<\sigma-\tilde\sigma_h,\varphi\right>$, and the second pairing is at most $\|\sigma-\tilde\sigma_h\|_{-2,\infty;\omega}|D^2\varphi|_{\mathrm{var}}(\omega)$ by definition \eqref{eq:localdual}.  For the first, mollify: since $\operatorname{supp}\varphi$ is a compact subset of $\omega$, the mollifications $\varphi_\eps$ lie in $C_0^\infty(\omega)$ for small $\eps$, satisfy $|D^2\varphi_\eps|_{\mathrm{var}}(\omega) \le |D^2\varphi|_{\mathrm{var}}(\omega)$, and converge to $\varphi$ in $H_0^1(\Om)$, while $\Delta\varphi_\eps \rightharpoonup \Delta\varphi$ weakly-$*$ as measures.  Since $u - u_h$ is continuous,
+By \eqref{eq:Ghagain}, $\left<\Gh,\varphi\right> = \left<\nabla(u-u_h),\nabla\varphi\right> - \left<\sigma-\tilde\sigma_h,\varphi\right>$, and the second pairing is at most $\|\sigma-\tilde\sigma_h\|_{-2,\infty;\omega}|D^2\varphi|_{\mathrm{var}}(\omega)$ by definition \eqref{eq:localdual}.  For the first, mollify: since $\operatorname{supp}\varphi$ is a compact subset of $\omega$, the mollifications $\varphi_\eps$ lie in $C_0^\infty(\omega)$ for small $\eps$, satisfy $|D^2\varphi_\eps|_{\mathrm{var}}(\omega) \le |D^2\varphi|_{\mathrm{var}}(\omega)$, and converge to $\varphi$ in $H_0^1(\Om)$, while $\triangle\varphi_\eps \rightharpoonup \triangle\varphi$ weakly-$*$ as measures.  Since $u - u_h$ is continuous,
 \[
   \left<\nabla(u-u_h),\nabla\varphi\right> = \lim_{\eps\to 0} \left<\nabla(u-u_h),\nabla\varphi_\eps\right>
-  = -\lim_{\eps\to 0} \int_\omega (u-u_h)\,\Delta\varphi_\eps,
+  = -\lim_{\eps\to 0} \int_\omega (u-u_h)\,\triangle\varphi_\eps,
 \]
-with no boundary term at any stage, and $|\Delta\varphi_\eps|(\omega) \le |D^2\varphi_\eps|_{\mathrm{var}}(\omega)$ finishes the proof.
+with no boundary term at any stage, and $|\triangle\varphi_\eps|(\omega) \le |D^2\varphi_\eps|_{\mathrm{var}}(\omega)$ finishes the proof.
 \end{proof}
 
 
