@@ -690,7 +690,7 @@ Suppose the upper obstacle is absent or never attained, that is $\Nhtop = \empty
 \end{remark}
 
 
-\subsection{Defining the barrier functions}  Following \cite[Proposition 4.1]{NSV03}, the next Proposition constructs $c^\top$, to define the upper barrier $u^\top$.  The first three terms are as in \cite{NSV03}: supremum norm of $w$, boundary interpolation error, and continuum admissibility violation of $u_h$ for the lower obstacle $\psilo$.  Now, however, we add a fourth term which measures pointwise \emph{detachment} from the upper obstacle $\psiup$, but over the star-dilated contact set $\omtop$.  (In the unilateral case of \cite[Proposition 4.1]{NSV03} this term does not appear when constructing $u^\top$.)
+\subsection{Defining the barrier functions}  Following \cite[Proposition 4.1]{NSV03}, the next Proposition constructs $c^\top$, to define the upper barrier $u^\top$.  The first three terms are as in \cite{NSV03}: supremum norm of $w$, boundary interpolation error, and continuum admissibility violation of $u_h$ for the lower obstacle $\psilo$.  Now, however, we add a fourth term which measures pointwise \emph{detachment} from the upper obstacle $\psiup$, but over the star-dilated contact set $\omtop$ (Remark~\ref{rem:whystar}).  In the unilateral case of \cite[Proposition 4.1]{NSV03} this term does not appear in $u^\top$.
 
 \begin{proposition}[Upper barrier]
 \label{prop:upperbarrier}
@@ -735,9 +735,9 @@ A boundary vertex contributes nothing, because $\Pih v \in \Vhr$ vanishes there.
 \noindent The conditions of Lemma \ref{lem:barriercrit}(a) hold, so $u\le u^\top$ in $\Om$.
 \end{proof}
 
-When using representation \eqref{eq:sigmatildesplit} in the above proof, the first two sums used the pointwise signs of $\sigma_h$ on wholly-active elements, while the third used only nodal values of $\sigma_h$ and the ball averages defining $\Pih$.  In particular no hypothesis relating $h$ to the geometry of the contact sets is needed, and the separation constant $r_0$ of Proposition~\ref{prop:separation} plays no role.  The same comment applies to the following proof.
+When using representation \eqref{eq:sigmatildesplit} in the above proof, the first two sums used the pointwise signs of $\sigma_h$ on wholly-active elements, while the third used only nodal values of $\sigma_h$ and the ball averages defining $\Pih$.  Note that the proof uses $\omtop$ but never $\ombot$, and thus it is not confused by elements in the (permitted) overlap $\ombot \cap \omtop$, if any.  A similar comment applies to the proof of Proposition \ref{prop:lowerbarrier} below.
 
-Next, following \cite[Proposition 4.2]{NSV03}, we define $c_\bot$ for the lower barrier $u_\bot$.  Three of the terms are basically as in the unilateral case, namely supremum norm of $w$, $g$ interpolation error, and detachment, though detachment is now measured over the star-dilated set $\ombot$ (Remark~\ref{rem:whystar}).  But now we add a continuum admissibility term for $u_h$ versus $\psiup$.
+Next, following \cite[Proposition 4.2]{NSV03}, we define $c_\bot$ for the lower barrier $u_\bot$.  Three of the terms are as in the unilateral case, namely supremum norm of $w$, $g$ interpolation error, and detachment, though the last one is now measured over the star-dilated set $\ombot$.  However, for this bilateral case we add a continuum admissibility term for $u_h$ versus $\psiup$.
 
 \begin{proposition}[Lower barrier]
 \label{prop:lowerbarrier}
@@ -1151,7 +1151,7 @@ by the standard interpolation estimates $\|\psiloh - \psilo\|_{0,\infty;T} \prec
 
 \begin{remark}[Elements which meet both dilated sets]
 \label{rem:bothsides}
-Nothing prevents $T \subset \ombot \cap \omtop$, which happens exactly when $T$ has one vertex in $\Nh^+$ and another in $\Nh^-$.  Proposition~\ref{prop:effdetach} then applies twice, each time through a different vertex, and the two conclusions do not interact.  Such a $T$ necessarily belongs to $\Thplus$, since its two distinguished vertices carry $u_h = \psiloh$ and $u_h = \psiuph$ respectively, values which differ by \eqref{eq:disc-nondeg}.  As in \S \ref{sec:barriers}, no relation between $h$ and the separation distance $r_0$ of Proposition~\ref{prop:separation} is needed.
+Nothing prevents $T \subset \ombot \cap \omtop$, which happens exactly when $T$ has one vertex in $\Nh^+$ and another in $\Nh^-$.  Proposition~\ref{prop:effdetach} then applies twice, each time through a different vertex, and the two conclusions do not interact.  Such a $T$ necessarily belongs to $\Thplus$, since its two distinguished vertices carry $u_h = \psiloh$ and $u_h = \psiuph$ respectively, values which differ by \eqref{eq:disc-nondeg}.
 \end{remark}
 
 \begin{remark}[The star dilation is free here]
