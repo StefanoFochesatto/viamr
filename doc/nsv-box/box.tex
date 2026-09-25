@@ -690,7 +690,7 @@ Suppose the upper obstacle is absent or never attained, that is $\Nhtop = \empty
 \end{remark}
 
 
-\subsection{Defining the barrier functions}
+\subsection{Defining the barrier functions}  Following \cite[Proposition 4.1]{NSV03}, the next Proposition constructs $c^\top$, to define the upper barrier $u^\top$.  The first three terms are as in \cite{NSV03}: supremum norm of $w$, boundary interpolation error, and continuum admissibility violation of $u_h$ for the lower obstacle $\psilo$.  Now, however, we add a fourth term which measures pointwise \emph{detachment} from the upper obstacle $\psiup$, but over the star-dilated contact set $\omtop$.  (In the unilateral case of \cite[Proposition 4.1]{NSV03} this term does not appear when constructing $u^\top$.)
 
 \begin{proposition}[Upper barrier]
 \label{prop:upperbarrier}
@@ -703,12 +703,12 @@ The function $u^\top = u_h + w + c^\top$ is an upper barrier: $u \le u^\top$ in 
 \end{proposition}
 
 \begin{proof}
-Clearly $c^\top \ge \|g - \Ih g\|_{0,\infty;\dOm}$, so set $v := (u - u^\top)^+$.  By Lemma~\ref{lem:barriercrit}(a) it suffices to show $\left<\sigma,v\right> \le 0$ and $\left<\tilde\sigma_h,v\right> \ge 0$.  Everything follows from two pointwise lower bounds for $u^\top$.  Because $w + \|w\|_{0,\infty;\Om} \ge 0$ and the remaining constants in \eqref{eq:cupper} are non-negative, we have:
+Clearly $c^\top \ge \|g - \Ih g\|_{0,\infty;\dOm}$, so set $v := (u - u^\top)^+$.  By Lemma~\ref{lem:barriercrit}(a) it suffices to show $\left<\sigma,v\right> \le 0$ and $\left<\tilde\sigma_h,v\right> \ge 0$, facts which will follow from two pointwise lower bounds for $u^\top$.  Because $w + \|w\|_{0,\infty;\Om} \ge 0$ and the remaining constants in \eqref{eq:cupper} are non-negative, we have:
 \begin{align}
 \label{eq:utopboundOm}
   u^\top &\ge\ u_h + (\psilo - u_h)^+ \ \ge\ \psilo \quad\text{in } \Om, \\
 \label{eq:utopboundomtop}
-  u^\top &\ge\ u_h + (\psiup - u_h)^+ \ \ge\ \psiup \quad\text{on } \omtop.
+  u^\top &\ge\ u_h + (\psiup - u_h)^+ \ \ge\ \psiup \quad\text{in } \omtop.
 \end{align}
 
 For the first pairing $\left<\sigma,v\right>$, bound \eqref{eq:utopboundOm} gives $\{v>0\} = \{u > u^\top\} \subset \{u > \psilo\} = \Om \setminus \Cbot$.  Thus $v = 0$ on $\Cbot$, which supports $\mu_\bot$, and \eqref{eq:sigmapairing} gives $\left<\sigma,v\right> \le \int_\Om v \,d\mu_\bot = 0$.
@@ -718,7 +718,7 @@ For the second pairing $\left<\tilde\sigma_h,v\right>$, bound \eqref{eq:utopboun
 \label{eq:vzerotop}
   v \equiv 0 \quad \text{on } \omtop.
 \end{equation}
-It follows that each of the three sums in representation \eqref{eq:sigmatildesplit} is non-negative.  Here we look at these sums individually:
+It will follow that each of the three sums in representation \eqref{eq:sigmatildesplit} is non-negative.  Here we look at these sums individually:
 \renewcommand{\labelenumi}{(\roman{enumi})}
 \begin{enumerate}
 \item If $T \in \Thbot$ then $\sigma_h \ge 0$ pointwise on $T$ and $v \ge 0$, so $\int_T \sigma_h v \ge 0$.
@@ -729,13 +729,15 @@ It follows that each of the three sums in representation \eqref{eq:sigmatildespl
 \[
   \int_T \Ih(\sigma_h \Pih v) = \frac{|T|}{d+1}\sum_{i=0}^d \sigma_h(z_i)\,(\Pih v)(z_i).
 \]
-A boundary vertex contributes nothing, because $\Pih v \in \Vhr$ vanishes there.  At an interior vertex $z_i$ we have $(\Pih v)(z_i) \ge 0$, by $v \ge 0$ and positivity of $\Pih$, so the $i$th term is non-negative unless $\sigma_h(z_i) < 0$.  But if $\sigma_h(z_i) < 0$ then $z_i \in \Nh^-$, so $B(z_i) \subset \omtop$, and then \eqref{eq:Pih} and \eqref{eq:vzerotop} give $(\Pih v)(z_i) = |B(z_i)|^{-1}\int_{B(z_i)} v = 0$.  Hence every term of the sum is non-negative.
+A boundary vertex contributes nothing, because $\Pih v \in \Vhr$ vanishes there.  At an interior vertex $z_i\in \Nhr$ we have $(\Pih v)(z_i) \ge 0$, by $v \ge 0$ and positivity of $\Pih$, so the $i$th term is non-negative unless $\sigma_h(z_i) < 0$.  But if $\sigma_h(z_i) < 0$ then $z_i \in \Nh^-$, so $B(z_i) \subset \omtop$ as noted after \eqref{eq:omegacontains}, and then \eqref{eq:Pih} and \eqref{eq:vzerotop} give $(\Pih v)(z_i) = |B(z_i)|^{-1}\int_{B(z_i)} v = 0$.  Hence every term of the sum is non-negative.
 \end{enumerate}
 
 \noindent The conditions of Lemma \ref{lem:barriercrit}(a) hold, so $u\le u^\top$ in $\Om$.
 \end{proof}
 
 When using representation \eqref{eq:sigmatildesplit} in the above proof, the first two sums used the pointwise signs of $\sigma_h$ on wholly-active elements, while the third used only nodal values of $\sigma_h$ and the ball averages defining $\Pih$.  In particular no hypothesis relating $h$ to the geometry of the contact sets is needed, and the separation constant $r_0$ of Proposition~\ref{prop:separation} plays no role.  The same comment applies to the following proof.
+
+Next, following \cite[Proposition 4.2]{NSV03}, we define $c_\bot$ for the lower barrier $u_\bot$.  Three of the terms are basically as in the unilateral case, namely supremum norm of $w$, $g$ interpolation error, and detachment, though detachment is now measured over the star-dilated set $\ombot$ (Remark~\ref{rem:whystar}).  But now we add a continuum admissibility term for $u_h$ versus $\psiup$.
 
 \begin{proposition}[Lower barrier]
 \label{prop:lowerbarrier}
@@ -751,27 +753,22 @@ The function $u_\bot = u_h + w - c_\bot$ is a lower barrier: $u_\bot \le u$ in $
 The construction mirrors Proposition~\ref{prop:upperbarrier}, exchanging $\bot \leftrightarrow \top$ and reversing all signs.  Again $c_\bot \ge \|g-\Ih g\|_{0,\infty;\dOm}$ is clear, we define $v := (u_\bot - u)^+$, and Lemma~\ref{lem:barriercrit}(b) asks for $\left<\sigma,v\right> \ge 0$ and $\left<\tilde\sigma_h,v\right> \le 0$.  The two pointwise upper bounds replacing \eqref{eq:utopboundOm} and \eqref{eq:utopboundomtop} are
 \begin{align*}
   u_\bot &\le\ u_h - (u_h - \psiup)^+ \ \le\ \psiup \quad\text{in } \Om, \\
-  u_\bot &\le\ u_h - (u_h - \psilo)^+ \ \le\ \psilo \quad\text{on } \ombot.
+  u_\bot &\le\ u_h - (u_h - \psilo)^+ \ \le\ \psilo \quad\text{in } \ombot.
 \end{align*}
-
-The first of these inequalities gives $\{v>0\} \subset \Om \setminus \Ctop$, so $v$ vanishes on the support of $\mu_\top$ and \eqref{eq:sigmapairing} yields $\left<\sigma,v\right> = \int_\Om v \,d\mu_\bot \ge 0$.
-
-The second of the above inequalities gives $v \equiv 0$ on $\ombot$, since $u \ge \psilo$ in $\Om$.  As in the upper barrier case, consider \eqref{eq:sigmatildesplit} term by term.  If $T \in \Thtop$ then $\sigma_h \le 0$ pointwise on $T$ and $v \ge 0$, so $\int_T \sigma_h v \le 0$.  If $T \in \Thbot$ then $\sigma_h \ge 0$ is affine on $T$, so either $\sigma_h \equiv 0$ on $T$, or $\sigma_h(z) > 0$ at some vertex $z$, in which case $z \in \Nh^+$ and $T \subset \Uh(z) \subset \ombot$, where $v$ vanishes; either way $\int_T\sigma_h v = 0$.  If $T \in \Thplus$ then, as before, $\int_T \Ih(\sigma_h\Pih v)$ is $|T|$ times the average $(d+1)^{-1}\sum_i \sigma_h(z_i)(\Pih v)(z_i)$, in which boundary vertices contribute nothing, interior vertices with $\sigma_h(z_i) \le 0$ contribute non-positively because $(\Pih v)(z_i) \ge 0$, and interior vertices with $\sigma_h(z_i) > 0$ have $B(z_i) \subset \ombot$ and hence $(\Pih v)(z_i) = 0$.  Thus $\left<\tilde\sigma_h,v\right> \le 0$, and $u_\bot\le u$ follows.
+The first of these inequalities gives $\{v>0\} \subset \Om \setminus \Ctop$, so $v$ vanishes on the support of $\mu_\top$ and \eqref{eq:sigmapairing} yields $\left<\sigma,v\right> = \int_\Om v \,d\mu_\bot \ge 0$.  The second gives $v \equiv 0$ on $\ombot$, since $u \ge \psilo$ in $\Om$.  As in the upper barrier case, consider \eqref{eq:sigmatildesplit} term by term.  If $T \in \Thtop$ then $\sigma_h \le 0$ pointwise on $T$ and $v \ge 0$, so $\int_T \sigma_h v \le 0$.  If $T \in \Thbot$ then $\sigma_h \ge 0$ is affine on $T$, so either $\sigma_h \equiv 0$ on $T$, or $\sigma_h(z) > 0$ at some vertex $z$, in which case $z \in \Nh^+$ and $T \subset \Uh(z) \subset \ombot$, where $v$ vanishes; either way $\int_T\sigma_h v = 0$.  If $T \in \Thplus$ then, as before, $\int_T \Ih(\sigma_h\Pih v)$ is $|T|$ times the average $(d+1)^{-1}\sum_i \sigma_h(z_i)(\Pih v)(z_i)$, in which boundary vertices contribute nothing, interior vertices with $\sigma_h(z_i) \le 0$ contribute non-positively because $(\Pih v)(z_i) \ge 0$, and interior vertices with $\sigma_h(z_i) > 0$ have $B(z_i) \subset \ombot$ and hence $(\Pih v)(z_i) = 0$.  Thus $\left<\tilde\sigma_h,v\right> \le 0$.
 \end{proof}
 
-Figure \ref{fig:barrieruni} illustrates the barriers constructed in Propositions \ref{prop:upperbarrier} and \ref{prop:lowerbarrier}, but in a unilateral case to avoid visual clutter.
+Figure \ref{fig:barrieruni} illustrates the barriers constructed in Propositions \ref{prop:upperbarrier} and \ref{prop:lowerbarrier}, but in a unilateral case, namely $u\ge \psilo$, to avoid visual clutter.
 
 \begin{figure}[ht]
 \centering
 \input{tikz/barrieruni}
-\caption{Notional barrier construction of Propositions \ref{prop:upperbarrier} and \ref{prop:lowerbarrier} in a unilateral case; see Remark~\ref{rem:unilateral}.  The barriers $u^\top,u_\bot$ are the corrected discrete solution $u_h+w$ shifted by constants, and $u$ (black) lies between them (shaded band).  The upper shift $c^\top$ \eqref{eq:cupper} carries no localized term because $\omtop=\emptyset$ (Remark \ref{rem:unilateralstars}), while the lower shift $c_\bot$ \eqref{eq:clower} includes detachment of $u_h$ from $\psilo$ over the set $\omega_\bot$ (pale vertical strip).}
+\caption{Barrier construction of Propositions \ref{prop:upperbarrier} and \ref{prop:lowerbarrier} illustrated in a unilateral case $u\ge\psilo$; see Remark~\ref{rem:unilateral}.  The continuum solution $u$ (black) lies in the shaded band between the barriers $u^\top,u_\bot$, which are corrected and shifted discrete solutions.  Here the upper shift $c^\top$ carries no detachment term because $\omtop=\emptyset$ (Remark \ref{rem:unilateralstars}), but the lower shift $c_\bot$ includes detachment of $u_h$ from $\psilo$ over the set $\ombot$ (pale vertical strip).  Note $\psiloh$ is not shown.}
 \label{fig:barrieruni}
 \end{figure}
 
 
-\subsection{Preliminary pointwise error estimate}
-
-We can easily convert the results in Propositions \ref{prop:upperbarrier} and \ref{prop:lowerbarrier} into a pointwise \emph{a posteriori} bound.  In fact, subtracting $u_h$ from the barrier relationship $u_\bot \le u \le u^\top$ gives
+\subsection{Preliminary pointwise error estimate}  We can easily convert the results in Propositions \ref{prop:upperbarrier} and \ref{prop:lowerbarrier} into a pointwise \emph{a posteriori} bound.  In fact, subtracting $u_h$ from the barrier relationship $u_\bot \le u \le u^\top$ gives
 \begin{equation}
 \label{eq:maxbarriers}
 |u-u_h| \le \max \{|u_\bot-u_h|, |u^\top-u_h|\} = \max \{|w-c_\bot|, |w+c^\top|\}
