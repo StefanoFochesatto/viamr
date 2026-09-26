@@ -97,7 +97,7 @@ class VIAMR(OptionsManager, AMAMixin, NSVMarkingsMixin, SetDiagnosticsMixin):
     .. code-block:: python3
 
       import animate
-      metric = amr.buildaveragedmetric(mesh, uh, lb)            # VIAMR builds the metric ...  FIXME bounds=(lb,ub)
+      metric = amr.buildaveragedmetric(mesh, uh, (lb, ub))      # VIAMR builds the metric ...
       amesh = animate.adapt(mesh, metric)                       # ... caller adapts the mesh with it
 
     Source layout:

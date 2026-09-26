@@ -280,7 +280,7 @@ for amrtype in refinetypes:
                     h_min=1.0e-4,
                     h_max=1.0,
                 )
-                metric = amr.buildaveragedmetric(mesh, uh, lb)
+                metric = amr.buildaveragedmetric(mesh, uh, (lb, None))
                 mesh = animate.adapt(mesh, metric)
             else:
                 mesh = amr.refinesbr2D(mesh, mark)

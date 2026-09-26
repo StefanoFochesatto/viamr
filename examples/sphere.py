@@ -662,7 +662,7 @@ for amrtype in refinetypes:
                 target_complexity=targetsAMA[i + 1], h_min=1.0e-4, h_max=1.0
             )
             t_mark0 = time.time()
-            metric = amr.buildaveragedmetric(mesh, uh, lb)
+            metric = amr.buildaveragedmetric(mesh, uh, (lb, None))
             t_mark1 = time.time()
             mesh = animate.adapt(mesh, metric)
             t_meshbuild1 = time.time()
