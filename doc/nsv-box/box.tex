@@ -997,25 +997,14 @@ with no boundary term at any stage, and $|\triangle\varphi_\eps|(\omega) \le |D^
 
 The lower bound for the localized residual uses bubble functions, in the manner of Verf\"urth \cite{Verfurth1996} and Nochetto \cite{Nochetto1995}.  The construction has to be compatible with the averaging operator $\Pih$ of \S \ref{sec:discretization}, in the sense that the bubbles must not disturb $\tilde\sigma_h$ on the transition elements $\Thplus$, and \cite[Lemma 6.1]{NSV03} arranges this by shrinking the balls $B(z)$ in \eqref{eq:Pih} so that they avoid the barycenters of all elements and sides.  Shrinking the balls preserves $B(z) \subset \Uh(z)$, so it changes neither \eqref{eq:Pihprops} and \eqref{eq:PihBV} nor any statement of \S\S \ref{sec:estimator}--\ref{sec:barriers}; only the constants move.  The obstacles play no part in the construction, so we state the result and refer to \cite[Lemma 6.1]{NSV03} for its proof.
 
-\begin{lemma}[Retracted bubble functions]
-\label{lem:bubbles}
-There is $\delta \in (0,1)$, depending only on the shape-regularity constant $\gamma^*$, such that if the balls in \eqref{eq:Pih} are replaced by $B(z;\delta\rho_z)$, where $\rho_z := \max\{r > 0 : B(z;r) \subset \Uh(z)\}$, then for every $T \in \Th$ and every $S \in \Sh$ there are bubble functions $b_T, b_S \in W^{2,1}(\Om) \cap H_0^1(\Om) \subset W$ with $0 \le b_T, b_S \le 1$, with $\operatorname{supp} b_T$ a compact subset of $\operatorname{int} T$ and $\operatorname{supp} b_S$ a compact subset of $\operatorname{int}\omega_S$, and with the following properties.  For all $\varphi \in L^1(\Om)$ and all $\varphi_T \in \mathbb{P}_1(T)$,
-\begin{align}
-\label{eq:bubbleT}
-  \Pih(\varphi\, b_T) &= 0, \\
-  \|\varphi_T\|_{0,\infty;T} &\preceq \sup\Bigl\{ \textstyle\int_T \varphi_T\, \zeta_T\, b_T \,:\, \zeta_T \in \mathbb{P}_1(T),\ \|\zeta_T\|_{0,1;T} \le 1 \Bigr\}, \notag \\
-  |D^2(\varphi_T b_T)|_{\mathrm{var}}(T) &\preceq h_T^{-2}\,\|\varphi_T\|_{0,1;T}, \notag
-\end{align}
-and
-\begin{align}
-\label{eq:bubbleS}
-  \Pih(\varphi\, b_S) &= 0, \\
-  1 &\preceq |S|^{-1}\textstyle\int_S b_S, \notag \\
-  |D^2 b_S|_{\mathrm{var}}(\omega_S) \preceq h_S^{-1}|S|, &\qquad \|b_S\|_{0,1;\omega_S} \preceq h_S |S|. \notag
-\end{align}
-\end{lemma}
+We use the retracted bubble functions of \cite[Lemma 6.1]{NSV03}.  There is $\delta \in (0,1)$, depending only on the shape-regularity constant $\gamma^*$, such that if the balls in \eqref{eq:Pih} are replaced by $B(z;\delta\rho_z)$, where $\rho_z := \max\{r > 0 : B(z;r) \subset \Uh(z)\}$, then for every $T \in \Th$ and every $S \in \Sh$ there are bubble functions $b_T, b_S \in W^{2,1}(\Om) \cap H_0^1(\Om) \subset W$, with $\operatorname{supp} b_T$ a compact subset of $\operatorname{int} T$ and $\operatorname{supp} b_S$ a compact subset of $\operatorname{int}\omega_S$, such that
+\begin{equation}
+\label{eq:bubbleproj}
+  \Pih(\varphi\, b_T) = 0 \qquad\text{and}\qquad \Pih(\varphi\, b_S) = 0 \qquad \text{for all } \varphi \in L^1(\Om).
+\end{equation}
+The remaining properties of $b_T$ and $b_S$ in \cite[Lemma 6.1]{NSV03}, namely \cite[formulas (6.1b), (6.1c), (6.2b), (6.2c)]{NSV03}, are used only inside the argument we cite in the proof of Proposition~\ref{prop:effresidual} below.
 
-The point of \eqref{eq:bubbleT} and \eqref{eq:bubbleS} is that the transition elements drop out of $\tilde\sigma_h$ when it is tested against a bubble.  Indeed, in definition \eqref{eq:sigmatilde} the $\Thplus$ sum contains $\Pih$ applied to the test function, so it vanishes, while the $\ThC$ sum is an integral over $\Lamh$.  Thus, for every $\varphi \in L^\infty(\Om)$, every $T\in\Th$, and every $S\in\Sh$,
+The point of \eqref{eq:bubbleproj} is that the transition elements drop out of $\tilde\sigma_h$ when it is tested against a bubble.  Indeed, in definition \eqref{eq:sigmatilde} the $\Thplus$ sum contains $\Pih$ applied to the test function, so it vanishes, while the $\ThC$ sum is an integral over $\Lamh$.  Thus, for every $\varphi \in L^\infty(\Om)$, every $T\in\Th$, and every $S\in\Sh$,
 \begin{equation}
 \label{eq:bubblepairing}
   \left<\tilde\sigma_h, \varphi\, b_T\right> = \int_{\Lamh} \sigma_h\, \varphi\, b_T
@@ -1037,38 +1026,17 @@ The localized residual $\|h^2R_\infty\|_{0,\infty;\Om}$, the boundary datum term
 \begin{proof}
 1.  The three terms other than the residual are immediate.  On $\dOm$ we have $u = g$ and $u_h = \Ih g$, so $g - \Ih g = u - u_h$ there.  Because $u \in \mathcal{K}$ satisfies $\psilo \le u \le \psiup$ in $\Om$, we also have the two pointwise bounds $(\psilo - u_h)^+ \le (u-u_h)^+$ and $(u_h - \psiup)^+ \le (u_h-u)^+$, and each is at most $\|u-u_h\|_{0,\infty;T}$ on $T$.  This is the only place where the box constraint enters the proof, and the two obstacles enter symmetrically.
 
-2.  Next we bound the interior residual.  Let $T \in \Th$ and set $\varrho_T := f + \sigma_h$ if $T \in \ThC$ and $\varrho_T := f$ if $T \in \Thplus$, as in \eqref{eq:Rp}, and let $\bar\varrho_T$ be the same expression with $\bar f$ in place of $f$.  In both cases $\bar\varrho_T \in \mathbb{P}_1(T)$, since $\sigma_h$ is affine on $T$ and $\bar f$ is constant there; no sign of $\sigma_h$ is used.  Choose $\zeta_T$ by the second line of \eqref{eq:bubbleT}, so that
-\[
-  \|\bar\varrho_T\|_{0,\infty;T} \preceq \int_T \bar\varrho_T\,\zeta_T b_T, \qquad \|\zeta_T\|_{0,1;T} \le 1.
-\]
-By \eqref{eq:bubblepairing}, in either case $\int_T (\bar\varrho_T - \bar f) \zeta_T b_T = \left<\tilde\sigma_h,\zeta_T b_T\right>$, so that
-\[
-  \int_T \bar\varrho_T \,\zeta_T b_T = \left<f + \tilde\sigma_h, \zeta_T b_T\right> + \int_T (\bar f - f)\,\zeta_T b_T = \left<\Gh,\zeta_T b_T\right> + \int_T (\bar f - f)\,\zeta_T b_T,
-\]
-the second equality by definition \eqref{eq:Gh} and $\left<\nabla u_h,\nabla(\zeta_T b_T)\right> = 0$, which holds because $\nabla u_h$ is constant on $T$ while $\zeta_T b_T$ vanishes near $\partial T$.  Now apply Lemma~\ref{lem:Ghlocal} with $\omega = \operatorname{int} T$ and the third line of \eqref{eq:bubbleT} to the first term, and $0 \le b_T \le 1$ with $\|\zeta_T\|_{0,1;T}\le 1$ to the second.  Adding and subtracting $f$ on the left then gives the local estimate
+2.  For the localized residual, the rest of the proof is identical to steps 2--4 of the proof of \cite[Proposition 6.2]{NSV03}, up to our sign convention for $\sigma_h$ (compare \eqref{eq:Rp} with \cite[formula (3.7)]{NSV03}), and with \cite[formula (3.11)]{NSV03} read in the local form of Lemma~\ref{lem:Ghlocal}.  We record two intermediate bounds from that argument for later use.  For $T \in \Th$ let $\varrho_T := f + \sigma_h$ if $T \in \ThC$ and $\varrho_T := f$ if $T \in \Thplus$, as in \eqref{eq:Rp}.  Then
 \begin{equation}
 \label{eq:effvolume}
-  h_T^2\|\varrho_T\|_{0,\infty;T} \ \preceq\ \|u-u_h\|_{0,\infty;T} + \|\sigma-\tilde\sigma_h\|_{-2,\infty;T} + h_T^2\|f-\bar f\|_{0,\infty;T},
+  h_T^2\|\varrho_T\|_{0,\infty;T} \ \preceq\ \|u-u_h\|_{0,\infty;T} + \|\sigma-\tilde\sigma_h\|_{-2,\infty;T} + h_T^2\|f-\bar f\|_{0,\infty;T}.
 \end{equation}
-in which the patch is $T$ itself.
-
-3.  Now the jump residual.  Let $S \in \Sh$ and recall that $J_S := \jump{\partial_\nu u_h}$ is constant on $S$.  Taking $\alpha_S := \operatorname{sign}(J_S)/|S|$, the second line of \eqref{eq:bubbleS} gives $\|J_S\|_{0,\infty;S} \preceq \int_S J_S \alpha_S b_S$ while $\|\alpha_S\|_{0,1;S} = 1$.  Since $\alpha_S b_S$ is supported in $\operatorname{int}\omega_S$, identity \eqref{eq:byparts} leaves only the side $S$, so definition \eqref{eq:Gh} and \eqref{eq:bubblepairing} give
-\[
-  \int_S J_S\,\alpha_S b_S = -\left<\nabla u_h, \nabla(\alpha_S b_S)\right>
-  = \left<\Gh, \alpha_S b_S\right> - \int_{\omega_S} \bigl(f + \sigma_h \mathbb{1}_{\Lamh}\bigr)\,\alpha_S b_S,
-\]
-where $\mathbb{1}_{\Lamh}$ is the characteristic function of the discrete contact region.  Lemma~\ref{lem:Ghlocal} and the last line of \eqref{eq:bubbleS}, together with $|\alpha_S||S| = 1$, bound the two terms, and we obtain
-\[
-  h_S\|J_S\|_{0,\infty;S} \ \preceq\ \|u-u_h\|_{0,\infty;\omega_S} + \|\sigma-\tilde\sigma_h\|_{-2,\infty;\omega_S} + h_S^2\bigl\|f + \sigma_h \mathbb{1}_{\Lamh}\bigr\|_{0,\infty;\omega_S}.
-\]
-On each of the two elements of $\omega_S$ the last integrand is exactly the $\varrho_T$ of step 2, so \eqref{eq:effvolume} applies there and yields
+For an interior side $S \in \Sh$, let $J_S := \jump{\partial_\nu u_h}$, which is constant on $S$.  Step 3 of \cite[Proposition 6.2]{NSV03}, followed by \eqref{eq:effvolume} applied on each of the two elements of $\omega_S$, yields
 \begin{equation}
 \label{eq:effjump}
   h_S\|J_S\|_{0,\infty;S} \ \preceq\ \|u-u_h\|_{0,\infty;\omega_S} + \|\sigma-\tilde\sigma_h\|_{-2,\infty;\omega_S} + \|h^2(f-\bar f)\|_{0,\infty;\omega_S}.
 \end{equation}
-Note that the patch is still only $\omega_S$; this is because step 2 is local to a single element.
-
-4.  Finally, by \eqref{eq:Rp} with $p = \infty$, $\|h^2R_\infty\|_{0,\infty;T} \le h_T\|\jump{\partial_\nu u_h}\|_{0,\infty;\partial T\setminus\dOm} + h_T^2\|\varrho_T\|_{0,\infty;T}$.  Bound the first part by \eqref{eq:effjump} over the sides $S \subset \partial T$, using $h_S \le h_T$ and $\omega_S \subset T^*$, and the second by \eqref{eq:effvolume}.  Combining with step 1 gives \eqref{eq:effresidual}.  Global efficiency follows by taking the maximum over $T \in \Th$, because a test function admissible in $\|\cdot\|_{-2,\infty;T^*}$ is admissible in $\|\cdot\|_{-2,\infty;\bar\Om}$, so the local seminorms \eqref{eq:localdual} are dominated by the global one.
+Global efficiency follows by taking the maximum over $T \in \Th$, because a test function admissible in $\|\cdot\|_{-2,\infty;T^*}$ is admissible in $\|\cdot\|_{-2,\infty;\bar\Om}$.
 \end{proof}
 
 
@@ -1157,7 +1125,7 @@ Since $\bar f$ is constant on $T$ we may write $\nabla\sigma_h = \nabla(\bar f +
   \ \preceq\ h_T\,|T|^{1/d}\,\|\bar f + \sigma_h\|_{0,\infty;T} \\
   &\preceq\ h_T^2\,\|f + \sigma_h\|_{0,\infty;T} + h_T^2\|f - \bar f\|_{0,\infty;T}.
 \end{align*}
-Since $T \in \ThC$, $f + \sigma_h$ is the $\varrho_T$ of step 2 in the proof of Proposition~\ref{prop:effresidual}, so \eqref{eq:effvolume} applies.
+Since $T \in \ThC$, $f + \sigma_h = \varrho_T$, so \eqref{eq:effvolume} applies.
 \end{proof}
 
 As \cite[\S 6.3]{NSV03} observes, the local bound \eqref{eq:effquad} does not obviously imply global efficiency, because passing to global quantities requires summing the left-hand side while the right-hand side is a maximum.  This is a feature of the $L^d$ accumulation in the quadrature term, and it is unrelated to the box constraint: \eqref{eq:effquad} holds on $\Thbot$ and $\Thtop$ elements alike, and its proof, like that of \eqref{eq:effvolume}, never uses a sign of $\sigma_h$.  In practice the marking strategy has to account for the different accumulation, as discussed in \cite[\S 7.1]{NSV03}.
