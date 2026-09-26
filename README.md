@@ -1,6 +1,8 @@
 # VIAMR = adaptive mesh refinement for variational inequalities
 
-This repository contains Python algorithms for adaptive mesh refinement (AMR) and mesh adaptation for certain variational inequalities (VIs).  VIs are, essentially, partial differential equation (PDE) problems where the solution is subject to inequalities.  The problems addressed by the library, in its current form, are scalar obstacle problems.  Many of the implemented methods work for any nonlinear operator, and the constraint set for these problems can be defined by lower- and upper-bound inequalities (box constraints).  Our algorithms apply the [Firedrake](https://www.firedrakeproject.org) finite element library.
+This repository contains Python algorithms for adaptive mesh refinement (AMR) and mesh adaptation for certain variational inequalities (VIs).  VIs are, essentially, partial differential equation (PDE) problems where the solution is subject to inequalities.  The problems addressed by the library, in its current form, are scalar obstacle problems generally defined by lower- and upper-bound inequalities (box constraints).  Many of the implemented methods work for any nonlinear operator.
+
+These algorithms apply the [Firedrake](https://www.firedrakeproject.org) finite element library.
 
 <p align="center">
 <img src="images/spiralbw.png" height="250" alt="spiral active set"> &nbsp &nbsp &nbsp &nbsp
@@ -15,17 +17,15 @@ Our primary AMR goals for these free-boundary problems is to generate rapid conv
 
 ## Library design
 
-Our library defines the `VIAMR` Python class in the source file `viamr/viamr.py`.  This class bundles 3 kinds of strategies for deciding _where_ to refine: free-boundary-proximity heuristics, classical residual/jump estimators applied only in inactive sets, and two whole-domain estimators already designed for Laplacian-type classical obstacle problems.  The first two strategies generalize to very nonlinear and/or degenerate operators.  These methods produce DG0 (piece-wise constant) indicators on meshes, with a $\{0,1\}$ value on each cell.  Such markings can generated diagnostically, combined by unioning, and measured geometrically by various methods of the class.
+Our library defines the `VIAMR` Python class.  This class bundles 3 kinds of strategies for deciding _where_ to refine a posteriori, that is, after a VI solution: free-boundary-proximity heuristics, classical residual/jump estimators applied only in inactive sets, and two whole-domain estimators already designed for Laplacian-type classical obstacle problems.  The first two strategies generalize to very nonlinear and/or degenerate operators.  These methods produce DG0 (piece-wise constant) indicators on meshes, with a $\{0,1\}$ value on each cell.  Such markings can generated diagnostically, combined by unioning, and measured geometrically by various methods of the class.
 
 Element (cell) markings from the above strategies can be fed to either of two skeleton-based, tag-and-refine mesh refinement methods.  One method is in the [PETSc library](https://petsc.org/release/), limited to 2D, and the other is from the [Netgen](https://ngsolve.org/) via PETSc-Netgen integration [(ngspetsc)](https://github.com/NGSolve/ngsPETSc); the latter works in 2D and 3D.
 
-Metric-based mesh adaptation, i.e. re-meshing, is also supported.  The library defines a `AMAMixin` class which implements an averaged-metric generation step, and applies the [animate](https://github.com/mesh-adaptation/animate) mesh-adaptation library to generate the new mesh.
+Metric-based mesh adaptation, i.e. re-meshing, is also supported.  One method of the library generates an averaged metric from free-boundary and inactive-set Hessian information; see `AMAMixin` in `viamr/ama.py`.  After the metric is generated, the user calls the [animate](https://github.com/mesh-adaptation/animate) mesh-adaptation library to generate the new mesh.
+
+Solution-norm error is a standard, supported way to evaluate quality.  Effectivity indices against the implemented _a posteriori_ estimators can be computed when exact solutions are available.  However, the library also supports a diagnostic layer (`SetDiagnosticsMixin` defined in `viamr/diagnostics.py`) which measures active-set geometrical error (Jaccard distances) and free-boundary location accuracy (Hausdorff metric; for 2D meshes only).  Free-boundary accuracy is often a goal for computations using VIs.
 
 All of the algorithms are parallel, and have excellent weak scaling.
-
-Solution-norm error is a standard, supported way to evaluate quality.  Effectivity indices against the implemented _a posteriori_ estimators can be computed when exact solutions are available.
-
-The library supports a diagnostic layer which measures active-set geometrical error (Jaccard distances) and free-boundary location accuracy (Hausdorff metric; for 2D meshes only).  Free-boundary accuracy is often a goal for computations using VIs.
 
 These codes extend Stefano's Master of Science project at the University of Alaska Fairbanks (S. Fochesatto (2024). _Adaptive mesh refinement for variational inequalities_).  A paper is in progress.
 
