@@ -923,71 +923,76 @@ The observations in Remarks 5.5\textendash 5.11 of \cite{NSV03} carry over to ou
 
 \section{Lower bounds} \label{sec:efficiency}
 
-Theorem~\ref{thm:reliability} bounds the error by the estimator.  This section addresses the converse question, namely whether $E_h$ can overestimate the error, following \cite[\S 6]{NSV03}.  We call a quantity \emph{globally efficient} if it is bounded by the global error plus a global measure of data approximation, and \emph{locally efficient} if each local indicator is bounded by the error and the data approximation over a small patch surrounding the corresponding element.  Global efficiency is what justifies stopping an adaptive loop once the estimator is small, while local efficiency is what protects against over-refinement.
+Reliability Theorem~\ref{thm:reliability} bounds the error by the estimator.  This section instead shows the converse, that $E_h$ does not overestimate the error.  Recall that a quantity is called \emph{globally efficient} if it is bounded by the global error plus a global measure of data approximation, and \emph{locally efficient} if each local indicator is bounded by error and data approximation over a small patch surrounding the corresponding element \cite[\S 6]{NSV03}.  Global efficiency is what justifies stopping adaptive refinement once the estimator is small, while local efficiency protects against over-refinement.
 
-Three kinds of data approximation appear below, and the last two now come in two copies each, one per obstacle.  The first is the usual oscillation $\|h^2(f-\bar f)\|_{0,\infty;\Om}$ of the load, where $\bar f$ is the piecewise-constant function with $\bar f|_T := |T|^{-1}\int_T f$ for $T \in \Th$.  The second is the pair of \emph{obstacle approximations}
-\begin{equation}
-\label{eq:obstacleapprox}
-  \|(\psiloh - \psilo)^+\|_{0,\infty;\omega} \qquad\text{and}\qquad \|(\psiup - \psiuph)^+\|_{0,\infty;\omega}.
-\end{equation}
-The two positive parts point in opposite directions.  Each retains the part of the obstacle interpolation error which is invisible to the corresponding detachment term of \eqref{eq:Eh}, that term being measured against the continuum obstacle while the discrete solution only knows the discrete one.  Both quantities are bounded by $\|\psilo-\psiloh\|_{0,\infty;\omega}$ and $\|\psiup-\psiuph\|_{0,\infty;\omega}$ respectively, hence they are $O(h^2)$ for obstacles in $W^{2,\infty}$; see Remark~\ref{rem:smoothobstacles}.  The third is the pair of \emph{discrete obstacle oscillations}: for $\omega \subset \bar\Om$ and $v_h \in \Vh$ set
-\begin{equation}
-\label{eq:jumposc}
-  \bigl\|h\jump{\partial_\nu v_h}\bigr\|_{0,\infty;\omega}
-  := \max\bigl\{ h_S \bigl\|\jump{\partial_\nu v_h}\bigr\|_{0,\infty;S} \,:\, S \in \Sh \text{ with } S \cap \operatorname{int}\omega \ne \emptyset \bigr\},
-\end{equation}
-and use this with $v_h = \psiloh$ and with $v_h = \psiuph$.
-
-Efficiency statements are local, so we need a local form of the dual seminorm \eqref{eq:dualnormbv}.  For $\omega \subset \bar\Om$ and $\rho \in W^*$ put
+\subsection{A local bound on the Galerkin functional}  To make the efficiency statements local we restrict the dual norm \eqref{eq:dualnormbv} to $\omega \subset \bar\Om$.  For $\rho \in W^*$ put
 \begin{equation}
 \label{eq:localdual}
-  \|\rho\|_{-2,\infty;\omega} := \sup\bigl\{\left<\rho,\varphi\right> \,:\, \varphi \in W,\ |D^2\varphi|_{\mathrm{var}}(\omega) \le 1,\ \operatorname{supp}\varphi \subset \omega\bigr\},
+  \|\rho\|_{-2,\infty;\omega} := \sup\bigl\{\left<\rho,\varphi\right> \,:\, \varphi \in W,\ |D^2\varphi|_{\mathrm{var}}(\omega) \le 1,\ \operatorname{supp}\varphi \subset \omega\bigr\};
 \end{equation}
-which reduces to \eqref{eq:dualnormbv} when $\omega = \bar\Om$.  Every test function used in this section has support in the interior of $\Om$, so no boundary terms will arise from integration by parts.  Finally, two patches around an element $T\in\Th$ appear, its star $\Uh(T)$ from \eqref{eq:star} and the smaller
-\begin{equation}
-\label{eq:Tstar}
-  T^* := \bigcup\{T' \in \Th \,:\, T' \text{ shares at least one side with } T\} \ \subset\ \Uh(T),
-\end{equation}
-and we write $\omega_S$ for the union of the two elements meeting along an interior side $S \in \Sh$.
+this reduces to \eqref{eq:dualnormbv} when $\omega = \bar\Om$.
 
-
-\subsection{A local bound on the Galerkin functional}  Both efficiency arguments below test $\Gh$ against a locally-supported function, so we first record the local counterpart of \cite[formula (3.11)]{NSV03}.  It is a direct consequence of the second form \eqref{eq:Ghagain} of the Galerkin functional, and, like \eqref{eq:Ghagain} itself, it does not distinguish the obstacles.
+The efficiency arguments in this section test $\Gh$ against locally-supported functions, so we first record a counterpart of \cite[formula (3.11)]{NSV03}.  It is a direct consequence of the second form \eqref{eq:Ghagain} of the Galerkin functional, and likewise it does not distinguish the obstacles.
 
 \begin{lemma}[Local bound on $\Gh$]
 \label{lem:Ghlocal}
-Let $\omega \subset \Om$ be open and let $\varphi \in W$ have support a compact subset of $\omega$.  Then
+Let $\omega \subset \Om$ be open, and suppose $\varphi \in W$ has support which is a compact subset of $\omega$.  Then
 \begin{equation}
 \label{eq:Ghlocal}
   \bigl|\left<\Gh,\varphi\right>\bigr| \ \le\ \Bigl(\|u-u_h\|_{0,\infty;\omega} + \|\sigma-\tilde\sigma_h\|_{-2,\infty;\omega}\Bigr)\,|D^2\varphi|_{\mathrm{var}}(\omega).
 \end{equation}
 \end{lemma}
 
-\begin{proof}
-By \eqref{eq:Ghagain}, $\left<\Gh,\varphi\right> = \left<\nabla(u-u_h),\nabla\varphi\right> - \left<\sigma-\tilde\sigma_h,\varphi\right>$, and the second pairing is at most $\|\sigma-\tilde\sigma_h\|_{-2,\infty;\omega}|D^2\varphi|_{\mathrm{var}}(\omega)$ by definition \eqref{eq:localdual}.  For the first, mollify: since $\operatorname{supp}\varphi$ is a compact subset of $\omega$, the mollifications $\varphi_\eps$ lie in $C_0^\infty(\omega)$ for small $\eps$, satisfy $|D^2\varphi_\eps|_{\mathrm{var}}(\omega) \le |D^2\varphi|_{\mathrm{var}}(\omega)$, and converge to $\varphi$ in $H_0^1(\Om)$, while $\triangle\varphi_\eps \rightharpoonup \triangle\varphi$ weakly-$*$ as measures.  Since $u - u_h$ is continuous,
-\[
-  \left<\nabla(u-u_h),\nabla\varphi\right> = \lim_{\eps\to 0} \left<\nabla(u-u_h),\nabla\varphi_\eps\right>
-  = -\lim_{\eps\to 0} \int_\omega (u-u_h)\,\triangle\varphi_\eps,
-\]
-with no boundary term at any stage, and $|\triangle\varphi_\eps|(\omega) \le |D^2\varphi_\eps|_{\mathrm{var}}(\omega)$ finishes the proof.
-\end{proof}
+\begin{proof} By \eqref{eq:Ghagain}, $\left<\Gh,\varphi\right> = \left<\nabla(u-u_h),\nabla\varphi\right> - \left<\sigma-\tilde\sigma_h,\varphi\right>$, for which the second pairing is at most $\|\sigma-\tilde\sigma_h\|_{-2,\infty;\omega}|D^2\varphi|_{\mathrm{var}}(\omega)$ by definition \eqref{eq:localdual}.  For the first, mollify: since $\operatorname{supp}\varphi$ is a compact subset of $\omega$, the mollifications $\varphi_\eps$ lie in $C_0^\infty(\omega)$ for small $\eps$.  Because convolution with a probability density does not increase total variation \cite[\S 5.2]{EvansGariepy2015}, we have $|D^2\varphi_\eps|_{\mathrm{var}}(\omega) \le |D^2\varphi|_{\mathrm{var}}(\omega)$, and also $\varphi_\eps$ converges to $\varphi$ in $H_0^1(\Om)$.  Thus
+  $$\left<\nabla(u-u_h),\nabla\varphi\right> = \lim_{\eps\to 0} \left<\nabla(u-u_h),\nabla\varphi_\eps\right>
+  = -\lim_{\eps\to 0} \int_\omega (u-u_h)\,\triangle\varphi_\eps,$$
+with no boundary term at any stage, and $|\triangle\varphi_\eps|(\omega) \le |D^2\varphi_\eps|_{\mathrm{var}}(\omega)$.  Conclude that the integral is at most $\|u-u_h\|_{0,\infty;\omega} |D^2\varphi|_{\mathrm{var}}(\omega)$.  \end{proof}
 
-\subsection{Efficiency of the localized residual}  The lower bound for the localized residual uses bubble functions, in the manner of Verf\"urth \cite{Verfurth1996} and Nochetto \cite{Nochetto1995}.  The construction has to be compatible with the averaging operator $\Pih$ of \S \ref{sec:discretization}, in the sense that the bubbles must not disturb $\tilde\sigma_h$ on the transition elements $\Thplus$, and \cite[Lemma 6.1]{NSV03} arranges this by shrinking the balls $B(z)$ in \eqref{eq:Pih} so that they avoid the barycenters of all elements and sides.  Shrinking the balls preserves $B(z) \subset \Uh(z)$, so it changes neither \eqref{eq:Pihprops} and \eqref{eq:PihBV} nor any statement of \S\S \ref{sec:estimator}--\ref{sec:barriers}; only the constants move.  The obstacles play no part in the construction, so we state the result and refer to \cite[Lemma 6.1]{NSV03} for its proof.
+\subsection{Efficiency of the localized residual}  The lower bound for the localized residual uses bubble functions, in the manner of Verf\"urth \cite{Verfurth1996} and Nochetto \cite{Nochetto1995}.  The construction has to be compatible with the averaging operator $\Pih$ of \S \ref{sec:discretization}, in the sense that the bubbles must not disturb $\tilde\sigma_h$ on the transition elements $\Thplus$, and \cite[Lemma 6.1]{NSV03} arranges this by shrinking the balls $B(z)$ in \eqref{eq:Pih} so that they avoid the barycenters of all elements and sides.  Shrinking the balls preserves $B(z) \subset \Uh(z)$, so it changes neither \eqref{eq:Pihprops} and \eqref{eq:PihBV} nor any statement of \S \ref{sec:estimator} or \S \ref{sec:barriers}; only the constants move.  The obstacles play no part in the construction, so we first summarize the bubble ideas, then state the result, and finally refer to \cite{NSV03} for its proof.
 
 We use the retracted bubble functions of \cite[Lemma 6.1]{NSV03}.  There is $\delta \in (0,1)$, depending only on the shape-regularity constant $\gamma^*$, such that if the balls in \eqref{eq:Pih} are replaced by $B(z;\delta\rho_z)$, where $\rho_z := \max\{r > 0 : B(z;r) \subset \Uh(z)\}$, then for every $T \in \Th$ and every $S \in \Sh$ there are bubble functions $b_T, b_S \in W^{2,1}(\Om) \cap H_0^1(\Om) \subset W$, with $\operatorname{supp} b_T$ a compact subset of $\operatorname{int} T$ and $\operatorname{supp} b_S$ a compact subset of $\operatorname{int}\omega_S$, such that
 \begin{equation}
 \label{eq:bubbleproj}
   \Pih(\varphi\, b_T) = 0 \qquad\text{and}\qquad \Pih(\varphi\, b_S) = 0 \qquad \text{for all } \varphi \in L^1(\Om).
 \end{equation}
-The remaining properties of $b_T$ and $b_S$ in \cite[Lemma 6.1]{NSV03}, namely \cite[formulas (6.1b), (6.1c), (6.2b), (6.2c)]{NSV03}, are used only inside the argument we cite in the proof of Proposition~\ref{prop:effresidual} below.
+The remaining properties of $b_T$ and $b_S$ in \cite[Lemma 6.1]{NSV03}, namely \cite[formulas (6.1b), (6.1c), (6.2b), (6.2c)]{NSV03}, are used below, but only in those parts of the proof of Proposition~\ref{prop:effresidual} which duplicate the proof of \cite[Proposition 6.2]{NSV03}.
 
-The point of \eqref{eq:bubbleproj} is that the transition elements drop out of $\tilde\sigma_h$ when it is tested against a bubble.  Indeed, in definition \eqref{eq:sigmatilde} the $\Thplus$ sum contains $\Pih$ applied to the test function, so it vanishes, while the $\ThC$ sum is an integral over $\Lamh$.  Thus, for every $\varphi \in L^\infty(\Om)$, every $T\in\Th$, and every $S\in\Sh$,
+The purpose of \eqref{eq:bubbleproj} is that the transition elements drop out of $\tilde\sigma_h$ when it is tested against a bubble test function.  Indeed, in definition \eqref{eq:sigmatilde} the $\Thplus$ sum contains $\Pih$ applied to the test function, so it vanishes, while the $\ThC$ sum is an integral over the contact set $\Lamh$.  Thus, for every $\varphi \in L^1(\Om)$, every $T\in\Th$, and every $S\in\Sh$,
 \begin{equation}
 \label{eq:bubblepairing}
   \left<\tilde\sigma_h, \varphi\, b_T\right> = \int_{\Lamh} \sigma_h\, \varphi\, b_T
   \qquad\text{and}\qquad
   \left<\tilde\sigma_h, \varphi\, b_S\right> = \int_{\Lamh} \sigma_h\, \varphi\, b_S,
 \end{equation}
-which is \cite[formula (6.4)]{NSV03}: the discrete non-contact region contributes nothing.  In particular the first identity reads $\int_T \sigma_h \varphi b_T$ if $T \in \ThC$, because $\operatorname{supp} b_T \subset \operatorname{int} T$, and it reads $0$ if $T \in \Thplus$, because then $\operatorname{int} T$ does not meet $\Lamh$.  Note that \eqref{eq:bubblepairing} is blind to which obstacle is active on a given element of $\ThC$; the whole of this subsection is.
+which is \cite[formula (6.4)]{NSV03}, and the discrete non-contact region contributes nothing.  In particular the first identity reads $\int_T \sigma_h \varphi b_T$ if $T \in \ThC$, because $\operatorname{supp} b_T \subset \operatorname{int} T$, and it yields $0$ if $T \in \Thplus$, because then $\operatorname{int} T$ does not meet $\Lamh$.  Note that \eqref{eq:bubblepairing} is blind to which obstacle is active on a given element of $\ThC$; the whole of this subsection is.
+
+Again following \cite[\S 6]{NSV03}, three types of data approximation will be relevant.  Versus the unilateral case, items (ii) and (iii) now come with two copies each, one per obstacle:
+\renewcommand{\labelenumi}{(\roman{enumi})}
+\begin{enumerate}
+\item The \emph{oscillation} of the load is $\|h^2(f-\bar f)\|_{0,\infty;\Om}$, where $\bar f$ is the piecewise-constant function with $\bar f|_T := |T|^{-1}\int_T f$ for $T \in \Th$.  This is $O(h^3)$ for $f \in W^{1,\infty}(\Om)$, because $\|f-\bar f\|_{0,\infty;T} \le h_T\|\nabla f\|_{0,\infty;T}$, and thus typically of higher order than other terms.
+\item On $\omega\subset\bar\Om$, the \emph{obstacle approximations} are
+\begin{equation}
+\label{eq:obstacleapprox}
+  \|(\psiloh - \psilo)^+\|_{0,\infty;\omega} \qquad\text{and}\qquad \|(\psiup - \psiuph)^+\|_{0,\infty;\omega}.
+\end{equation}
+These quantities are bounded by interpolation errors $\|\psilo-\psiloh\|_{0,\infty;\omega}$ and $\|\psiup-\psiuph\|_{0,\infty;\omega}$ respectively, hence they are $O(h^2)$ for obstacles in $W^{2,\infty}$; see Remark~\ref{rem:smoothobstacles}.  Through these approximations, the bounds below will retain the obstacle interpolation errors which are invisible to the corresponding detachment term of \eqref{eq:Eh}, the one measured against the continuum obstacle.
+\item The \emph{discrete obstacle oscillations}: for $\omega \subset \bar\Om$ and $v_h \in \Vh$ set
+\begin{equation}
+\label{eq:jumposc}
+  \bigl\|h\jump{\partial_\nu v_h}\bigr\|_{0,\infty;\omega}
+  := \max\bigl\{ h_S \bigl\|\jump{\partial_\nu v_h}\bigr\|_{0,\infty;S} \,:\, S \in \Sh \text{ with } S \cap \operatorname{int}\omega \ne \emptyset \bigr\},
+\end{equation}
+and use this with $v_h = \psiloh$ and with $v_h = \psiuph$.
+\end{enumerate}
+
+These data-approximation quantities appear on the right side of the lower bounds below, and they cannot generally be removed.  While the load oscillation (i) is negligible for smooth $f$, even for smooth obstacles, terms (ii) and (iii) are $O(h^2)$ like the error itself.
+
+Furthermore, two patches around an element appear in the Propositions below.  For $T\in\Th$, we use both its star $\Uh(T)$ \eqref{eq:star} and the smaller neighborhood
+\begin{equation}
+\label{eq:Tstar}
+  T^* := \bigcup\{T' \in \Th \,:\, T' \text{ shares at least one side with } T\} \ \subset\ \Uh(T).
+\end{equation}
+We also write $\omega_S$ for the union of the two elements meeting along an interior side $S \in \Sh$.
 
 \begin{proposition}[Efficiency I: localized residual]
 \label{prop:effresidual}
@@ -1000,9 +1005,14 @@ The localized residual $\|h^2R_\infty\|_{0,\infty;\Om}$, the boundary datum term
 \end{proposition}
 
 \begin{proof}
-1.  The three terms other than the residual are immediate.  On $\dOm$ we have $u = g$ and $u_h = \Ih g$, so $g - \Ih g = u - u_h$ there.  Because $u \in \mathcal{K}$ satisfies $\psilo \le u \le \psiup$ in $\Om$, we also have the two pointwise bounds $(\psilo - u_h)^+ \le (u-u_h)^+$ and $(u_h - \psiup)^+ \le (u_h-u)^+$, and each is at most $\|u-u_h\|_{0,\infty;T}$ on $T$.  This is the only place where the box constraint enters the proof, and the two obstacles enter symmetrically.
+1.  The three terms other than the residual are immediate, as follows.  On $\dOm$ we have $u = g$ and $u_h = \Ih g$, so $g - \Ih g = u - u_h$ there.  Because $u \in \mathcal{K}$ satisfies $\psilo \le u \le \psiup$ in $\Om$, we also have the two pointwise bounds $(\psilo - u_h)^+ \le (u-u_h)^+$ and $(u_h - \psiup)^+ \le (u_h-u)^+$, and each is at most $\|u-u_h\|_{0,\infty;T}$ on $T$.  This is the only place where the box constraint enters the proof, and the two obstacles enter symmetrically.
 
-2.  For the localized residual, the rest of the proof is identical to steps 2--4 of the proof of \cite[Proposition 6.2]{NSV03}, up to our sign convention for $\sigma_h$ (compare \eqref{eq:Rp} with \cite[formula (3.7)]{NSV03}), and with \cite[formula (3.11)]{NSV03} read in the local form of Lemma~\ref{lem:Ghlocal}.  We record two intermediate bounds from that argument for later use.  For $T \in \Th$ let $\varrho_T := f + \sigma_h$ if $T \in \ThC$ and $\varrho_T := f$ if $T \in \Thplus$, as in \eqref{eq:Rp}.  Then
+2.  For the localized residual, the rest of the proof is identical to steps 2--4 of the proof of \cite[Proposition 6.2]{NSV03}, up to our sign convention\footnote{Compare \eqref{eq:Rp} with \cite[formula (3.7)]{NSV03}.} for $\sigma_h$, and with \cite[formula (3.11)]{NSV03} replaced by our local form Lemma~\ref{lem:Ghlocal}.
+
+3.  Global efficiency follows by taking the maximum over $T \in \Th$, because a test function admissible in $\|\cdot\|_{-2,\infty;T^*}$ is admissible in $\|\cdot\|_{-2,\infty;\bar\Om}$.
+\end{proof}
+
+From the argument in part 2 of the above proof, or from the same content in \cite[Proposition 6.2]{NSV03}, we record two intermediate bounds for later use.  For $T \in \Th$ let $\varrho_T := f + \sigma_h$ if $T \in \ThC$ and $\varrho_T := f$ if $T \in \Thplus$, as in \eqref{eq:Rp}.  Then
 \begin{equation}
 \label{eq:effvolume}
   h_T^2\|\varrho_T\|_{0,\infty;T} \ \preceq\ \|u-u_h\|_{0,\infty;T} + \|\sigma-\tilde\sigma_h\|_{-2,\infty;T} + h_T^2\|f-\bar f\|_{0,\infty;T}.
@@ -1012,8 +1022,6 @@ For an interior side $S \in \Sh$, let $J_S := \jump{\partial_\nu u_h}$, which is
 \label{eq:effjump}
   h_S\|J_S\|_{0,\infty;S} \ \preceq\ \|u-u_h\|_{0,\infty;\omega_S} + \|\sigma-\tilde\sigma_h\|_{-2,\infty;\omega_S} + \|h^2(f-\bar f)\|_{0,\infty;\omega_S}.
 \end{equation}
-Global efficiency follows by taking the maximum over $T \in \Th$, because a test function admissible in $\|\cdot\|_{-2,\infty;T^*}$ is admissible in $\|\cdot\|_{-2,\infty;\bar\Om}$.
-\end{proof}
 
 \subsection{Efficiency of the localized detachment terms}  The two remaining terms of $E_h$ are the localized detachment terms $\|(u_h-\psilo)^+\|_{0,\infty;\ombot}$ and $\|(\psiup-u_h)^+\|_{0,\infty;\omtop}$.  As \cite[\S 6.2]{NSV03} explains for the unilateral case, these computable terms replace the non-computable optimal choices $\|(u_h-u)^+\|_{0,\infty;\ombot}$ and $\|(u-u_h)^+\|_{0,\infty;\omtop}$, which are trivially efficient.  What has to be shown is that the substitution costs only obstacle approximation.
 
