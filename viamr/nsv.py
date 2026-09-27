@@ -5,7 +5,7 @@ from firedrake.petsc import PETSc
 
 
 class NSVMarkingsMixin:
-    r"""Mixed into class VIAMR (see viamr.py): marking by the pointwise a posteriori estimators of Nochetto, Siebert, & Veeser (2003, 2005) for classical obstacle problems.  The public method is nsvmark(), which dispatches to _nsv03mark() or _nsv05mark().  Note that that the 2003 method has been extended to box bounds by Bueler (2026).
+    r"""Mixed into class VIAMR (see viamr.py): marking by the pointwise a posteriori estimators of Nochetto, Siebert, & Veeser (2003, 2005) for classical obstacle problems.  The public method is nsvmark(), which dispatches to _nsv03mark() or _nsv05mark().  Note that the 2003 method has been extended to box bounds by Bueler (2026).
 
     NSVMarkingsMixin is not usable separately from VIAMR, as it calls many VIAMR methods, e.g. fixedratemark(), nodalactive(), and _elemextreme().
     """
@@ -29,10 +29,10 @@ class NSVMarkingsMixin:
         rhotol=None,
         signtol=None,
     ):
-        """For classical obstacle problems, with the Laplacian as the operator, compute marking on the entire domain according to a pointwise a posteriori estimators of Nochetto, Siebert, & Veeser (2003,2005) and Bueler (2026).  The estimator is one of:
+        """For classical obstacle problems, with the Laplacian as the operator, compute marking on the entire domain according to the pointwise a posteriori estimators of Nochetto, Siebert, & Veeser (2003,2005) and Bueler (2026).  The estimator is one of:
 
         * estimator="nsv03":  the local "practical estimator" of NSV03, extended
-          to box constraints bounds = (lb, ub); see _nsv03mark().
+          to box constraints bounds = (lb, ub) by B26; see _nsv03mark().
 
         * estimator="nsv05":  the fully-localized, star-based estimator of NSV05,
           the successor of NSV03, for a lower obstacle only, i.e. bounds =
@@ -112,12 +112,10 @@ class NSVMarkingsMixin:
             a posteriori error control for elliptic obstacle problems.
             Numerische Mathematik, 95(1), 163-195.
 
-        With ub given this is the *box-constrained* form of that estimator, the
-        one derived in doc/nsv-box/box.tex, which extends NSV03 to the two-sided
+        With ub given this is the *box-constrained* form of that estimator (Bueler 2026).
+        This extends NSV03 (which covers the ub=None case) to the two-sided
         constraint chi_lo <= u <= chi_up.  Both obstacles are then live, and the
-        four terms below which refer to an obstacle come in symmetric pairs.  The
-        default ub=None is the unilateral problem of NSV03 itself, in which the
-        upper obstacle is absent and each pair collapses to its lower half.
+        four terms below which refer to an obstacle come in symmetric pairs.
 
         The per-element main formula, NSV03 (7.1) read box-constrained, is
             eta_infty =
@@ -127,7 +125,7 @@ class NSVMarkingsMixin:
                 + 1_{omega_bot} ||(u_h - chi_lo)^+||_infty
                     + 1_{omega_top} ||(chi_up - u_h)^+||_infty       [term 3]
                 + ||g - I_h g||_{infty; partial Omega cap T}         [term 4]
-        But there is a second per-element quantity, the L^d "quadrature indicator" of section 7.1:
+        There is a second per-element quantity, the L^d "quadrature indicator" of section 7.1:
             eta_d = C_1 h_T^2 ||grad(sigma_h)||_{d; Lambda_h cap T}    [term eta_d]
         Both eta_.. are computed on each triangle T in the mesh.
 
@@ -168,19 +166,13 @@ class NSVMarkingsMixin:
         #   is given.  With lb_ufl=None it is also what makes "(lb - u_h)^+" vanish,
         #   since then the continuum obstacle is lb itself, which is representable
         #   in u_h's space.  Symmetrically on the upper side.
-        if lb is None:
-            obstacleerrlo = Function(DG0)
-            gaplo = Function(DG0)
-        else:
-            gaph = Function(CG1).interpolate(uh - lb)
-            assert self._globalextreme(gaph, minimum=True) >= 0.0
-            obstacleerrlo, gaplo = self._obstacleterms(uh, lb, lb_ufl, fdegree)
-        if ub is None:
-            obstacleerrup = Function(DG0)
-            gapup = Function(DG0)
-        else:
-            gaphup = Function(CG1).interpolate(ub - uh)
-            assert self._globalextreme(gaphup, minimum=True) >= 0.0
+        if lb is not None:
+            assert self._globalextreme(Function(CG1).interpolate(uh - lb), minimum=True) >= 0.0
+            obstacleerrlo, gaplo = self._obstacleterms(
+                uh, lb, lb_ufl, fdegree, boxside="lower"
+            )
+        if ub is not None:
+            assert self._globalextreme(Function(CG1).interpolate(ub - uh), minimum=True) >= 0.0
             obstacleerrup, gapup = self._obstacleterms(
                 uh, ub, ub_ufl, fdegree, boxside="upper"
             )
@@ -219,13 +211,13 @@ class NSVMarkingsMixin:
         #   on a wholly lower-active star, the negative part on a wholly
         #   upper-active star, and zero elsewhere.  The two stars are disjoint
         #   because lb < ub, so the two contributions never overlap.
-        bdry_ufl = Constant(0.0)
+        bdry_ufl = 0.0
         if lb is not None:
             starlo = self._starwhollyactive(uh, (lb, None))
-            bdry_ufl = bdry_ufl + starlo * conditional(sigmah > 0.0, sigmah, 0.0)
+            bdry_ufl += starlo * conditional(sigmah > 0.0, sigmah, 0.0)
         if ub is not None:
             starup = self._starwhollyactive(uh, (None, ub))
-            bdry_ufl = bdry_ufl + starup * conditional(sigmah < 0.0, sigmah, 0.0)
+            bdry_ufl += starup * conditional(sigmah < 0.0, sigmah, 0.0)
         bdryval = Function(CG1).interpolate(bdry_ufl)
         DirichletBC(CG1, bdryval, "on_boundary").apply(sigmah)
 
@@ -257,27 +249,16 @@ class NSVMarkingsMixin:
         #    \|.\|* = \|.\|_{\infty; \partial T \setminus \partial \Omega},
         #             i.e. infinity norm along interior edges
         #    [[z]] is the jump in z along an edge
-        v0 = TestFunction(DG0)
-        # The jump must be a *sup over the facets of T of the jump value*, so it is
-        # recovered per facet by _facetjump(), which divides by the facet measure,
-        # and then maximized over each cell's own facets.
-        # _facetjump() gives exterior facets the value zero, which is exactly the
-        # "\setminus \partial \Omega" restriction wanted here.
-        jumpu = self._elemmaxabs(self._facetjump(uh))
-        # Lambda_h, the element-wise contact set; bilaterally it is the union
-        # Lambda_h,bot cup Lambda_h^top of doc/nsv-box/box.tex, and each half is
-        # one thinelemactive() call
-        tlo = (
-            Function(DG0)
-            if lb is None
-            else self.thinelemactive(uh, (lb, None))
-        )
-        tup = (
-            Function(DG0)
-            if ub is None
-            else self.thinelemactive(uh, (None, ub))
-        )
-        tactive = Function(DG0).interpolate(max_value(tlo, tup))
+        if lb is not None:
+            tlo = self.thinelemactive(uh, (lb, None))
+            if ub is None:
+                tactive = tlo
+        if ub is not None:
+            tup = self.thinelemactive(uh, (None, ub))
+            if lb is None:
+                tactive = tup
+        if lb is not None and ub is not None:
+            tactive = Function(DG0).interpolate(max_value(tlo, tup))
         X_ufl = abs(f_ufl + tactive * sigmah)
         # note pages 188-189 in NSV03 regarding use of DG7, to deal with the fact
         # that f_ufl is generally not in CG1:
@@ -286,19 +267,34 @@ class NSVMarkingsMixin:
         #      nodes for 7th order polynomials.""
         # BUT using DG7 this way is really slow because it is so big, so we drop
         # to DG3 by default; DG3.dim() = 10*DG0.dim(), while DG7.dim() ~= 40*DG0.dim()
-        # TODO: Firedrake's DG node set on simplices omits the vertices, so a max
-        # over DG dofs under-samples a sup norm: interpolating x on the unit
-        # triangle gives 0.897 at DG3 and 0.930 at DG4, against 1.0 for CG.  The
-        # bias is toward under-estimation, which is the wrong direction for a
-        # reliability bound.  CG is not a drop-in replacement here, since f_ufl
-        # may be genuinely discontinuous (Example 7.2 builds it from
-        # conditional()), so this needs a decision rather than a rename; the same
-        # applies to the DGf sampling in _nsv05mark().  Contrast
-        # _obstacleterms(), where the sampled quantities are continuous and CG is
-        # used for exactly this reason.
-        DGf = FunctionSpace(mesh, "DG", fdegree)
+        # Note we use variant="equispaced" for a valid element maximum.
+        DGf = FunctionSpace(mesh, "DG", fdegree, variant="equispaced")
+        # The jump must be a *sup over the facets of T of the jump value*, so it is
+        # recovered per facet by _facetjump(), which divides by the facet measure,
+        # and then maximized over each cell's own facets.
+        # _facetjump() gives exterior facets the value zero, which is exactly the
+        # "\setminus \partial \Omega" restriction wanted here.
+        jumpu = self._elemmaxabs(self._facetjump(uh))
         Rinf = Function(DGf).interpolate((jumpu / hT) + X_ufl)
         Rinf = self._elemmaxabs(Rinf)
+        residterm = Function(DG0).interpolate(C0 * hT ** 2 * Rinf)
+
+        # term 4
+        # This is a sup norm over \partial \Omega \cap T, so it is computed as the
+        # elementwise sup of |g - I_h g| on the elements which touch the boundary.
+        # That overestimates the sup over the boundary facets themselves, but it is
+        # an upper bound and so keeps the estimator reliable.
+        CG4 = FunctionSpace(mesh, "CG", 4)  # CG4.dim() ~ 9*DG0.dim()
+        adg = self._elemmaxabs(Function(CG4).interpolate(g_ufl - g))
+        v0 = TestFunction(DG0)
+        touchesbdry = Function(DG0)
+        touchesbdry.dat.data[:] = assemble(v0 * ds).dat.data_ro
+        bdryerr = Function(DG0).interpolate(
+            conditional(touchesbdry > 0.0, 1.0, 0.0) * adg
+        )
+
+        # start to build UFL for eta_inf; see doc string above for formula
+        etainf_ufl = residterm + bdryerr
 
         # term 3
         # The two localized detachment terms, each measured over a star-dilated
@@ -316,43 +312,23 @@ class NSVMarkingsMixin:
         # NSV03's Remark 5.8, where this term drives the initial refinement.
         # Compare _nsv05mark(), whose Lambda_h of (2.20) is likewise a union of
         # whole stars.
-        nodalstrictlo = Function(CG1).interpolate(
-            conditional(sigmah > dualtol, 1.0, 0.0)
-        )
-        ombot = self._elemextreme(nodalstrictlo, minimum=False, defaultval=0.0)
-        blockgaplo = Function(DG0).interpolate(ombot * gaplo)
-        nodalstrictup = Function(CG1).interpolate(
-            conditional(sigmah < -dualtol, 1.0, 0.0)
-        )
-        omtop = self._elemextreme(nodalstrictup, minimum=False, defaultval=0.0)
-        blockgapup = Function(DG0).interpolate(omtop * gapup)
+        if lb is not None:
+            nodalstrictlo = Function(CG1).interpolate(
+                conditional(sigmah > dualtol, 1.0, 0.0)
+            )
+            ombot = self._elemextreme(nodalstrictlo, minimum=False, defaultval=0.0)
+            blockgaplo = Function(DG0).interpolate(ombot * gaplo)
+            etainf_ufl += obstacleerrlo + blockgaplo
+        if ub is not None:
+            nodalstrictup = Function(CG1).interpolate(
+                conditional(sigmah < -dualtol, 1.0, 0.0)
+            )
+            omtop = self._elemextreme(nodalstrictup, minimum=False, defaultval=0.0)
+            blockgapup = Function(DG0).interpolate(omtop * gapup)
+            etainf_ufl += obstacleerrup + blockgapup
 
-        # term 4
-        # This is a sup norm over \partial \Omega \cap T, so it is computed as the
-        # elementwise sup of |g - I_h g| on the elements which touch the boundary.
-        # That overestimates the sup over the boundary facets themselves, but it is
-        # an upper bound and so keeps the estimator reliable.
-        CG4 = FunctionSpace(mesh, "CG", 4)  # CG4.dim() ~ 9*DG0.dim()
-        adg = self._elemmaxabs(Function(CG4).interpolate(g_ufl - g))
-        touchesbdry = Function(DG0)
-        touchesbdry.dat.data[:] = assemble(v0 * ds).dat.data_ro
-        bdryerr = Function(DG0).interpolate(
-            conditional(touchesbdry > 0.0, 1.0, 0.0) * adg
-        )
-
-        # finally compute eta_inf; see doc string above for formula
-        residterm = Function(DG0).interpolate(C0 * hT ** 2 * Rinf)
-        etainf_ufl = (
-            residterm
-            + obstacleerrlo
-            + obstacleerrup
-            + blockgaplo
-            + blockgapup
-            + bdryerr
-        )
+        # evaluate eta_inf onto elements and first marking pass
         etainf = Function(DG0, name="eta_inf").interpolate(etainf_ufl)
-
-        # first marking pass: eta_infty over the whole domain
         mark, _ = self.fixedratemark(etainf, theta, method)
 
         # term eta_d
@@ -382,13 +358,20 @@ class NSVMarkingsMixin:
         # estimator of doc/nsv-box/box.tex in both the bilateral and unilateral cases.
         Eh = (
             self._globalextreme(residterm, minimum=False)
-            + self._globalextreme(obstacleerrlo, minimum=False)
-            + self._globalextreme(obstacleerrup, minimum=False)
-            + self._globalextreme(blockgaplo, minimum=False)
-            + self._globalextreme(blockgapup, minimum=False)
             + self._globalextreme(bdryerr, minimum=False)
             + self._globalpnorm(etad, d)
         )
+        if lb is not None:
+            Eh += (
+                self._globalextreme(obstacleerrlo, minimum=False)
+                + self._globalextreme(blockgaplo, minimum=False)
+            )
+        if ub is not None:
+            Eh += (
+                self._globalextreme(obstacleerrup, minimum=False)
+                + self._globalextreme(blockgapup, minimum=False)
+            )
+
         fields = {"etainf": etainf, "etad": etad, "sigmah": sigmah}
         return (mark, fields, Eh)
 
@@ -549,7 +532,7 @@ class NSVMarkingsMixin:
         # sample the (generally non-polynomial) load, then get its elementwise
         # extremes; note pages 188-189 in NSV03 regarding the use of DG7, and
         # see _nsv03mark() for why we drop to DG3 by default
-        DGf = FunctionSpace(mesh, "DG", fdegree)
+        DGf = FunctionSpace(mesh, "DG", fdegree, variant="equispaced")
         fs = Function(DGf).interpolate(f_ufl)
         fmaxT = self._elemextreme(fs, minimum=False, defaultval=PETSc.NINFINITY)
         fminT = self._elemextreme(fs, minimum=True, defaultval=PETSc.INFINITY)
