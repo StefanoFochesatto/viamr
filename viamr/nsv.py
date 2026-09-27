@@ -5,13 +5,9 @@ from firedrake.petsc import PETSc
 
 
 class NSVMarkingsMixin:
-    r"""Mixed into VIAMR (see viamr.py): marking by the pointwise a posteriori
-    estimators of Nochetto, Siebert, & Veeser for classical obstacle problems.
-    The public method is nsvmark(), which dispatches to _nsv03mark() or
-    _nsv05mark().
+    r"""Mixed into class VIAMR (see viamr.py): marking by the pointwise a posteriori estimators of Nochetto, Siebert, & Veeser (2003, 2005) for classical obstacle problems.  The public method is nsvmark(), which dispatches to _nsv03mark() or _nsv05mark().  Note that that the 2003 method has been extended to box bounds by Bueler (2026).
 
-    NSVMarkingsMixin is not usable separately from VIAMR, as it calls many
-    VIAMR methods, e.g. fixedratemark(), nodalactive(), and _obstacleterms().
+    NSVMarkingsMixin is not usable separately from VIAMR, as it calls many VIAMR methods, e.g. fixedratemark(), nodalactive(), and _elemextreme().
     """
 
     def nsvmark(
@@ -33,19 +29,17 @@ class NSVMarkingsMixin:
         rhotol=None,
         signtol=None,
     ):
-        """For classical obstacle problems, with the Laplacian as the operator,
-        compute marking on the entire domain according to a pointwise a posteriori
-        estimator of Nochetto, Siebert, & Veeser.  The estimator is one of:
+        """For classical obstacle problems, with the Laplacian as the operator, compute marking on the entire domain according to a pointwise a posteriori estimators of Nochetto, Siebert, & Veeser (2003,2005) and Bueler (2026).  The estimator is one of:
 
-          estimator="nsv03":  the local "practical estimator" of NSV03, extended
+        * estimator="nsv03":  the local "practical estimator" of NSV03, extended
           to box constraints bounds = (lb, ub); see _nsv03mark().
 
-          estimator="nsv05":  the fully-localized, star-based estimator of NSV05,
+        * estimator="nsv05":  the fully-localized, star-based estimator of NSV05,
           the successor of NSV03, for a lower obstacle only, i.e. bounds =
           (lb, None); see _nsv05mark().
 
         The inputs uh, bounds, g, f_ufl, g_ufl, bounds_ufl, method, theta,
-        dualtol, and fdegree mean the same for both estimators.  Here g is the
+        dualtol, and fdegree have the same meaning for the two estimators.  Here g is the
         discrete boundary data, f_ufl the source term, g_ufl the boundary values,
         and bounds_ufl = (lb_ufl, ub_ufl) the continuum obstacles, if known.
         The marking strategy method and threshold theta are passed to
