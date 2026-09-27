@@ -857,12 +857,6 @@ The regularized Dirac mass \eqref{eq:delta} and the Riesz representation $w$ of 
 where the hidden constant depends on $\beta$ through $\rho$.
 \end{lemma}
 
-%\begin{proof}
-%Taking $\varphi = w$ in \eqref{eq:green}, then $\varphi = G$ in \eqref{eq:w}, and then applying the representation formula \eqref{eq:Gh-repn},
-%  $$\left<\delta,w\right> = \left<\nabla G,\nabla w\right> = \left<\Gh,G\right> = \left<\Rh,G-\Pih G\right> + \left<\Qh,\Pih G\right>.$$
-%Bound \eqref{eq:Rhbound} controls the first term by $\|h^2R_\infty\|_{0,\infty;\Om}\|D^2G\|_{0,1;\Om}$.  The first inequality of \eqref{eq:Qhbound}, followed by the first estimate of \eqref{eq:Pihprops} with exponent $d' = d/(d-1)$, controls the second by $\|h^2\nabla\sigma_h\|_{0,d;\Lamh}\|DG\|_{0,d/(d-1);\Om}$.  Now apply \eqref{eq:greenbound}.
-%\end{proof}
-
 \begin{proposition}[Pointwise estimate of $|w|$]
 \label{prop:wbound}
 The maximum norm of the Riesz representation $w$ of the Galerkin functional $\Gh$, from \eqref{eq:w}, satisfies
@@ -872,20 +866,7 @@ The maximum norm of the Riesz representation $w$ of the Galerkin functional $\Gh
 \end{equation}
 \end{proposition}
 
-%\begin{proof}
-%Fix $p > d$, let $\alpha$ be as in Lemma~\ref{lem:holder}, and choose $\beta = 1/\alpha$, so that $h_{\min}^{\alpha\beta} = h_{\min}$ in \eqref{eq:holderapplied}.  Given \eqref{eq:wsplit} and Lemma~\ref{lem:mollified}, it suffices to show that the right side of \eqref{eq:holderapplied} is then dominated by the right side of \eqref{eq:wbound}.  We may assume $\operatorname{diam}\Om \le 1$, since rescaling the geometry costs only a constant.
-%
-%For the residual term, $R_p|_T \preceq R_\infty|_T$ pointwise on every $T$, uniformly in $p$: the volume terms of \eqref{eq:Rp} agree, while $\|\jump{\partial_\nu u_h}\|_{0,p;\partial T\setminus\dOm} \le |\partial T|^{1/p}\,\|\jump{\partial_\nu u_h}\|_{0,\infty;\partial T\setminus\dOm}$, and shape regularity turns the resulting factor $h_T^{-1/p'}|T|^{-1/p}|\partial T|^{1/p}$ into $h_T^{-1}$.  Hence, using $h_{\min}\le h_T$ and the boundedness of $\Om$,
-% $$h_{\min}\|hR_p\|_{0,p;\Om} \le \|h^2R_p\|_{0,p;\Om} \preceq \|h^2R_\infty\|_{0,\infty;\Om}.$$
-%
-%For the quadrature term, $\nabla\sigma_h$ is constant on each element, so $\|h^2\nabla\sigma_h\|_{0,p;\Lamh} \approx (\sum_T a_T^p)^{1/p}$ with $a_T := h_T^{2+d/p}|\nabla\sigma_h|_T$, the sum running over the elements of $\Lamh$; the case $p=d$ of the same identity has $a_T$ replaced by $b_T := h_T^{3}|\nabla\sigma_h|_T$.  Now $h_{\min} a_T \le b_T$, because $h_{\min} \le h_T \le h_T^{1-d/p}$ under $\operatorname{diam}\Om\le 1$, and $\ell^p \subset \ell^d$ with $(\sum_T c_T^p)^{1/p} \le (\sum_T c_T^d)^{1/d}$ because $p > d$.  Therefore
-%  $$h_{\min}\|h^2\nabla\sigma_h\|_{0,p;\Lamh} \preceq \Bigl(\sum_T b_T^d\Bigr)^{1/d} \approx \|h^2\nabla\sigma_h\|_{0,d;\Lamh}. \qedhere$$
-%\end{proof}
-
-
-\subsection{Reliability}
-
-Collecting \eqref{eq:barrierbound} and Proposition~\ref{prop:wbound}, define the \emph{pointwise estimator}
+\subsection{Reliability}  Collecting \eqref{eq:barrierbound} and Proposition~\ref{prop:wbound}, define the \emph{pointwise estimator}
 \begin{equation}
 \label{eq:Eh}
 \begin{aligned}
@@ -970,9 +951,7 @@ which reduces to \eqref{eq:dualnormbv} when $\omega = \bar\Om$.  Every test func
 and we write $\omega_S$ for the union of the two elements meeting along an interior side $S \in \Sh$.
 
 
-\subsection{A local bound on the Galerkin functional}
-
-Both efficiency arguments below test $\Gh$ against a locally-supported function, so we first record the local counterpart of \cite[formula (3.11)]{NSV03}.  It is a direct consequence of the second form \eqref{eq:Ghagain} of the Galerkin functional, and, like \eqref{eq:Ghagain} itself, it does not distinguish the obstacles.
+\subsection{A local bound on the Galerkin functional}  Both efficiency arguments below test $\Gh$ against a locally-supported function, so we first record the local counterpart of \cite[formula (3.11)]{NSV03}.  It is a direct consequence of the second form \eqref{eq:Ghagain} of the Galerkin functional, and, like \eqref{eq:Ghagain} itself, it does not distinguish the obstacles.
 
 \begin{lemma}[Local bound on $\Gh$]
 \label{lem:Ghlocal}
@@ -992,10 +971,7 @@ By \eqref{eq:Ghagain}, $\left<\Gh,\varphi\right> = \left<\nabla(u-u_h),\nabla\va
 with no boundary term at any stage, and $|\triangle\varphi_\eps|(\omega) \le |D^2\varphi_\eps|_{\mathrm{var}}(\omega)$ finishes the proof.
 \end{proof}
 
-
-\subsection{Efficiency of the localized residual}
-
-The lower bound for the localized residual uses bubble functions, in the manner of Verf\"urth \cite{Verfurth1996} and Nochetto \cite{Nochetto1995}.  The construction has to be compatible with the averaging operator $\Pih$ of \S \ref{sec:discretization}, in the sense that the bubbles must not disturb $\tilde\sigma_h$ on the transition elements $\Thplus$, and \cite[Lemma 6.1]{NSV03} arranges this by shrinking the balls $B(z)$ in \eqref{eq:Pih} so that they avoid the barycenters of all elements and sides.  Shrinking the balls preserves $B(z) \subset \Uh(z)$, so it changes neither \eqref{eq:Pihprops} and \eqref{eq:PihBV} nor any statement of \S\S \ref{sec:estimator}--\ref{sec:barriers}; only the constants move.  The obstacles play no part in the construction, so we state the result and refer to \cite[Lemma 6.1]{NSV03} for its proof.
+\subsection{Efficiency of the localized residual}  The lower bound for the localized residual uses bubble functions, in the manner of Verf\"urth \cite{Verfurth1996} and Nochetto \cite{Nochetto1995}.  The construction has to be compatible with the averaging operator $\Pih$ of \S \ref{sec:discretization}, in the sense that the bubbles must not disturb $\tilde\sigma_h$ on the transition elements $\Thplus$, and \cite[Lemma 6.1]{NSV03} arranges this by shrinking the balls $B(z)$ in \eqref{eq:Pih} so that they avoid the barycenters of all elements and sides.  Shrinking the balls preserves $B(z) \subset \Uh(z)$, so it changes neither \eqref{eq:Pihprops} and \eqref{eq:PihBV} nor any statement of \S\S \ref{sec:estimator}--\ref{sec:barriers}; only the constants move.  The obstacles play no part in the construction, so we state the result and refer to \cite[Lemma 6.1]{NSV03} for its proof.
 
 We use the retracted bubble functions of \cite[Lemma 6.1]{NSV03}.  There is $\delta \in (0,1)$, depending only on the shape-regularity constant $\gamma^*$, such that if the balls in \eqref{eq:Pih} are replaced by $B(z;\delta\rho_z)$, where $\rho_z := \max\{r > 0 : B(z;r) \subset \Uh(z)\}$, then for every $T \in \Th$ and every $S \in \Sh$ there are bubble functions $b_T, b_S \in W^{2,1}(\Om) \cap H_0^1(\Om) \subset W$, with $\operatorname{supp} b_T$ a compact subset of $\operatorname{int} T$ and $\operatorname{supp} b_S$ a compact subset of $\operatorname{int}\omega_S$, such that
 \begin{equation}
@@ -1039,10 +1015,7 @@ For an interior side $S \in \Sh$, let $J_S := \jump{\partial_\nu u_h}$, which is
 Global efficiency follows by taking the maximum over $T \in \Th$, because a test function admissible in $\|\cdot\|_{-2,\infty;T^*}$ is admissible in $\|\cdot\|_{-2,\infty;\bar\Om}$.
 \end{proof}
 
-
-\subsection{Efficiency of the localized detachment terms}
-
-The two remaining terms of $E_h$ are the localized detachment terms $\|(u_h-\psilo)^+\|_{0,\infty;\ombot}$ and $\|(\psiup-u_h)^+\|_{0,\infty;\omtop}$.  As \cite[\S 6.2]{NSV03} explains for the unilateral case, these computable terms replace the non-computable optimal choices $\|(u_h-u)^+\|_{0,\infty;\ombot}$ and $\|(u-u_h)^+\|_{0,\infty;\omtop}$, which are trivially efficient.  What has to be shown is that the substitution costs only obstacle approximation.
+\subsection{Efficiency of the localized detachment terms}  The two remaining terms of $E_h$ are the localized detachment terms $\|(u_h-\psilo)^+\|_{0,\infty;\ombot}$ and $\|(\psiup-u_h)^+\|_{0,\infty;\omtop}$.  As \cite[\S 6.2]{NSV03} explains for the unilateral case, these computable terms replace the non-computable optimal choices $\|(u_h-u)^+\|_{0,\infty;\ombot}$ and $\|(u-u_h)^+\|_{0,\infty;\omtop}$, which are trivially efficient.  What has to be shown is that the substitution costs only obstacle approximation.
 
 The mechanism is a discrete quadratic-growth statement, the discrete counterpart of \cite[formula (2.9)]{Baiocchi1977}: a nonnegative piecewise-linear function which vanishes at an interior node is controlled on the whole star of that node by the jumps of its normal derivative.  We state it as in \cite[Lemma 6.4]{NSV03}, whose proof concerns $\Vh$ alone and involves no obstacle.
 
@@ -1104,10 +1077,7 @@ Nothing prevents $T \subset \ombot \cap \omtop$, which happens exactly when $T$ 
 Measuring the detachment terms over the dilated sets \eqref{eq:omegas}, rather than over $\{\sigma_h>0\}$ and $\{\sigma_h<0\}$ as \cite{NSV03} does, might be expected to cost an extra ring of elements in the efficiency statement.  It does not.  Regarding $\sigma_h$ as piecewise linear, $\ombot = \Uh(\{\sigma_h>0\})$, because an element on which $\sigma_h$ is somewhere positive has a vertex where $\sigma_h$ is positive, and conversely.  So the elements $T \subset \ombot$ treated by Proposition~\ref{prop:effdetach} are exactly the elements $T$ with $T \cap \{\sigma_h > 0\} \ne \emptyset$ treated by \cite[Proposition 6.3]{NSV03}, and the patch on the right-hand side of \eqref{eq:effdetach} is the same $\Uh(T)$ as theirs.  The reason is that their local bound is already stated over all of $T$, and not over $T \cap \{\sigma_h>0\}$; the dilation adds nothing beyond what the element-wise maximum was taking anyway.
 \end{remark}
 
-
-\subsection{Efficiency of the quadrature estimator}
-
-The remaining term of $E_h$ is the quadrature estimator $\|h^2\nabla\sigma_h\|_{0,d;\Lamh}$, which arises from the mass lumping in definition \eqref{eq:sigmah} of $\sigma_h$.  That lumping is what makes the nodal complementarity of Proposition~\ref{prop:nodalsign} available in the first place, so this term is the price of the whole approach.
+\subsection{Efficiency of the quadrature estimator}  The remaining term of $E_h$ is the quadrature estimator $\|h^2\nabla\sigma_h\|_{0,d;\Lamh}$, which arises from the mass lumping in definition \eqref{eq:sigmah} of $\sigma_h$.  That lumping is what makes the nodal complementarity of Proposition~\ref{prop:nodalsign} available in the first place, so this term is the price of the whole approach.
 
 \begin{proposition}[Efficiency III: quadrature estimator]
 \label{prop:effquad}
@@ -1130,15 +1100,14 @@ Since $T \in \ThC$, $f + \sigma_h = \varrho_T$, so \eqref{eq:effvolume} applies.
 
 As \cite[\S 6.3]{NSV03} observes, the local bound \eqref{eq:effquad} does not obviously imply global efficiency, because passing to global quantities requires summing the left-hand side while the right-hand side is a maximum.  This is a feature of the $L^d$ accumulation in the quadrature term, and it is unrelated to the box constraint: \eqref{eq:effquad} holds on $\Thbot$ and $\Thtop$ elements alike, and its proof, like that of \eqref{eq:effvolume}, never uses a sign of $\sigma_h$.  In practice the marking strategy has to account for the different accumulation, as discussed in \cite[\S 7.1]{NSV03}.
 
-\subsection{Summary regarding efficiency}
-
-Collecting Propositions~\ref{prop:effresidual}, \ref{prop:effdetach}, and \ref{prop:effquad}, every term of the estimator $E_h$ in \eqref{eq:Eh} is locally efficient, up to the load oscillation $\|h^2(f-\bar f)\|_{0,\infty;T}$, the obstacle approximations \eqref{eq:obstacleapprox}, and the discrete obstacle oscillations \eqref{eq:jumposc}.  All of these are second order for data in $W^{2,\infty}$ (Remark~\ref{rem:smoothobstacles}).  Global efficiency follows for every term except the quadrature estimator, exactly as in the unilateral case.  The logarithmic factor $|\log h_{\min}|^2$ multiplying the first two terms of \eqref{eq:Eh} is not recovered by these lower bounds, but on the other hand it comes from linear theory and not from the obstacles \cite[Remark 5.10]{NSV03}.
+\subsection{Summary regarding efficiency}  Collecting Propositions~\ref{prop:effresidual}, \ref{prop:effdetach}, and \ref{prop:effquad}, every term of the estimator $E_h$ in \eqref{eq:Eh} is locally efficient, up to the load oscillation $\|h^2(f-\bar f)\|_{0,\infty;T}$, the obstacle approximations \eqref{eq:obstacleapprox}, and the discrete obstacle oscillations \eqref{eq:jumposc}.  All of these are second order for data in $W^{2,\infty}$ (Remark~\ref{rem:smoothobstacles}).  Global efficiency follows for every term except the quadrature estimator, exactly as in the unilateral case.  The logarithmic factor $|\log h_{\min}|^2$ multiplying the first two terms of \eqref{eq:Eh} is not recovered by these lower bounds, but on the other hand it comes from linear theory and not from the obstacles \cite[Remark 5.10]{NSV03}.
 
 
 \section{Library implementation, and results}
 \label{sec:library}
 
 TODO: discuss the VIAMR implementation and show brief results
+
 
 \section{Discussion and outlook}
 \label{sec:discuss}
@@ -1147,7 +1116,10 @@ It is worth recording where the bilateral case actually costs something relative
 
 TODO: some kind of outlook?
 
-\section{Declaration of generative artifical intelligence usage}  \label{sec:ai}  During the preparation of this manuscript, the author used Claude Opus 5.5 to propose aspects of the extension from the unilateral case \cite{NSV03} to box constraints, to edit the language, and to generate certain implementations and tests within the VIAMR library.  For cases where Claude was used, the \href{https://github.com/StefanoFochesatto/viamr}{corresponding repository commit messages} acknowledge AI usage.  The author, who thoroughly reviewed, edited, and validated the resulting content, assumes full and sole responsibility for the originality, accuracy, and integrity of the entire content of this work.
+
+\section{Declaration of generative artifical intelligence usage}  \label{sec:ai}
+
+During the preparation of this manuscript, the author used Claude Opus 5.5 to propose aspects of the extension from the unilateral case \cite{NSV03} to box constraints, to edit the language, and to generate certain implementations and tests within the VIAMR library.  For cases where Claude was used, the \href{https://github.com/StefanoFochesatto/viamr}{corresponding repository commit messages} acknowledge AI usage.  The author, who thoroughly reviewed, edited, and validated the resulting content, assumes full and sole responsibility for the originality, accuracy, and integrity of the entire content of this work.
 
 \bibliographystyle{siamplain}
 \bibliography{box}
