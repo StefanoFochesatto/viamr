@@ -138,15 +138,15 @@ class NSVMarkingsMixin:
 
               omega_bot = U_h({sigma_h > 0}),   omega_top = U_h({sigma_h < 0}),
 
-          so an element counts if *some* vertex has a strictly signed multiplier.  NSV03 (7.1) instead uses the bare set {sigma_h < 0} in their opposite sign convention, requiring *every* vertex; the dilation is forced by the box constraint, because on a transition element sigma_h changes sign and the affine argument justifying the bare set fails.  The star dilation is explained in doc/nsv-box/box.tex, which also notes that the dilated set contains the bare one, so this stays reliable unilaterally.  One consequence: unlike the bare set, omega_bot does not force the term to zero when the continuum obstacle is absent, since an element with one strictly active vertex and two inactive ones has a nonzero gap.
+          so an element counts if *some* vertex has a strictly signed multiplier.  NSV03 (7.1) instead uses the bare point set {sigma_h < 0} in their opposite sign convention.  In the bilateral case the dilation is forced by the box constraint, because on a transition element sigma_h changes sign and the affine argument justifying the bare set fails.  The star dilation is explained in doc/nsv-box/box.tex, which also notes that the dilated set contains the bare one, so this stays reliable unilaterally.
 
           term 4:  Estimates the boundary interpolation error, and we use a formula which is correct if g is in CG4.  Being a sup norm over partial Omega cap T, it is computed as the elementwise sup of |g - I_h g| over the elements touching the boundary.
 
-          term eta_d:  Controls the mass-lumping/quadrature error incurred when computing sigma_h (see sec. 6.3 and 7.1 in NSV03).  sigma_h is CG1, so grad(sigma_h) is elementwise constant, and its L^d(T) norm is |grad(sigma_h)|_T * |T|^{1/d}.  Localized to Lambda_h (the discrete contact set, approximated here by tactive below, the same "neighborhood active" indicator used for term 1's X) because sigma = 0 off the contact set (see (1.2) in NSV03), so grad(sigma_h) there is quadrature noise rather than signal.  Bilaterally Lambda_h is the union of the lower and upper element-wise contact sets.  C_1=0.01 is the practical value used by NSV03 in (7.1).
+          term eta_d:  Controls the mass-lumping/quadrature error incurred when computing sigma_h (see sec. 6.3 and 7.1 in NSV03).  sigma_h is CG1, so grad(sigma_h) is elementwise constant, and its L^d(T) norm is |grad(sigma_h)|_T * |T|^{1/d}.  Localized to Lambda_h (the discrete contact set, approximated here by tactive below, the same "neighborhood active" indicator used for term 1's X) because the quadrature functional Q_h, defined before NSV03 (3.5) and bounded in (3.9), sums only over the elements of Lambda_h.  On the remaining elements the lumping I_h is already built into sigmatilde_h.  Bilaterally Lambda_h is the union of the lower and upper element-wise contact sets.  C_1=0.01 is the practical value used by NSV03 in (7.1).
 
         Regarding eta_d, NSV03 sec. 7.1 notes that it "exhibits different accumulation" than eta_infty.  That is, as a genuine L^d(Lambda_h) norm, it aggregates over T by an L^d-type sum.  Mixing both into one scalar before marking would let eta_d's different scaling distort the max-based threshold.  Following NSV03, we therefore mark in two separate passes.  First on eta_infty, then on eta_d restricted to Lambda_h, and then take the union.  NSV03 further qualifies that the second pass only runs "provided quadrature dominates the estimator," so the second pass runs only if max(eta_d) > etadratio * max(eta_infty).  NSV03 does not give a precise numerical criterion for "dominates", so etadratio is exposed as a parameter.
 
-        Returns (mark, fields, Eh), where fields = {"etainf", "etad", "sigmah"} holds the DG0 fields eta_infty and eta_d and the CG1 residual sigma_h.  Eh is the scalar estimator Etilde_h of (7.1) itself, so it is the quantity which bounds max(||u - u_h||_{0,inf;Omega}, ||sigma - sigmatilde_h||_{-2,inf;Omega}), and thus the right numerator for an effectivity index.  (Bilaterally, the reliability theorem of doc/nsv-box/box.tex gives the ||u - u_h||_{0,inf;Omega} half of that bound, and its residual estimate gives the other half, up to a constant.)  Each of its terms is accumulated in its own norm: the sup-norm terms are maximized separately, since (7.1) adds the global norms rather than maximizing their elementwise sum eta_infty; and eta_d is accumulated as an L^d-type sum of d-th powers.
+        Returns (mark, fields, Eh), where fields = {"etainf", "etad", "sigmah"} holds the DG0 fields eta_infty and eta_d and the CG1 residual sigma_h.  Eh is the scalar estimator Etilde_h of (7.1) itself, in which the factors C_i |log h_min|^2 of E_h are replaced by constants.  The bound max(||u - u_h||_{0,inf;Omega}, ||sigma - sigmatilde_h||_{-2,inf;Omega}) <= E_h of NSV03 Theorem 5.4 is thus not proven for Etilde_h, but Etilde_h is the practical surrogate for E_h, and thus the right numerator for an effectivity index.  (Bilaterally, the reliability theorem of doc/nsv-box/box.tex gives the ||u - u_h||_{0,inf;Omega} half of the E_h bound, and its residual estimate gives the other half, up to a constant.)  Each of its terms is accumulated in its own norm: the sup-norm terms are maximized separately, since (7.1) adds the global norms rather than maximizing their elementwise sum eta_infty; and eta_d is accumulated as an L^d-type sum of d-th powers.
         """
         # mesh quantities
         mesh = uh.function_space().mesh()
@@ -302,16 +302,13 @@ class NSVMarkingsMixin:
         #     omega_bot = U_h({sigma_h > 0}),   omega_top = U_h({sigma_h < 0}).
         # A star dilation of a nodal set is a single node -> element max, so an
         # element lands in omega_bot exactly when *some* vertex has a strictly
-        # positive multiplier.  NSV03 (7.1) uses the bare set instead, an
-        # element -> min requiring *every* vertex; doc/nsv-box/box.tex explains
+        # positive multiplier.  NSV03 (7.1) uses the bare point set
+        # {sigma_h > 0} instead, and doc/nsv-box/box.tex explains
         # why the box constraint forces the dilation, and notes that the dilated
         # set contains the bare one, so the unilateral estimator stays reliable.
-        # Because of that enlargement the term does not degenerate when
-        # continuum obstacle is absent, in contrast to the bare set, where
-        # complementarity makes the gap vanish at exactly the nodes tested.  This is the situation of
-        # NSV03's Remark 5.8, where this term drives the initial refinement.
         # Compare _nsv05mark(), whose Lambda_h of (2.20) is likewise a union of
-        # whole stars.
+        # whole stars.  Strictness is tested against dualtol rather than zero,
+        # because sigma_h at inactive nodes is solver noise of either sign.
         if lb is not None:
             nodalstrictlo = Function(CG1).interpolate(
                 conditional(sigmah > dualtol, 1.0, 0.0)
