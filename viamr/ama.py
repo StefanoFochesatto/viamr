@@ -10,7 +10,7 @@ except ImportError:
 
 
 class AMAMixin:
-    r"""Mixed into VIAMR (see viamr.py): construct metrics for metric-based
+    r"""Mixed into class VIAMR (see viamr.py): construct metrics for metric-based
     mesh adaptation via the Animate library.  Note AMA = "averaged-metric adaptation".
     This approach is an alternative to the marking + skeleton-based-refinement
     methods that are the rest of the class.

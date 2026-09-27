@@ -4,7 +4,7 @@ from firedrake import *
 
 
 class SetDiagnosticsMixin:
-    r"""Mixed into VIAMR (see viamr.py): diagnostic and measurement methods
+    r"""Mixed into class VIAMR (see viamr.py): diagnostic and measurement methods
     for computed sets, namely jaccard(), hausdorff2D(), and
     freeboundarygraph2D().
 
