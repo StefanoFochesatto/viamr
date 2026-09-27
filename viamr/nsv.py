@@ -1,4 +1,5 @@
 import numpy as np
+from pyop2.mpi import MPI
 from firedrake import *
 from firedrake.petsc import PETSc
 
