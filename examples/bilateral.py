@@ -3,19 +3,15 @@
 #     -1 <= u <= 1    everywhere
 #     -Delta u = f    in inactive set
 #
-# Has an exact solution, with non-empty lower and upper active (contact) sets.
-# We are not aware of such a verification case in the literature, thus
-# this is an original construction.
-#
-# On Omega = (-2,2)^2, u=u(r) is radial in r = sqrt(x_1^2+x_2^2):
+# On Omega = (-2,2)^2, the exact solution is u(r) for r = sqrt(x_1^2+x_2^2):
 #
 #     r <= 0.5        upper contact,  u = 1
-#     0.5 <= r <= 1   free,           u = 1 - 6s^2 + 4s^3,          s = 2r - 1
+#     0.5 <= r <= 1   inactive,       u = 1 - 6s^2 + 4s^3,          s = 2r - 1
 #     1 <= r <= 1.5   lower contact,  u = -1
-#     1.5 <= r <= 2   free,           u = -1 + 6t^2 - 8t^3 + 3t^4,  t = 2r - 3
-#     r >= 2          free,           u = 0
+#     1.5 <= r <= 2   inactive,       u = -1 + 6t^2 - 8t^3 + 3t^4,  t = 2r - 3
+#     r >= 2          inactive,       u = 0
 #
-# and the load is
+# and the load f is continuous:
 #
 #     f = 48                                     r <= 0.5
 #     f = 48 - 96 s + 24 s(1-s)/r                0.5 <= r <= 1     (48 -> -48)
@@ -23,35 +19,43 @@
 #     f = -48 + 192 t - 144 t^2 - 24 t(1-t)^2/r  1.5 <= r <= 2     (-48 -> 0)
 #     f = 0                                      r >= 2
 #
+# The fixed Dirichlet boundary condition is g=0 on the boundary of the square,
+# entirely in the (closure of the) inactive set.
+#
 # Note that the residual sigma = -Lap(u) - f satisfies sigma = -48 <= 0 on the
 # upper-contact disc and sigma = +48 >= 0 on the lower-contact annulus, and
 # sigma = 0 on the other three (inactive) regions.  Also u is C^1 across every
 # free boundary, since u' = -24 s(1-s) and u' = 24 t(1-t)^2 both vanish at their
-# endpoints, so no spurious measure sits on a free boundary.  The quartic on the
-# outer annulus makes u'(2) = u''(2) = 0, which is what lets f be continuous
-# everywhere, including where u meets the u = 0 corner region.  Every boundary
-# point of the square has r >= 2, and g = 0.
+# endpoints, and thus no singular measure sits on a free boundary.  The quartic on
+# the outer annulus makes u'(2) = u''(2) = 0, which is what lets f be continuous
+# everywhere, including where u meets the u = 0 corner region.
 #
-# The free boundaries are circles, so no triangulation aligns with them, and the
-# transition elements where sigma_h changes sign are genuinely present.  See
-# doc/box.tex for discussion of the NSV03 method extension to box bounds as here.
+# The free boundaries are circles, so no triangulation aligns with them, and also
+# there exist transition elements where sigma_h changes sign.
 #
-# usage:
-#   python3 bilateral.py                 both methods; generates .png figures
-#   python3 bilateral.py -targetnodes 4e4
+# Both UDO+BR and NSV03/B26 methods are applied (see doc/nsv-box/box.tex), and the
+# code generates .pvd from both methods, as well as .png figures showing performance.
+#
+# Runs:  python3 bilateral.py -h               # help
+#        python3 bilateral.py                  # good .pvd for paper
+#        python3 bilateral.py -target 5.0e5    # .png for performance figure (or -no_udo)
 
 from argparse import ArgumentParser
 
 parser = ArgumentParser(
-    description="Compare AMR by UDO+BR and NSV03 on a bilateral obstacle problem, both methods in their box-constrained form."
+    description="Compare AMR by UDO+BR and NSV03/B26 on a bilateral obstacle problem."
 )
 parser.add_argument(
-    "-maxlevels", type=int, default=10, metavar="N",
-    help="backstop on AMR levels [default=10]",
+    "-maxlevels", type=int, default=15, metavar="N",
+    help="backstop on AMR levels [default=15]",
 )
 parser.add_argument(
-    "-targetnodes", type=float, default=1.0e4, metavar="X",
-    help="stop refining once this many nodes is met [default=1.0e4]",
+    "-no_udo", action="store_true", default=False,
+    help="do not include UDO+BR method (e.g. for paper figures)",
+)
+parser.add_argument(
+    "-target", type=float, default=2.0e3, metavar="X",
+    help="stop refining at this many nodes [default=2.0e3]",  # increase for performance study
 )
 parser.add_argument(
     "-theta", type=float, default=0.5, metavar="X",
@@ -69,7 +73,7 @@ from firedrake.petsc import PETSc
 
 print = PETSc.Sys.Print  # enables correct printing in parallel
 
-methods = ["UDOBR", "NSV03"]
+methods = ["NSV03"] if args.no_udo else ["NSV03", "UDOBR"]
 
 # parameters
 nUDO = 0
@@ -120,7 +124,7 @@ sp = {
 
 
 def errornorm_Linf(amr, u, uh):
-    """Approximate sup-norm error, the norm NSV03's theory targets; same
+    """Approximate sup-norm error, the NSV03 target norm.  Same
     technique _nsv03mark() uses internally for non-polynomial data."""
     W = FunctionSpace(uh.function_space().mesh(), "CG", 4)
     return amr.scalarrange(Function(W).interpolate(abs(u - uh)))[1]
@@ -172,10 +176,6 @@ for method in methods:
         print(f"    |u-u_h|_2 = {errsl2[-1]:.3e}, |u-u_h|_inf = {errsinf[-1]:.3e}")
 
         if method == "UDOBR":
-            # box form: fbmark() unions the two one-sided UDO marks, as in
-            # examples/pollutant.py, while the inactive-set estimator takes the
-            # pair, so that it restricts to the elements touching *neither*
-            # obstacle
             fmark, _, _ = amr.fbmark(uh, (lb, ub), udo_n=nUDO)
             residual = -div(grad(uh)) - f_ufl
             (imark, _, Eh) = amr.inactivemark(
@@ -193,7 +193,7 @@ for method in methods:
             smin, smax = amr.scalarrange(sigmah)
             print(f"    sigma_h range = [{smin:.2f}, {smax:.2f}] (exact: [-48, 48])")
             errtarget = errsinf[-1]
-            estname = "Etilde_h (NSV03 box, sup norm)"
+            estname = "Etilde_h (sup norm)"
         else:
             raise NotImplementedError
         ests.append(Eh)
@@ -202,7 +202,7 @@ for method in methods:
         print(f"    {estname} = {Eh:.3e}, marked = {amr.countmark(mark)}, "
               f"effectivity = {eff:.3f}")
 
-        if dofs[-1] > args.targetnodes or j == args.maxlevels - 1:
+        if dofs[-1] > args.target or j == args.maxlevels - 1:
             break
         mesh = amr.refinesbr2D(mesh, mark)
 
@@ -228,29 +228,30 @@ if mesh.comm.rank == 0:
 
     print("")
     print("generating figures bilateral_*.png ...")
-    markers = {"UDOBR": "ko", "NSV03": "bs"}
 
-    for tag, idx, ylab, power in [
-        ("l2", 1, "norm error |u-u_h|_2", -1.0),
-        ("linf", 2, "sup norm error |u-u_h|_inf", -1.0),
-    ]:
-        plt.figure()
-        for meth in methods:
-            dd, ee = np.array(results[meth][0]), np.array(results[meth][idx])
-            plt.loglog(dd, ee, markers[meth], label=meth)
-        y = dd ** power
-        plt.loglog(dd, y * ee[0] / y[0], "k:", label="DOFs^(-1) = O(h^2)")
-        plt.legend()
-        plt.grid(True)
-        plt.xlabel("DOFs")
-        plt.ylabel(ylab)
-        plt.title(f"bilateral problem: {ylab}")
-        plt.savefig(f"bilateral_convergence_{tag}.png")
+    markers = {"UDOBRl2": "ko",
+               "UDOBRlinf": "ks",
+               "NSV03l2": "bo",
+               "NSV03linf": "bs"}
+    plt.figure()
+    for meth in methods:
+        ddinf, eeinf = np.array(results[meth][0]), np.array(results[meth][2])
+        plt.loglog(ddinf, eeinf, markers[meth+"linf"], label=meth + " |u-u_h|_inf")
+    for meth in methods:
+        dd2, ee2 = np.array(results[meth][0]), np.array(results[meth][1])
+        plt.loglog(dd2, ee2, markers[meth+"l2"], markerfacecolor="w", label=meth + " |u-u_h|_2")
+    y = ddinf ** -1.0  # use last linf value for normalization
+    plt.loglog(ddinf, y * eeinf[0] / y[0], "k:", label="DOFs^(-1) = O(h^2)")
+    plt.legend()
+    plt.grid(True)
+    plt.xlabel("DOFs")
+    plt.ylabel("error norm")
+    plt.savefig(f"bilateral_convergence.png")
 
-    # Each method's estimator is compared to the norm that method targets: the
-    # energy norm on the doubly-inactive set for BR78, and the sup norm for
-    # NSV03.  The two effectivities are therefore not comparable to each other,
-    # only each to the ideal value 1.
+    # Each method's estimator is compared to the norm that method targets:
+    # energy norm on inactive set for BR78; sup norm for NSV03.
+    markers = {"UDOBR": "ko",
+               "NSV03": "bo"}
     plt.figure()
     for meth in methods:
         dd, ef = np.array(results[meth][0]), np.array(results[meth][5])
@@ -258,6 +259,6 @@ if mesh.comm.rank == 0:
     plt.legend()
     plt.grid(True)
     plt.xlabel("DOFs")
-    plt.ylabel("effectivity = estimator / error in targeted norm")
-    plt.title("bilateral problem: effectivity")
+    plt.ylabel("effectivity = estimator / error")
+    #plt.title("bilateral problem: effectivity")
     plt.savefig("bilateral_effectivity.png")
