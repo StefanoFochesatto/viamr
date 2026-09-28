@@ -1,32 +1,33 @@
-# Compare AMR methods on the two obstacle problems used by Nochetto, Siebert,
-# and Veeser to demonstrate their pointwise a posteriori estimators.  Both have
-# the Laplacian as the operator and a unilateral lower obstacle.
+# Compare AMR methods on two classical, unilateral obstacle problems used by
+# Nochetto, Siebert, and Veeser (2003, 2005) to demonstrate pointwise a posteriori
+# estimators:
 #
 #   -prob easy     "7.2 Example: Constant Obstacle" from NSV03 =
 #                    Nochetto, R. H., Siebert, K. G., & Veeser, A. (2003).
 #                    Pointwise a posteriori error control for elliptic obstacle
 #                    problems.  Numer. Math. 95(1), 163-195.
-#                  The obstacle is chi = 0 on the square (or cube) of side 2,
-#                  and the exact solution is known, so this problem also
-#                  generates convergence and effectivity .png figures.
+#                  Versions exist in 2D and 3D (-dim 2|3).  The obstacle is zero
+#                  on the square (or cube) of side 2.  The exact solution is known,
+#                  so convergence and effectivity .png figures are generated.
 #
 #   -prob pyramid  "3.2 Pyramid obstacle" from NSV05 =
 #                    Nochetto, R. H., Siebert, K. G., & Veeser, A. (2005). Fully
 #                    localized a posteriori error estimators and barrier sets for
 #                    contact problems.  SIAM J. Numer. Anal. 42(5), 2118-2135.
-#                  The obstacle is a pyramid on the diamond domain.  No exact
-#                  solution is known, so only an estimator .png figure is
-#                  generated, and there are no error norms or effectivities.
+#                  The obstacle is a pyramid on the diamond domain.  No exact solution
+#                  is known; an estimator .png figure is without effectivities.
 #
 # usage:
-#   python3 nsv.py                  easy problem in 2D; generates .png figures
+#   python3 nsv.py -h               help
+#   python3 nsv.py                  easy problem in 2D
 #   python3 nsv.py -dim 3           easy problem in 3D; needs Netgen
 #   python3 nsv.py -prob pyramid    pyramid problem
+#   python3 nsv.py -target 2.0e5    performance graph
 
 from argparse import ArgumentParser
 
 parser = ArgumentParser(
-    description="Compare AMR by UDO+BR, NSV03, and NSV05 on the two obstacle problems from Nochetto, Siebert, & Veeser (2003, 2005)."
+    description="Compare AMR by UDO+BR, NSV03, and NSV05 on two obstacle problems from Nochetto, Siebert, & Veeser (2003, 2005)."
 )
 parser.add_argument(
     "-dim",
@@ -39,9 +40,9 @@ parser.add_argument(
 parser.add_argument(
     "-maxlevels",
     type=int,
-    default=12,
+    default=20,
     metavar="N",
-    help="backstop on AMR levels [default=12]",
+    help="backstop on AMR levels [default=20]",
 )
 parser.add_argument(
     "-prob",
@@ -52,11 +53,11 @@ parser.add_argument(
     help="which obstacle problem to solve [default=easy]",
 )
 parser.add_argument(
-    "-targetnodes",
+    "-target",
     type=float,
-    default=1.0e4,
+    default=2.0e3,
     metavar="X",
-    help="stop refining once this many nodes is met [default=1.0e4]",
+    help="stop refining once this many nodes is met [default=2.0e3]",  # increase for performance
 )
 args, passthroughoptions = parser.parse_known_args()
 
@@ -376,7 +377,7 @@ for method in methods:
             print(line)
 
         # done with this method if we reach target complexity, or run out of levels
-        if dofs[-1] > args.targetnodes or j == args.maxlevels - 1:
+        if dofs[-1] > args.target or j == args.maxlevels - 1:
             break
 
         # get next mesh by refinement
