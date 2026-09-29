@@ -6,6 +6,13 @@
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta}
 
+\usepackage{graphicx}
+\ifpdf
+  \DeclareGraphicsExtensions{.eps,.pdf,.png,.jpg}
+\else
+  \DeclareGraphicsExtensions{.eps}
+\fi
+
 % hyperref should be the last package we load
 \usepackage[pdftex,
 colorlinks=true,
@@ -17,14 +24,15 @@ urlcolor=blue,
 
 \numberwithin{equation}{section}
 
+\theoremstyle{theorem}
 \newtheorem{theorem}{Theorem}[section]  % numbering from section number
-
 \newtheorem{proposition}[theorem]{Proposition}
 \newtheorem{lemma}[theorem]{Lemma}
 \newtheorem{corollary}[theorem]{Corollary}
 
 \theoremstyle{definition}
 \newtheorem{remark}[theorem]{Remark}
+\newtheorem{example}[theorem]{Example}
 
 \newcommand{\eps}{\epsilon}
 \newcommand{\Om}{\Omega}
@@ -1115,6 +1123,33 @@ As \cite[\S 6.3]{NSV03} observes, the local bound \eqref{eq:effquad} does not ob
 \label{sec:library}
 
 TODO: discuss the VIAMR implementation and show brief results
+
+\begin{example} \label{ex:bilateral}
+To test the box-constraints estimator \eqref{eq:Eh} we constructed a radial exact solution $u(r)$, $r=\sqrt{x_1^2+x_2^2}$, of a bilateral obstacle problem on the square $\Omega=(-2,2)^2$ (Figure \ref{fig:bilateral}).  The box constraints are $\psilo=-1\le u\le 1=\psiup$, and the fixed boundary condition is $g=0$ on $\partial\Omega$.  The upper constact set $\Ctop$ is the disk $r\le 1/2$ while the lower contact set $\Cbot$ is the annulus $1\le r\le 3/2$.  The $u(r)$ is piecewise-quartic and $C^1$ across each free boundary.
+\end{example}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.45\textwidth]{figs/bilateral-surf.png}
+\caption{Solution $u_h$ of Example \ref{ex:bilateral} on a refined mesh.}
+\label{fig:bilateral}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+\mbox{\includegraphics[width=0.4\textwidth]{figs/bilateral-mark-4.png}
+\qquad\includegraphics[width=0.4\textwidth]{figs/bilateral-mark-7.png}}
+\caption{At coarser resolutions (left: 3 levels of refinement) marking covers large parts of the active set because of transitional elements.  Later in the refinement path (right: 6 levels), little of the active sets are being marked, while marking continues in the inactive set and very close to the well-resolved free boundary.}
+\label{fig:bilateralmark}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+\mbox{\includegraphics[width=0.47\textwidth]{figs/bilateral-conv.png}
+\qquad\includegraphics[width=0.465\textwidth]{figs/bilateral-eff.png}}
+\caption{FIXME}
+\label{fig:bilateralperf}
+\end{figure}
 
 
 \section{Discussion and outlook}
