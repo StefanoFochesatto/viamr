@@ -12,6 +12,7 @@
 \else
   \DeclareGraphicsExtensions{.eps}
 \fi
+\usepackage[export]{adjustbox} % Extends \includegraphics with 'valign'
 
 % hyperref should be the last package we load
 \usepackage[pdftex,
@@ -24,15 +25,17 @@ urlcolor=blue,
 
 \numberwithin{equation}{section}
 
-\theoremstyle{theorem}
+\theoremstyle{plain}
 \newtheorem{theorem}{Theorem}[section]  % numbering from section number
 \newtheorem{proposition}[theorem]{Proposition}
 \newtheorem{lemma}[theorem]{Lemma}
 \newtheorem{corollary}[theorem]{Corollary}
 
 \theoremstyle{definition}
-\newtheorem{remark}[theorem]{Remark}
 \newtheorem{example}[theorem]{Example}
+
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
 
 \newcommand{\eps}{\epsilon}
 \newcommand{\Om}{\Omega}
@@ -93,7 +96,7 @@ The VIAMR library\footnote{\href{https://github.com/StefanoFochesatto/viamr}{git
 
 This paper extends the \cite{NSV03} estimator to the bilateral or box-constrained case, that is, with continuous lower \emph{and upper} bounds.  Theorem~\ref{thm:reliability} shows that our estimator $E_h$, defined in \eqref{eq:Eh}, bounds the error $\|u-u_h\|_{0,\infty;\Om}$, and \S \ref{sec:efficiency} shows that each term of $E_h$ is locally efficient, up to oscillation terms.  However, we leave open the further refinements of \cite{NSV05} in the bilateral setting, namely full localization and barrier sets; see Remark~\ref{rem:localization}.  Furthermore, proven reliability and efficiency of this kind are generally not available for nonlinear and/or degenerate operators, nor for the heuristic methods in the VIAMR library.
 
-We are not aware of any pointwise \emph{a posteriori} theory for the bilateral problem, and this motivates the present paper.  Somewhat nearby, Ot\'arola, Rankin, \& Salgado \cite{Otarolaetal2019} prove reliable and efficient maximum-norm \emph{a posteriori} bounds for a problem with genuine box constraints, using the machinery of \cite{NSV03}.  However, their constrained variable is a control, determined by a pointwise projection of the adjoint state, so there is no free boundary of the present kind, and no pointwise barrier construction like that in \S \ref{sec:barriers}.  By contrast, our constrained variable is the solution of the VI itself.
+We are not aware of any pointwise \emph{a posteriori} theory for the bilateral problem, and this motivates the present paper.  FIXME no implementation in ALBERTA apparently.\footnote{The repository cited by \cite{Siebert2011} seems to no longer exist, but we searched \href{https://gitlab.com/alberta-fem/alberta3}{gitlab.com/alberta-fem/alberta3}, which has been recently maintained.  A broader internet search found no implementations.}  Somewhat nearby, Ot\'arola, Rankin, \& Salgado \cite{Otarolaetal2019} prove reliable and efficient maximum-norm \emph{a posteriori} bounds for a problem with genuine box constraints, using the machinery of \cite{NSV03}.  However, their constrained variable is a control, determined by a pointwise projection of the adjoint state, so there is no free boundary of the present kind, and no pointwise barrier construction like that in \S \ref{sec:barriers}.  By contrast, our constrained variable is the solution of the VI itself.
 
 The sections of this paper form two major parts.  Sections \ref{sec:setup} and \ref{sec:discretization} form the first part; they state the continuum bilateral problem, quantify the separation of its two contact sets, and build the discretization.  Nothing in the first part is specific to the constructed estimators.  For the second part, Sections \ref{sec:estimator} through \ref{sec:efficiency} are the bilateral form of the estimator of \cite{NSV03}, which is assembled from element-wise contact sets, and they prove reliability, via continuous barrier functions, and efficiency.  Section \ref{sec:discuss} concludes with a discussion of the implementation, and an outlook.
 
@@ -1119,38 +1122,42 @@ As \cite[\S 6.3]{NSV03} observes, the local bound \eqref{eq:effquad} does not ob
 \subsection{Summary regarding efficiency}  Collecting Propositions~\ref{prop:effresidual}, \ref{prop:effdetach}, and \ref{prop:effquad}, every term of the estimator $E_h$ in \eqref{eq:Eh} is locally efficient, up to the load oscillation $\|h^2(f-\bar f)\|_{0,\infty;T}$, the obstacle approximations \eqref{eq:obstacleapprox}, and the discrete obstacle oscillations \eqref{eq:jumposc}.  All of these are second order for data in $W^{2,\infty}$ (Remark~\ref{rem:smoothobstacles}).  Global efficiency follows for every term except the quadrature estimator, exactly as in the unilateral case.  The logarithmic factor $|\log h_{\min}|^2$ multiplying the first two terms of \eqref{eq:Eh} is not recovered by these lower bounds, but on the other hand it comes from linear theory and not from the obstacles \cite[Remark 5.10]{NSV03}.
 
 
-\section{Library implementation, and results}
+\section{Implementation and results}
 \label{sec:library}
 
-TODO: discuss the VIAMR implementation and show brief results
+The pointwise estimator $E_h$ \eqref{eq:Eh} has been implemented as element-wise local error indicators \cite{BangerthRannacher2003,Siebert2011} in the VIAMR Python library.\footnote{Download the library and its documentation from \href{https://github.com/StefanoFochesatto/viamr}{github.com/StefanoFochesatto/viamr}.}  The library builds on the Firedrake FE package \cite{Rathgeberetal2016}, itself based on the parallel unstructured mesh abstraction from PETSc \cite{Langeetal2016}.  In this section we give show three basic examples which exhibit some features of the estimator.
+
+The implementation adapts the ``practical estimator'' of \cite[equation (7.1)]{NSV03} to the bilateral case.  As in that approach, we group all terms into a local indicator $\eta_{\infty,T}$, except the localized quadrature indicator $\eta_{d,T}$, which is only used when quadrature error dominates.  We lump the $|\log h_{\min}|^2$ factor into the constants, with the same default values; we made no attempt to tune these constants.  The local indicators are computed as scalar fields in the discontinuous piecewise-constant space.  Element-wise maxima of data $g,\psilo,\psiup$ are evaluated using high-degree nodal evaluation.  Element marking is based on the maximum strategy \cite{Siebert2011} and mesh refinement is skeleton-based \cite{PlazaCarey2000}.
 
 \begin{example} \label{ex:bilateral}
-To test the box-constraints estimator \eqref{eq:Eh} we constructed a radial exact solution $u(r)$, $r=\sqrt{x_1^2+x_2^2}$, of a bilateral obstacle problem on the square $\Omega=(-2,2)^2$ (Figure \ref{fig:bilateral}).  The box constraints are $\psilo=-1\le u\le 1=\psiup$, and the fixed boundary condition is $g=0$ on $\partial\Omega$.  The upper constact set $\Ctop$ is the disk $r\le 1/2$ while the lower contact set $\Cbot$ is the annulus $1\le r\le 3/2$.  The $u(r)$ is piecewise-quartic and $C^1$ across each free boundary.
-\end{example}
+To test the new bilateral estimator we constructed a radial exact solution\footnote{Details are in \texttt{examples/bilateral.py} in the library.} $u(r)$, $r=\sqrt{x_1^2+x_2^2}$, on the square $\Omega=(-2,2)^2$ (Figure \ref{fig:bilateral}, left).  The box constraints are $\psilo=-1$ and $\psiup=+1$, and the fixed boundary condition is $g=0$ (on $\partial\Omega$).  The solution $u(r)$ is piecewise-quartic and $C^1$ across the free boundaries (circles at $r=1/2,1,3/2$), but $u\in W^{2,\infty}(\Omega) \setminus C^2(\Omega)$ with $\sigma=-\triangle u - f$ jumping by $|f|=48$ across each free boundary.  The upper contact set $\Ctop$ is the disk $r\le 1/2$ while the lower contact set $\Cbot$ is the annulus $1\le r\le 3/2$.  The data are all affine in this case, thus $g=I_h g$, $\psiloh=\psilo$, $\psiuph=\psiup$, and $\cK_h = \cK \cap \Vh$ (fully-conforming), and it follows that \eqref{eq:Eh} reduces to the localized residual, quadrature, and detachment terms.
 
 \begin{figure}[ht]
-\centering
-\includegraphics[width=0.45\textwidth]{figs/bilateral-surf.png}
-\caption{Solution $u_h$ of Example \ref{ex:bilateral} on a refined mesh.}
+\noindent \mbox{\includegraphics[width=0.25\textwidth, valign=c]{figs/bilateral-surf.png}
+\quad \includegraphics[width=0.32\textwidth, valign=c]{figs/bilateral-mark-4.png}
+\quad\includegraphics[width=0.32\textwidth, valign=c]{figs/bilateral-mark-7.png}}
+\caption{Left: Example \ref{ex:bilateral} solution $u$.  Middle: At early refinement stages (3 levels), large transitional elements are marked.  Right: Marking focusses in the inactive set, and only very near the resolved free boundaries (6 levels).}
 \label{fig:bilateral}
 \end{figure}
 
-\begin{figure}[ht]
-\centering
-\mbox{\includegraphics[width=0.4\textwidth]{figs/bilateral-mark-4.png}
-\qquad\includegraphics[width=0.4\textwidth]{figs/bilateral-mark-7.png}}
-\caption{At coarser resolutions (left: 3 levels of refinement) marking covers large parts of the active set because of transitional elements.  Later in the refinement path (right: 6 levels), little of the active sets are being marked, while marking continues in the inactive set and very close to the well-resolved free boundary.}
-\label{fig:bilateralmark}
-\end{figure}
+The experiment starts from a coarse, structured mesh of $64$ triangles on $\Omega$, thus the circular free boundaries are completely unresolved.  The VI problem at each stage is solved, with tight tolerances, by PETSc's box-bounds active-set method \cite{BensonMunson2006}.  Similar to results from \cite[\S 7]{NSV03} in the unilateral case, in early refinement stages large cells overlapping the (exact) contact sets are marked (Figure \ref{fig:bilateral}).  However, in later refinement stages, marking concentrates into the inactive sets, where \eqref{eq:Eh} essentially reduces to its first term, an estimator of classical \cite{BabuskaRheinboldt1978} type, though additional marking occurs very close to the resolved free boundaries; the latter is driven primarily by the detachment terms.  Pointwise errors and the effectivity index behave as expected out to $N=10^6$ degrees of freedom (Figure \ref{fig:bilateralperf}).
 
 \begin{figure}[ht]
 \centering
-\mbox{\includegraphics[width=0.47\textwidth]{figs/bilateral-conv.png}
-\qquad\includegraphics[width=0.465\textwidth]{figs/bilateral-eff.png}}
-\caption{FIXME}
+\mbox{\includegraphics[width=0.421\textwidth]{figs/bilateral-conv.png}
+\qquad\includegraphics[width=0.42\textwidth]{figs/bilateral-eff.png}}
+\caption{Example \ref{ex:bilateral}: pointwise $L^\infty$ and (normalized) $L^2$ norms decay at the optimal rate (left), with the effectivity ratio settling around 4 (right).}
 \label{fig:bilateralperf}
 \end{figure}
+\end{example}
 
+\begin{example} \label{ex:easyunilateral}
+FIXME show easy case \texttt{examples/nsv.py} in $d=3$ with compare to \cite[Figure 7.1, lower]{NSV03}
+\end{example}
+
+\begin{example} \label{ex:pyramidunilateral}
+FIXME show pyramid case in $d=2$ with compare to \cite[Figure 7.6, left]{NSV03}, and show result from \cite{NSV05} on this example
+\end{example}
 
 \section{Discussion and outlook}
 \label{sec:discuss}
@@ -1162,7 +1169,7 @@ TODO: some kind of outlook?
 
 \section{Declaration of generative artifical intelligence usage}  \label{sec:ai}
 
-During the preparation of this manuscript, the author used Claude Opus 5.5 to propose aspects of the extension from the unilateral case \cite{NSV03} to box constraints, to edit the language, and to generate certain implementations and tests within the VIAMR library.  For cases where Claude was used, the \href{https://github.com/StefanoFochesatto/viamr}{corresponding repository commit messages} acknowledge AI usage.  The author, who thoroughly reviewed, edited, and validated the resulting content, assumes full and sole responsibility for the originality, accuracy, and integrity of the entire content of this work.
+The author used Claude Opus 5.5 to propose mathematical content, to edit the language, to generate initial implementations, and to write software tests.  For cases where Claude was used, the \href{https://github.com/StefanoFochesatto/viamr}{corresponding repository commit messages} acknowledge AI usage.  The author thoroughly reviewed, edited, and validated the resulting content.  He assumes full and sole responsibility for the originality, accuracy, and integrity of the entire content of this work.
 
 \bibliographystyle{siamplain}
 \bibliography{box}
