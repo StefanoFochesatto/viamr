@@ -10,9 +10,9 @@ try:
 except ImportError:
     from firedrake.petsc import OptionsManager
 
-from .ama import AMAMixin, haveanimate
-from .diagnostics import SetDiagnosticsMixin
-from .nsv import NSVMarkingsMixin
+from .amamixin import AMAMixin, haveanimate
+from .diagnosticsmixin import SetDiagnosticsMixin
+from .nsvmixin import NSVMarkingsMixin
 
 
 class VIAMR(OptionsManager, AMAMixin, NSVMarkingsMixin, SetDiagnosticsMixin):
