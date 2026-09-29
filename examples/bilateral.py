@@ -33,12 +33,16 @@
 # The free boundaries are circles, so no triangulation aligns with them, and also
 # there exist transition elements where sigma_h changes sign.
 #
-# Both UDO+BR and NSV03/B26 methods are applied (see doc/nsv-box/box.tex), and the
-# code generates .pvd from both methods, as well as .png figures showing performance.
+# Both UDO+BR and NSV03/B26 methods are applied by default; see option -no_udo.
 #
-# Runs:  python3 bilateral.py -h               # help
-#        python3 bilateral.py                  # good .pvd for paper
-#        python3 bilateral.py -target 5.0e5    # .png for performance figure (or -no_udo)
+# Generates .pvd from final mesh for each method.  Generates .png figures showing
+# convergence and effectivity as functions of dofs.  Generates .png
+# showing solution and marking on final mesh.
+#
+# Runs:  python3 bilateral.py -h                       # help
+#        python3 bilateral.py                          # good .pvd for paper
+#        python3 bilateral.py -target 8.0e5 -no_udo    # performance figure
+#        python3 bilateral.py -no_udo -target 1e9 -maxlevels N  # mesh marking figures N=4,7
 
 from argparse import ArgumentParser
 
@@ -47,7 +51,7 @@ parser = ArgumentParser(
 )
 parser.add_argument(
     "-maxlevels", type=int, default=15, metavar="N",
-    help="backstop on AMR levels [default=15]",
+    help="stop on levels in mesh hierarchy from AMR [default=15]",
 )
 parser.add_argument(
     "-no_udo", action="store_true", default=False,
@@ -64,12 +68,15 @@ parser.add_argument(
 args, passthroughoptions = parser.parse_known_args()
 
 import numpy as np
+import matplotlib.pyplot as plt
 import petsc4py
 
 petsc4py.init(passthroughoptions)
+
 from firedrake import *
-from viamr import VIAMR
 from firedrake.petsc import PETSc
+
+from viamr import VIAMR
 
 print = PETSc.Sys.Print  # enables correct printing in parallel
 
@@ -79,7 +86,7 @@ methods = ["NSV03"] if args.no_udo else ["NSV03", "UDOBR"]
 nUDO = 0
 dualtol = 1.0e-8
 markmethod = "total"
-m0 = 8  # initial mesh resolution
+m0 = 4  # initial mesh resolution
 
 mesh0 = RectangleMesh(
     m0, m0, 2.0, 2.0, originX=-2.0, originY=-2.0, diagonal="crossed",
@@ -166,8 +173,10 @@ for method in methods:
         print(f"  level {j}: nodes = {dofs[-1]}, elements = {nelements}, "
               f"lower-active = {nlo}, upper-active = {nup}")
 
-        errsl2.append(float(errornorm(u_ufl, uh)))
+        area = 16.0
+        errsl2.append(float(errornorm(u_ufl, uh) / np.sqrt(area)))  # scaled
         errsinf.append(errornorm_Linf(amr, u_ufl, uh))
+        assert errsl2[-1] <= errsinf[-1]  # because of l2 scaling
         # H^1 seminorm on the set inactive for *both* obstacles, which is what
         # inactivemark() restricts its estimator to
         iamark = amr.eleminactive(uh, (lb, ub), strong=True)
@@ -224,8 +233,6 @@ for method in methods:
     VTKFile(outfile).write(*fields)
 
 if mesh.comm.rank == 0:
-    import matplotlib.pyplot as plt
-
     print("")
     print("generating figures bilateral_*.png ...")
 
@@ -252,13 +259,50 @@ if mesh.comm.rank == 0:
     # energy norm on inactive set for BR78; sup norm for NSV03.
     markers = {"UDOBR": "ko",
                "NSV03": "bo"}
-    plt.figure()
     for meth in methods:
+        plt.figure()
         dd, ef = np.array(results[meth][0]), np.array(results[meth][5])
         plt.semilogx(dd, ef, markers[meth], label=meth)
-    plt.legend()
-    plt.grid(True)
-    plt.xlabel("DOFs")
-    plt.ylabel("effectivity = estimator / error")
-    #plt.title("bilateral problem: effectivity")
-    plt.savefig("bilateral_effectivity.png")
+        plt.semilogx([0.9*min(dd), 1.1*max(dd)], [1.0, 1.0], 'k:')
+        plt.xlim(0.91*min(dd), 1.09*max(dd))
+        plt.ylim(0.0, 1.1 * max(ef))
+        plt.grid(True)
+        #plt.axis('tight')
+        plt.xlabel("DOFs")
+        if meth == "NSV03":
+            plt.ylabel("effectivity = estimator / |u-u_h|_inf")
+        elif meth == "UDOBR":
+            plt.ylabel("effectivity = estimator / |u-u_h|_H1[inactive]")
+        plt.savefig(f"bilateral_effectivity_{meth}.png", bbox_inches='tight')
+
+
+    if nelements > 1.0e5:
+        print("[large mesh ... EXITing before trying to generate mesh figures ...]")
+        import sys
+        sys.exit(0)
+
+    from firedrake.pyplot import tripcolor, triplot
+
+    # triplot() issues:
+    #   * pops "colors" from boundary_kw, so pass a copy of bkw, as "dict(bkw)"
+    #   * logger warns spuriously about empty interior-facet subdomains, so drop warnings
+    bkw = {"colors": 4 * ["k"],
+           "linewidths": 1.0}
+    set_log_level(ERROR)
+
+    fig, axes = plt.subplots()
+    tripcolor(uh, axes=axes, cmap='viridis')
+    triplot(mesh, axes=axes, interior_kw={"linewidths": 0.4}, boundary_kw=dict(bkw))
+    axes.set_aspect("equal")
+    axes.set_axis_off()
+    fig.savefig("bilateral_uh.png", bbox_inches='tight', dpi=300.0)
+    plt.cla()
+
+    fig, axes = plt.subplots()
+    _, DG0 = amr.spaces(mesh)
+    tripcolor(Function(DG0).interpolate(0.7 * mark), axes=axes, cmap='Greys', clim=(0.0,1.0))
+    triplot(mesh, axes=axes, interior_kw={"linewidths": 0.3}, boundary_kw=dict(bkw))
+    axes.set_aspect("equal")
+    axes.set_axis_off()
+    fig.savefig("bilateral_mark.png", bbox_inches='tight', dpi=300.0)
+    plt.cla()
