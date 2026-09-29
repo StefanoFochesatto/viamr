@@ -199,8 +199,8 @@ for method in methods:
                 dualtol=dualtol, method=markmethod,
             )
             etainf, etad, sigmah = nsvfields["etainf"], nsvfields["etad"], nsvfields["sigmah"]
-            smin, smax = amr.scalarrange(sigmah)
-            print(f"    sigma_h range = [{smin:.2f}, {smax:.2f}] (exact: [-48, 48])")
+            #smin, smax = amr.scalarrange(sigmah)
+            #print(f"    sigma_h range = [{smin:.2f}, {smax:.2f}] (exact: [-48, 48])")
             errtarget = errsinf[-1]
             estname = "Etilde_h (sup norm)"
         else:
@@ -241,12 +241,23 @@ if mesh.comm.rank == 0:
                "NSV03l2": "bo",
                "NSV03linf": "bs"}
     plt.figure()
+
+    def labelmaker(meth, basic):
+        lab = basic
+        if len(methods) > 1:
+            lab = meth + " " + lab
+        return lab
+
     for meth in methods:
         ddinf, eeinf = np.array(results[meth][0]), np.array(results[meth][2])
-        plt.loglog(ddinf, eeinf, markers[meth+"linf"], label=meth + " |u-u_h|_inf")
+        plt.loglog(ddinf, eeinf, markers[meth+"linf"], label=labelmaker(meth, "|u-u_h|_inf"))
+    for meth in methods:
+        ddest, eeest = np.array(results[meth][0]), np.array(results[meth][4])
+        lab = "|u-u_h|_inf" if len(methods) == 1 else meth + " |u-u_h|_inf"
+        plt.loglog(ddest, eeest, markers[meth+"linf"], markerfacecolor="w", label=labelmaker(meth, "estimate"))
     for meth in methods:
         dd2, ee2 = np.array(results[meth][0]), np.array(results[meth][1])
-        plt.loglog(dd2, ee2, markers[meth+"l2"], markerfacecolor="w", label=meth + " |u-u_h|_2")
+        plt.loglog(dd2, ee2, markers[meth+"l2"], markerfacecolor="w", label=labelmaker(meth, "|u-u_h|_2"))
     y = ddinf ** -1.0  # use last linf value for normalization
     plt.loglog(ddinf, y * eeinf[0] / y[0], "k:", label="DOFs^(-1) = O(h^2)")
     plt.legend()
