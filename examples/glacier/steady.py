@@ -24,7 +24,7 @@ import petsc4py
 petsc4py.init(passthroughoptions)
 from firedrake import *
 from firedrake.petsc import PETSc
-from pyop2.mpi import MPI
+from mpi4py import MPI
 from firedrake.dmhooks import pop_appctx, push_appctx
 
 pprint = PETSc.Sys.Print  # parallel print

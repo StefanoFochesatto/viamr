@@ -51,7 +51,7 @@ from firedrake.petsc import PETSc
 print = PETSc.Sys.Print  # enables correct printing in parallel
 
 from viamr import VIAMR
-from pyop2.mpi import MPI  # for MPI reduce in parallel
+from mpipy import MPI  # for MPI reduce in parallel
 
 try:
     import netgen

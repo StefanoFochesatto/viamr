@@ -12,7 +12,7 @@
 # The bumpy bed formula bumps_b_ufl() is used by steady.py too.
 
 import numpy as np
-from pyop2.mpi import MPI
+from mpi4py import MPI
 import firedrake as fd
 from firedrake.petsc import PETSc
 from physics import secpera, n, Gamma, H2u
