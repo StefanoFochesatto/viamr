@@ -758,6 +758,7 @@ class NSVMarkingsMixin:
         exchange, with no DMPlex access needed."""
         assert defaultval is not None
         target = Function(nodalspace).assign(defaultval)
+        # FIXME move to PyOP3
         kernel = op2.Kernel(
             """
         void trace_to_node_extreme(double *target, double const *source)

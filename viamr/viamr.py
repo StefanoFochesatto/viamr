@@ -309,12 +309,7 @@ class VIAMR(OptionsManager, AMAMixin, NSVMarkingsMixin, SetDiagnosticsMixin):
 
         In contrast to elemactive(), here a cell is marked as active only if it *and its neighboring cells* are active.  The test for active is based on testing at the DG0 degree of freedom, and according to activetol.  Returns a DG0 element-wise indicator, with thinned-active elements having value 1.
 
-        The implementation is inspired by the UDO algorithm in VIAMR.fbmark():
-        a thinned-active element is exactly one which is *not* within one ring of
-        an inactive element, i.e. z = 1 - dilate1(inactive), computed via the same
-        two constant-arity PyOP2 kernels _udofbmark() uses (cell->node max-scatter,
-        then node->cell max-gather),
-        with no DMPlex access.
+        The implementation is inspired by the UDO algorithm in VIAMR.fbmark(): a thinned-active element is exactly one which is *not* within one ring of an inactive element, i.e. z = 1 - dilate1(inactive).  Calls _elemextreme() for this purpose.
         """
         mesh = uh.function_space().mesh()
         CG1, DG0 = self.spaces(mesh)
@@ -381,6 +376,7 @@ class VIAMR(OptionsManager, AMAMixin, NSVMarkingsMixin, SetDiagnosticsMixin):
         V = source.function_space()
         DG0 = FunctionSpace(V.mesh(), "DG", 0)
         target = Function(DG0).assign(defaultval)
+        # FIXME move to PyOP3
         kernel = op2.Kernel(
             """
         void elem_extreme(double *target, double const *source)
@@ -417,6 +413,7 @@ class VIAMR(OptionsManager, AMAMixin, NSVMarkingsMixin, SetDiagnosticsMixin):
         """Scatter a DG0 element field into nodalspace (e.g. CG1), broadcasting each cell's value to all of its local nodes and taking the extreme value where multiple cells share a node.  Thus the node value is the extreme over the star U_h(z) of the element values.  Either computes the maximum or (optionally) the minimum; the user must set the default value, which initializes the reduction.  Applies a PyOP2 parallel loop; correct in parallel via Firedrake's own halo exchange, with no DMPlex access needed."""
         assert defaultval is not None
         target = Function(nodalspace).assign(defaultval)
+        # FIXME move to PyOP3
         kernel = op2.Kernel(
             """
         void elem_to_node_extreme(double *target, double const *source)
@@ -503,9 +500,7 @@ class VIAMR(OptionsManager, AMAMixin, NSVMarkingsMixin, SetDiagnosticsMixin):
             # indicator.
             border = self._elemborder(self.nodalactive(uh, bounds))
 
-        # main loop: expand element border out to n levels, via two constant-arity
-        # PyOP2 kernels per level (cell->node max-scatter, then node->cell max-gather).
-        # No DMPlex access, and thus no special mesh overlap requirement.
+        # main loop: expand element border out to n levels
         for _ in range(n):
             border = self._elemextreme(
                 self._elemtonodeextreme(border, CG1, minimum=False, defaultval=0.0),
@@ -963,6 +958,7 @@ class VIAMR(OptionsManager, AMAMixin, NSVMarkingsMixin, SetDiagnosticsMixin):
 
         # remove other labels to stop further distribution in mesh()
         # (Koki's suggestion)
+        # FIXME move to PyOP3
         dmAdapt.removeLabel("pyop2_core")
         dmAdapt.removeLabel("pyop2_owned")
         dmAdapt.removeLabel("pyop2_ghost")
