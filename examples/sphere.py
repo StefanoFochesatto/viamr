@@ -809,8 +809,9 @@ if mesh.comm.rank == 0:
             for amrtype in refinetypes:
                 rdofs, rvals = np.array(results[amrtype][0]), np.array(results[amrtype][index])
                 plt.loglog(rdofs, rvals, stylemap[amrtype], label=amrtype.upper())
-            rdofs, rvals = np.array(results["uni"][0]), np.array(results["uni"][index])
-            # anchor to the first finite, positive UNI value, not just index 0;
+            if "uni" in refinetypes:  # if possible, use "uni" in getting anchor
+                rdofs, rvals = np.array(results["uni"][0]), np.array(results["uni"][index])
+            # anchor to the first finite, positive value, not just index 0;
             #    relevant to coarse initial mesh
             valid = np.isfinite(rvals) & (rvals > 0)
             if np.any(valid):
