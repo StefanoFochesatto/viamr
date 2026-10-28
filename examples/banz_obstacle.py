@@ -42,7 +42,7 @@ def solve_obstacle(mesh, f_load, psi_ufl):
     }
     solver = NonlinearVariationalSolver(problem, solver_parameters=sp)
     solver.solve(bounds=(lb, ub))
-    return u, lb
+    return u, lb, bcs
 
 
 def main():
@@ -65,23 +65,28 @@ def main():
     theta = 0.4  # Mark elements carrying top 40% of the indicator
 
     for level in range(max_levels):
-        u, lb = solve_obstacle(mesh, f_load, psi_ufl)
-        V = u.function_space()
+        u, lb, bcs = solve_obstacle(mesh, f_load, psi_ufl)
 
         # Multiplier approximation kappa:
-        # In Proximal Galerkin, kappa = (s^{k-1} - s^k) / alpha is supplied directly.
-        # For a standard VI solve, kappa approximates -Delta u on the contact set.
-        act = amr.nodalactive(u, (lb, None))
-        kappa = Function(V, name="Multiplier Approximation")
-        # Approximate contact force on active set
-        kappa.interpolate(conditional(act > 0.5, Constant(1.5), Constant(0.0)))
+        # * In Proximal Galerkin (PG / LVPP), kappa is given directly by the latent drift
+        #   kappa = (s^{k-1} - s^k) / alpha (Banz-Schroeder Galerkin relation holds for free).
+        # * When solving with a discrete VI solver (such as PETSc SNESVI), kappa is
+        #   reconstructed from the discrete residual:
+        #     res_i = \int_Omega grad(u) . grad(phi_i) dx - \int_Omega f phi_i dx
+        #   using mass-lumped scaling kappa_i = max(res_i / \int phi_i dx, 0.0) with
+        #   Dirichlet boundary nodes zeroed.
+        #
+        # Calling amr.banz_discrete_multiplier(u, f_ufl=f_load, bcs=bcs) computes this.
+        # (Passing kappa=None to banzmark will also compute it automatically).
+        kappa = amr.banz_discrete_multiplier(u, f_ufl=f_load, bcs=bcs)
 
         # Evaluate Banz-Schroeder a posteriori estimator
         mark, fields, eta_up = amr.banzmark(
             u,
             (lb, None),
-            kappa,
+            kappa=kappa,
             f_ufl=f_load,
+            bcs=bcs,
             method="total",
             theta=theta,
             tau="grad",

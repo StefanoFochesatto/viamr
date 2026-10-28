@@ -204,16 +204,30 @@ def test_banz_input_validation():
     with pytest.raises(ValueError):
         amr.banzmark(v, (None, None), kappa=Constant(1.0))
 
-    # Missing kappa
-    with pytest.raises(ValueError):
-        amr.banzmark(v, (Constant(0.0), None), kappa=None)
-
+    # Auto-reconstructs discrete multiplier when kappa=None
+    mark, fields, Eh = amr.banzmark(v, (Constant(0.0), None), kappa=None)
+    assert Eh >= 0.0
     # Invalid flux tau
     with pytest.raises(NotImplementedError):
         amr.banzmark(
             v, (Constant(0.0), None), kappa=Constant(1.0), tau="invalid"
         )
+def test_banz_discrete_multiplier():
+    amr = VIAMR()
+    mesh = UnitSquareMesh(6, 6)
+    V = FunctionSpace(mesh, "CG", 1)
+    u = Function(V)
+    f = Constant(2.0)
+    bcs = DirichletBC(V, 0.0, "on_boundary")
 
+    # Mass lumped
+    k_lump = amr.banz_discrete_multiplier(u, f_ufl=f, bcs=bcs, lump=True)
+    assert k_lump.function_space() == V
+    assert np.all(k_lump.dat.data_ro >= 0.0)
+
+    # Consistent mass matrix
+    k_cons = amr.banz_discrete_multiplier(u, f_ufl=f, bcs=bcs, lump=False)
+    assert k_cons.function_space() == V
 
 @pytest.mark.parallel(nprocs=2)
 def test_banz_parallel():

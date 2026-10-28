@@ -447,6 +447,51 @@ class BanzMarkingsMixin:
             max(float(np.dot(d_vec.dat.data_ro, y.dat.data_ro)), 0.0)
         )
 
+    def banz_discrete_multiplier(self, uh, f_ufl=None, bcs=None, lump=True):
+        r"""Compute the discrete multiplier approximation kappa in CG1 from the
+        discrete residual of an obstacle problem solve:
+            res_i = \int_Omega grad(u_h) . grad(phi_i) dx - \int_Omega f phi_i dx.
+
+        With lump=True (default, matching NSV03/05 mass-lumped scaling):
+            kappa_i = max(res_i / \int_Omega phi_i dx, 0.0),
+        with Dirichlet boundary nodes zeroed.
+        With lump=False, solves the consistent mass matrix system M kappa = res.
+        """
+        V = uh.function_space()
+        mesh = V.mesh()
+        v = TestFunction(V)
+        f_term = (
+            Constant(0.0)
+            if f_ufl is None
+            else (Constant(f_ufl) if isinstance(f_ufl, (int, float)) else f_ufl)
+        )
+        res = assemble((inner(grad(uh), grad(v)) - f_term * v) * dx)
+
+        if bcs is not None:
+            if not isinstance(bcs, (list, tuple)):
+                bcs = [bcs]
+            for bc in bcs:
+                res.dat.data[bc.nodes] = 0.0
+        else:
+            bc_temp = DirichletBC(V, 0.0, "on_boundary")
+            res.dat.data[bc_temp.nodes] = 0.0
+
+        kappa = Function(V, name="kappa (discrete multiplier)")
+        if lump:
+            scale = assemble(v * dx)
+            with scale.dat.vec_ro as s_vec, res.dat.vec_ro as r_vec:
+                s_arr = np.where(s_vec.array_r > 0.0, s_vec.array_r, 1.0)
+                kappa.dat.data[:] = np.maximum(r_vec.array_r / s_arr, 0.0)
+        else:
+            M = assemble(inner(TrialFunction(V), v) * dx)
+            solve(
+                M,
+                kappa,
+                res,
+                solver_parameters={"ksp_type": "preonly", "pc_type": "lu"},
+            )
+        return kappa
+
     def banzmark(
         self,
         uh,
@@ -529,10 +574,8 @@ class BanzMarkingsMixin:
             raise ValueError("Lower obstacle bound must be provided in bounds or bounds_ufl.")
 
         if kappa is None:
-            raise ValueError(
-                "kappa (multiplier approximation or latent drift) must be provided."
-            )
-
+            # Reconstruct discrete multiplier from the discrete residual
+            kappa = self.banz_discrete_multiplier(uh, f_ufl=f_ufl, bcs=bcs)
         V = uh.function_space()
         mesh = V.mesh()
 
