@@ -11,11 +11,18 @@ except ImportError:
     from firedrake.petsc import OptionsManager
 
 from .amamixin import AMAMixin, haveanimate
+from .banzmixin import BanzFields, BanzMarkingsMixin
 from .diagnosticsmixin import SetDiagnosticsMixin
 from .nsvmixin import NSVMarkingsMixin
 
 
-class VIAMR(OptionsManager, AMAMixin, NSVMarkingsMixin, SetDiagnosticsMixin):
+class VIAMR(
+    OptionsManager,
+    AMAMixin,
+    NSVMarkingsMixin,
+    BanzMarkingsMixin,
+    SetDiagnosticsMixin,
+):
     r"""A VIAMR object computes a posteriori estimators for a Firedrake variational inequality (VI) solver, where the VI constraint set is defined by box bounds (lb <= u <= ub), and it manages adaptive mesh refinement (AMR) from such estimators.
 
     Central notions behind this class:
@@ -35,6 +42,8 @@ class VIAMR(OptionsManager, AMAMixin, NSVMarkingsMixin, SetDiagnosticsMixin):
       inactivemark():  classical (PDE) a posteriori error estimator, applied in the computed inactive set, implementing either the method from Babushka & Rheinboldt (1978) (estimator="br78"), its weighted extension from Bernardi & Verfurth (2000) (estimator="bv00"), or CG1 recovery of the DG0 gradient (estimator="gradientrecovery")
 
       nsvmark():  mark using a pointwise a posteriori estimator for classical obstacle problems, either the "practical estimator" from Nochetto, Siebert, & Veeser (2003) = NSV03, extended to box constraints (estimator="nsv03"), or the fully-localized, star-based estimator from Nochetto, Siebert, & Veeser (2005) = NSV05, the successor of NSV03, implemented for unilateral obstacles only (estimator="nsv05")
+
+      banzmark():  mark using the abstract a posteriori error estimator of Banz & Schroeder (2021) and Proximal Galerkin (Keith & Surowiec 2024), providing certified upper bounds for arbitrary primal-dual pairs (v, kappa) and distinguishing discretization (auxiliary) error from proximal iteration (constraint) error
 
       fixedratemark():  general-purpose thresholding of an elementwise DG0 estimator field by a fixed-rate ('max' or 'total'/bulk/Doerfler) criterion; used internally by inactivemark() and nsvmark(), but also usable directly
 
@@ -101,9 +110,10 @@ class VIAMR(OptionsManager, AMAMixin, NSVMarkingsMixin, SetDiagnosticsMixin):
       amesh = animate.adapt(mesh, metric)                       # ... caller adapts the mesh with it
 
     Source layout:
-      * buildaveragedmetric() is in AMAMixin (ama.py)
-      * jaccard(), hausdorff2D(), and freeboundarygraph2D() are in SetDiagnosticsMixin (diagnostics.py),
-      * nsvmark() is in NSVMarkingsMixin (nsv.py)
+      * buildaveragedmetric() is in AMAMixin (amamixin.py)
+      * banzmark() is in BanzMarkingsMixin (banzmixin.py)
+      * jaccard(), hausdorff2D(), and freeboundarygraph2D() are in SetDiagnosticsMixin (diagnosticsmixin.py)
+      * nsvmark() is in NSVMarkingsMixin (nsvmixin.py)
 
     Known limitations:
       * Functions which do not work in parallel: 1. jaccard(..., submesh=False) with two DG0 Function arguments.
