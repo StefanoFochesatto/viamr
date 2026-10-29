@@ -13,9 +13,16 @@ except ImportError:
 from .amamixin import AMAMixin, haveanimate
 from .diagnosticsmixin import SetDiagnosticsMixin
 from .nsvmixin import NSVMarkingsMixin
+from .banzmixin import BanzMarkingsMixin, poincare_constant, banz_constants
 
 
-class VIAMR(OptionsManager, AMAMixin, NSVMarkingsMixin, SetDiagnosticsMixin):
+class VIAMR(
+    OptionsManager,
+    AMAMixin,
+    BanzMarkingsMixin,
+    NSVMarkingsMixin,
+    SetDiagnosticsMixin,
+):
     r"""A VIAMR object computes a posteriori estimators for a Firedrake variational inequality (VI) solver, where the VI constraint set is defined by box bounds (lb <= u <= ub), and it manages adaptive mesh refinement (AMR) from such estimators.
 
     Central notions behind this class:
@@ -35,6 +42,8 @@ class VIAMR(OptionsManager, AMAMixin, NSVMarkingsMixin, SetDiagnosticsMixin):
       inactivemark():  classical (PDE) a posteriori error estimator, applied in the computed inactive set, implementing either the method from Babushka & Rheinboldt (1978) (estimator="br78"), its weighted extension from Bernardi & Verfurth (2000) (estimator="bv00"), or CG1 recovery of the DG0 gradient (estimator="gradientrecovery")
 
       nsvmark():  mark using a pointwise a posteriori estimator for classical obstacle problems, either the "practical estimator" from Nochetto, Siebert, & Veeser (2003) = NSV03, extended to box constraints (estimator="nsv03"), or the fully-localized, star-based estimator from Nochetto, Siebert, & Veeser (2005) = NSV05, the successor of NSV03, implemented for unilateral obstacles only (estimator="nsv05")
+
+      banzmark():  mark using the a posteriori error estimator of Banz & Schroeder (2021) for classical obstacle problems, with standard cut-offs (cutoff="sco") or finite element cut-offs (cutoff="feco")
 
       fixedratemark():  general-purpose thresholding of an elementwise DG0 estimator field by a fixed-rate ('max' or 'total'/bulk/Doerfler) criterion; used internally by inactivemark() and nsvmark(), but also usable directly
 
