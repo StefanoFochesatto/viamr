@@ -1,3 +1,5 @@
+# BS21: Banz & Schroeder (2021), J. Appl. Numer. Optim. 3(2):333-359, DOI:10.23952/jano.3.2021.2.07
+# In notation of BS21, discrete primal FE approximation uh corresponds to v.
 import numpy as np
 from mpi4py import MPI
 from firedrake import *
@@ -13,6 +15,8 @@ def poincare_constant(mesh):
     The bounding box is computed with an allreduce over the mesh communicator,
     making it safe in parallel across any number of MPI ranks.
     """
+    # Axis-aligned bounding box formula C_P = L/pi is an implementation choice for
+    # the energy-norm setting (BS21 Remark 3.2), not a numbered paper formula.
     coords = mesh.coordinates.dat.data_ro
     if coords.ndim == 1:
         coords = coords.reshape(-1, 1)
@@ -62,6 +66,7 @@ def banz_constants(
     if not (0.0 < delta < beta):
         raise ValueError(f"delta must lie in (0, beta) = (0, {beta}), got {delta}")
 
+    # Abstract constants E, F, theta from BS21 Theorem 2.3.
     E = (1.0 + 2.0 * (c ** 2) * (chat_gamma ** 2)) / (
         4.0 * delta * (beta - delta)
     ) + 2.0 * (chat_gamma ** 2)
@@ -75,6 +80,8 @@ def banz_constants(
         )
 
     one_minus = 1.0 - theta * epsilon
+    # Derived weights c_aux, c_cons from BS21 Theorem 2.3;
+    # c_comp = epsilon * c_cons shorthand.
     c_aux = E / one_minus
     c_cons = F / (epsilon * one_minus)
     c_comp = epsilon * c_cons  # == F / one_minus
@@ -119,6 +126,8 @@ def banz_aux_estimator(uh, kappa, f_ufl=None, estimator="br78", degree=3, **kwar
     if isinstance(kappa, (int, float)):
         kappa = Constant(kappa)
 
+    # BS21 (2.5)/(3.6): auxiliary problem -Delta v_hat = f + kappa.
+    # Its Galerkin condition is (2.14)/(3.4); res is the strong residual.
     res = f + kappa + div(grad(uh))
 
     eta_sq = Function(DG0)
@@ -126,6 +135,8 @@ def banz_aux_estimator(uh, kappa, f_ufl=None, estimator="br78", degree=3, **kwar
     dx_m = dx(domain=mesh, degree=degree)
     dS_m = dS(domain=mesh, degree=degree)
 
+    # Residual error indicator: cf. BS21 (3.7), using P1-style BR78 cell-diameter
+    # weights and full data rather than literal hp-projected formula.
     G = inner(eta_sq / v, w) * dx_m
     G -= inner(h ** 2 * res ** 2, w) * dx_m
     G -= 0.5 * inner(h("+") * jump(grad(uh), n) ** 2, w("+")) * dS_m
@@ -137,6 +148,7 @@ def banz_aux_estimator(uh, kappa, f_ufl=None, estimator="br78", degree=3, **kwar
     eta_aux = Function(DG0, name="eta_aux").interpolate(sqrt(max_value(eta_sq, 0.0)))
     with eta_sq.dat.vec_ro as vec:
         local_sum = float(np.sum(np.maximum(vec.array_r, 0.0)))
+    # Global auxiliary residual estimator sum eta_aux^2, BS21 (3.7).
     aux_eta2 = float(mesh.comm.allreduce(local_sum, op=MPI.SUM))
 
     return eta_aux, aux_eta2
@@ -209,6 +221,8 @@ def banz_weighted_functional(
         psi = Constant(psi)
 
     # Multiplier negativity term: N_Omega^2 <= C_P^2 * ||kappa_-||_L2^2
+    # Dual defect with mu = kappa_+ (BS21 (3.10)); C_P * ||kappa_-||_L2 provides an
+    # L2 upper bound on the H^-1_D dual norm (BS21 Section 2.2).
     kappa_minus = max_value(-kappa, 0.0)
     N_integrand = Constant(C_P ** 2) * kappa_minus ** 2
     N2 = float(assemble(N_integrand * dx_m))
@@ -216,15 +230,20 @@ def banz_weighted_functional(
     if cutoff == "sco":
         zeta_field = None
         # By Stampacchia's theorem for (psi - uh)_+ = max(psi - uh, 0):
+        # BS21 Section 2.2: zeta = (psi - uh)_+ belongs to K_v.
+        # This corrects the reversed cut-off sign printed in (3.11).
         grad_integrand = conditional(
             psi - uh > 0.0, inner(grad(psi - uh), grad(psi - uh)), 0.0
         )
         grad_zeta2 = float(assemble(grad_integrand * dx_m))
 
+        # Positive part decompositions for complementarity pairing, BS21 (3.10).
         uh_minus_psi_pos = max_value(uh - psi, 0.0)
         psi_minus_uh_pos = max_value(psi - uh, 0.0)
         kappa_plus = max_value(kappa, 0.0)
 
+        # Expand the two pairings in Xi_eps (BS21 Section 2.2).
+        # Dropping the non-positive cross-term enlarges the functional.
         if drop_cross_neg:
             pair_integrand = kappa_plus * uh_minus_psi_pos
         else:
@@ -236,6 +255,7 @@ def banz_weighted_functional(
         V = uh.function_space()
         zeta_h_star = Function(V, name="zeta_h_star").assign(0.0)
         y = TestFunction(V)
+        # Discrete auxiliary VI for zeta_h^*, BS21 (3.16)/(3.13) under energy product (Remark 3.2).
         F_feco = (
             inner(grad(zeta_h_star), grad(y)) * dx_m
             - inner(-0.5 * Constant(epsilon) * kappa, y) * dx_m
@@ -252,12 +272,14 @@ def banz_weighted_functional(
         if solver_parameters is not None:
             sp.update(solver_parameters)
         solver = NonlinearVariationalSolver(problem, solver_parameters=sp)
+        # Discrete obstacle bounds defining K_v, BS21 (3.16).
         lb_zeta = Function(V).interpolate(psi - uh)
         ub_zeta = Function(V).interpolate(Constant(PETSc.INFINITY))
         solver.solve(bounds=(lb_zeta, ub_zeta))
         zeta_field = zeta_h_star
 
         # Stampacchia gradient for max(zeta_h_star, psi - uh)
+        # Repaired cut-off zeta_FECO = max(zeta_h^*, psi - uh) ensures zeta in K_v (BS21 Theorem 3.1).
         grad_integrand = conditional(
             zeta_h_star >= psi - uh,
             inner(grad(zeta_h_star), grad(zeta_h_star)),
@@ -265,11 +287,13 @@ def banz_weighted_functional(
         )
         grad_zeta2 = float(assemble(grad_integrand * dx_m))
 
+        # Retains mu = kappa_+ standard cut-off rather than multiplier problem BS21 (3.15).
         kappa_plus = max_value(kappa, 0.0)
         zeta_feco = conditional(zeta_h_star >= psi - uh, zeta_h_star, psi - uh)
         pair_integrand = kappa_plus * (uh - psi) + kappa * zeta_feco
         comp_pairing = float(assemble(pair_integrand * dx_m))
 
+    # Scalar weighted functional Xi_eps: unnumbered definition in BS21 Section 2.2 (p. 337).
     xi = N2 + grad_zeta2 + epsilon * comp_pairing
 
     # Cellwise DG0 representation of xi
@@ -496,6 +520,8 @@ class BanzMarkingsMixin:
             **kwargs,
         )
 
+        # Weights from BS21 Theorem 2.3; (2.7) supplies the reliability factor
+        # needed when replacing the auxiliary error by a residual estimator.
         eta_up2 = c_aux * aux_eta2 + c_cons * xi
         eta_up = float(np.sqrt(max(eta_up2, 0.0)))
 
